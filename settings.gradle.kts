@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "GeminiWrapper"
+rootProject.name = "MovieLens"
 include(":app")
  

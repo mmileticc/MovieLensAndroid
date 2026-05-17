@@ -7,13 +7,13 @@ plugins {
 }
 
 android {
-    namespace = "dev.milinko.geminiwrapper"
+    namespace = "dev.milinko.movielens"
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = "dev.milinko.geminiwrapper"
+        applicationId = "dev.milinko.movielens"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
