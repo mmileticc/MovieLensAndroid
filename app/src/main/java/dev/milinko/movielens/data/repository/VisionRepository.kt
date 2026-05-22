@@ -13,6 +13,9 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,27 +30,43 @@ class VisionRepositoryImpl @Inject constructor(
 ) : VisionRepository {
 
     override suspend fun detect(imageUri: String): VisionSearchResponse {
-        val file = getFileFromUri(imageUri)
-            ?: throw IllegalStateException("Ne mogu pripremiti sliku za upload.")
+        try {
+            val file = getFileFromUri(imageUri)
+                ?: throw IllegalStateException("Ne mogu pripremiti sliku za upload.")
 
-        val mimeType = contentResolverMimeOrGuess(context, imageUri.toUri()) ?: "image/jpeg"
-        val requestFile = file.asRequestBody(mimeType.toMediaType())
-        val body = MultipartBody.Part.createFormData("image", file.name, requestFile)
+            val mimeType = contentResolverMimeOrGuess(context, imageUri.toUri()) ?: "image/jpeg"
+            val requestFile = file.asRequestBody(mimeType.toMediaType())
+            val body = MultipartBody.Part.createFormData("image", file.name, requestFile)
 
-        val response = visionApi.detect(body)
-        if (response.isSuccessful) {
-            return response.body()
-                ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+            val response = visionApi.detect(body)
+            if (response.isSuccessful) {
+                return response.body()
+                    ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+            }
+
+            val rawError = response.errorBody()?.string().orEmpty()
+            val parsedMessage = runCatching {
+                val json = JSONObject(rawError)
+                json.optString("error").ifBlank { json.optString("message") }
+            }.getOrDefault("")
+
+            throw IllegalStateException(
+                parsedMessage.takeIf { it.isNotBlank() }
+                    ?: "Greška servera (${response.code()})"
+            )
+        } catch (e: Exception) {
+            throw IllegalStateException(e.toUserFacingMessage(), e)
         }
+    }
 
-        val rawError = response.errorBody()?.string().orEmpty()
-        val parsedMessage = runCatching {
-            JSONObject(rawError).optString("error")
-        }.getOrDefault("")
-
-        throw IllegalStateException(
-            if (parsedMessage.isNotBlank()) parsedMessage else "Greška servera (${response.code()})"
-        )
+    private fun Throwable.toUserFacingMessage(): String {
+        return when (this) {
+            is SocketTimeoutException -> "Vreme je isteklo dok je slika slana. Proveri internet i pokušaj ponovo."
+            is UnknownHostException -> "Ne mogu da pronađem server. Proveri internet i adresu backend-a."
+            is IOException -> "Mrežna greška tokom slanja slike. Pokušaj ponovo."
+            is IllegalStateException -> message?.takeIf { it.isNotBlank() } ?: "Nepoznata greška."
+            else -> message?.takeIf { it.isNotBlank() } ?: "Nepoznata greška."
+        }
     }
 
     private fun contentResolverMimeOrGuess(context: Context, uri: Uri): String? {

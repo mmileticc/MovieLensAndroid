@@ -1,5 +1,7 @@
 package dev.milinko.movielens.ui.chat.v2
 
+import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.pm.PackageManager.PERMISSION_GRANTED
 import android.net.Uri
 import android.util.Log
@@ -7,6 +9,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,8 +50,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -90,6 +96,7 @@ import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 import dev.milinko.movielens.ui.components.SettingsDialog
 import java.io.File
 import java.util.Locale
+import androidx.compose.ui.platform.LocalLocale
 
 private enum class MainSection { Scan, Result, Discovery, Library, Settings }
 private enum class ResultTab { Info, Cast, Trailers }
@@ -405,6 +412,11 @@ private fun ScanSection(
             TextButton(onClick = onOpenSettings) { Text("Edit", color = Color(0xFFE50914)) }
         }
 
+        uiState.error?.let { errorMessage ->
+            Spacer(modifier = Modifier.height(12.dp))
+            ErrorBanner(errorMessage)
+        }
+
         Spacer(modifier = Modifier.height(14.dp))
 
         // Image preview area
@@ -507,7 +519,7 @@ private fun ScanSection(
                                             modifier = Modifier.size(28.dp)
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text(String.format(Locale.getDefault(), "%.1f/10", v), color = Color.White.copy(alpha = 0.9f))
+                                        Text(String.format(LocalLocale.current.platformLocale, "%.1f/10", v), color = Color.White.copy(alpha = 0.9f))
                                     }
                                 }
                             }
@@ -927,135 +939,6 @@ private fun SearchPill(onClick: () -> Unit) {
 }
 
 @Composable
-private fun CameraViewfinderCard(
-    selectedImageUri: String?,
-    onPickImage: () -> Unit,
-    onCameraCapture: () -> Unit,
-    onRemoveImage: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(340.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(
-                Brush.linearGradient(
-                    listOf(Color(0xFF0D0D20), Color(0xFF1A0A1A), Color(0xFF2A0A14))
-                )
-            )
-            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(24.dp))
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(Color(0x33E50914), Color.Transparent),
-                        radius = 600f
-                    )
-                )
-        )
-
-        if (selectedImageUri != null) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(selectedImageUri)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = "Selected image",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.30f))
-            )
-        }
-
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RoundActionButton(icon = Icons.Default.Tune, onClick = onPickImage, background = Color.Black.copy(alpha = 0.45f))
-                RoundActionButton(icon = Icons.Default.PhotoLibrary, onClick = onPickImage, background = Color.Black.copy(alpha = 0.45f))
-            }
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Surface(
-                    shape = CircleShape,
-                    color = Color(0x22E50914),
-                    border = androidx.compose.foundation.BorderStroke(2.dp, Color(0x55E50914))
-                ) {
-                    Box(
-                        modifier = Modifier.size(74.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color(0xFFE50914), modifier = Modifier.size(30.dp))
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("Point at a poster or screen", color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = selectedImageUri?.let { "Image selected" } ?: "Use gallery or camera",
-                    color = Color.White.copy(alpha = 0.45f),
-                    fontSize = 12.sp
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RoundActionButton(icon = Icons.Default.PhotoLibrary, onClick = onPickImage, background = Color.Black.copy(alpha = 0.45f))
-                if (selectedImageUri != null) {
-                    RoundActionButton(icon = Icons.Default.Delete, onClick = onRemoveImage, background = Color.Black.copy(alpha = 0.55f), tint = Color.White)
-                } else {
-                    RoundActionButton(icon = Icons.Default.CameraAlt, onClick = onCameraCapture, background = Color.Black.copy(alpha = 0.45f))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ScanIntroCard(onScan: () -> Unit) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF12121D))
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Scan this frame", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Odaberi sliku iz galerije ili kamere, a zatim pokreni prepoznavanje i dobićeš strukturiran rezultat sa kandidatima i TMDB match-evima.",
-                color = Color.White.copy(alpha = 0.65f),
-                fontSize = 13.sp,
-                lineHeight = 18.sp
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = onScan,
-                shape = RoundedCornerShape(14.dp),
-                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914))
-            ) {
-                Icon(Icons.Default.Search, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Scan now")
-            }
-        }
-    }
-}
-
-@Composable
 private fun LoadingOverlay() {
     Box(
         modifier = Modifier
@@ -1429,6 +1312,7 @@ private fun ResultHeroPlaceholder(
     }
 }
 
+@SuppressLint("NonObservableLocale")
 @Composable
 private fun VisionResultSection(
     response: VisionSearchResponse,
@@ -1438,6 +1322,8 @@ private fun VisionResultSection(
     val first = response.resolutions.firstOrNull()
     val heroMatch = first?.matches?.firstOrNull()
     val heroTitle = first?.candidate?.title ?: "Vision result"
+    // Potreban nam je Context za otvaranje linkova u browseru
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -1562,6 +1448,73 @@ private fun VisionResultSection(
                         InfoRow(label = "Status", value = if (response.notMovieLike) "Not movie-like" else "Ready")
                     }
                 }
+
+                // ============================================================================
+                // NOVI DEO: PRIKAZ BIOSKOPA (Pojavljuje se samo ako film negde igra)
+                // ============================================================================
+                if (heroMatch != null && heroMatch.cinemaShowtimes.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    SectionTitle(title = "Now Playing in Cinemas")
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    ElevatedCard(
+                        colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF1E1115)), // Blago crvenkasti ton za bioskope
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            heroMatch.cinemaShowtimes.forEachIndexed { idx, bioskop ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = bioskop.cinemaName,
+                                            color = Color.White,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = bioskop.cinemaLocation,
+                                            color = Color.White.copy(alpha = 0.6f),
+                                            fontSize = 12.sp
+                                        )
+                                    }
+
+                                    // Crveno atraktivno dugme za rezervaciju karata
+                                    Button(
+                                        onClick = {
+                                            try {
+                                                val intent = Intent(
+                                                    Intent.ACTION_VIEW,
+                                                    Uri.parse(bioskop.bookingUrl)
+                                                )
+                                                context.startActivity(intent)
+                                            } catch (e: Exception) {
+                                                println("[ERROR] Neuspešno otvaranje linka: ${e.message}")
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914)),
+                                        shape = RoundedCornerShape(12.dp),
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                    ) {
+                                        Text("Tickets", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                // Stavljamo liniju razgraničenja između bioskopa, osim iza poslednjeg
+                                if (idx < heroMatch.cinemaShowtimes.lastIndex) {
+                                    Divider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(vertical = 4.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+                // ============================================================================
+
                 Spacer(modifier = Modifier.height(14.dp))
                 SectionTitle(title = "TMDB matches")
                 Spacer(modifier = Modifier.height(10.dp))
@@ -1591,6 +1544,8 @@ private fun VisionResultSection(
         Spacer(modifier = Modifier.height(96.dp))
     }
 }
+
+
 
 @Composable
 private fun ResultTabChip(text: String, selected: Boolean, onClick: () -> Unit) {
