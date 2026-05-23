@@ -8,9 +8,7 @@ plugins {
 
 android {
     namespace = "dev.milinko.movielens"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "dev.milinko.movielens"
@@ -60,6 +58,7 @@ dependencies {
     implementation(libs.androidx.material3)
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.androidx.navigation.compose)
 
     // Room
     implementation(libs.room.runtime)

@@ -8,6 +8,8 @@ import dev.milinko.movielens.data.remote.ChatApiService
 import dev.milinko.movielens.data.remote.vision.VisionApi
 import dev.milinko.movielens.data.pref.UrlStorage
 import dev.milinko.movielens.data.remote.interceptor.DynamicBaseUrlInterceptor
+import dev.milinko.movielens.data.remote.movie.MovieApiService
+import dev.milinko.movielens.data.remote.user.UserApiService
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -60,5 +62,17 @@ object NetworkModule {
     @Singleton
     fun provideVisionApi(retrofit: Retrofit): VisionApi {
         return retrofit.create(VisionApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideMovieApiService(retrofit: Retrofit): MovieApiService {
+        return retrofit.create(MovieApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideUserApiService(retrofit: Retrofit): UserApiService {
+        return retrofit.create(UserApiService::class.java)
     }
 }

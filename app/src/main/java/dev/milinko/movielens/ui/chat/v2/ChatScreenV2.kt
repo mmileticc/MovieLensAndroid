@@ -1160,8 +1160,8 @@ private fun SectionTitle(title: String) {
 
 @Composable
 private fun SectionHeader(label: String) {
-    Text(
-        text = label.uppercase(Locale.getDefault()),
+        Text(
+        text = label.uppercase(LocalLocale.current.platformLocale),
         color = Color.White.copy(alpha = 0.4f),
         fontSize = 11.sp,
         fontWeight = FontWeight.SemiBold,
@@ -1383,7 +1383,7 @@ private fun VisionResultSection(
             ) {
                 AssistChip(
                     onClick = { },
-                    label = { Text(if (response.notMovieLike) "NOT MOVIE LIKE" else (first?.candidate?.type?.uppercase(Locale.getDefault()) ?: "MOVIE")) },
+                    label = { Text(if (response.notMovieLike) "NOT MOVIE LIKE" else (first?.candidate?.type?.uppercase(LocalLocale.current.platformLocale) ?: "MOVIE")) },
                     colors = AssistChipDefaults.assistChipColors(
                         containerColor = Color(0x22E50914),
                         labelColor = Color(0xFFFF6B6B)
@@ -1396,7 +1396,7 @@ private fun VisionResultSection(
                     text = listOfNotNull(
                         first?.candidate?.year?.toString(),
                         heroMatch?.releaseDate,
-                        heroMatch?.voteAverage?.let { String.format(Locale.getDefault(), "%.1f/10", it) }
+                        heroMatch?.voteAverage?.let { String.format(LocalLocale.current.platformLocale, "%.1f/10", it) }
                     ).joinToString(" · ").ifBlank { response.uncertaintyReason ?: "Unknown" },
                     color = Color.White.copy(alpha = 0.65f),
                     fontSize = 13.sp
@@ -1580,90 +1580,10 @@ private fun ActionPill(text: String, icon: androidx.compose.ui.graphics.vector.I
 }
 
 @Composable
-private fun ResolutionCard(index: Int, resolution: CandidateResolution) {
-    val candidate = resolution.candidate
-    ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF11111A))) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "$index. ${candidate.title}${candidate.year?.let { " ($it)" } ?: ""}",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                candidate.type?.let { MetaChip(it.uppercase(Locale.getDefault())) }
-                candidate.confidence?.let { MetaChip("${(it * 100).toInt()}%") }
-            }
-            candidate.notes?.takeIf { it.isNotBlank() }?.let {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(it, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
-            }
-            if (resolution.matches.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("TMDB matches", color = Color.White.copy(alpha = 0.48f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(modifier = Modifier.height(8.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    resolution.matches.take(4).forEach { match ->
-                        TmdbMatchRow(match = match)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TmdbMatchRow(match: TmdbMatch) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-        val poster = tmdbPosterUrl(match.posterPath)
-        if (poster != null) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current).data(poster).crossfade(true).build(),
-                contentDescription = match.title,
-                modifier = Modifier
-                    .size(width = 72.dp, height = 108.dp)
-                    .clip(RoundedCornerShape(12.dp)),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(width = 72.dp, height = 108.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = 0.08f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Image, contentDescription = null, tint = Color.White.copy(alpha = 0.5f))
-            }
-        }
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(match.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            match.originalTitle?.takeIf { it.isNotBlank() && it != match.title }?.let {
-                Text(it, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
-            }
-            match.releaseDate?.let {
-                Text("Release: $it", color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
-            }
-            val stats = buildList {
-                match.popularity?.let { add("Popularity: ${String.format(Locale.getDefault(), "%.1f", it)}") }
-                match.voteAverage?.let { add("Vote: ${String.format(Locale.getDefault(), "%.1f", it)}") }
-            }
-            if (stats.isNotEmpty()) {
-                Text(stats.joinToString(" · "), color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
-            }
-            match.overview?.takeIf { it.isNotBlank() }?.let {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    it,
-                    color = Color.White.copy(alpha = 0.65f),
-                    fontSize = 12.sp,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
+private fun InfoRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = Color.White.copy(alpha = 0.45f), fontSize = 13.sp)
+        Text(value, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -1730,13 +1650,154 @@ private fun TrailerCard(title: String, duration: String, views: String) {
 }
 
 @Composable
-private fun InfoRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = Color.White.copy(alpha = 0.45f), fontSize = 13.sp)
-        Text(value, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+private fun ResolutionCard(index: Int, resolution: CandidateResolution) {
+    val candidate = resolution.candidate
+    ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF11111A))) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "$index. ${candidate.title}${candidate.year?.let { " ($it)" } ?: ""}",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                candidate.type?.let { MetaChip(it.uppercase(LocalLocale.current.platformLocale)) }
+                candidate.confidence?.let { MetaChip("${(it * 100).toInt()}%") }
+            }
+            candidate.notes?.takeIf { it.isNotBlank() }?.let {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(it, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+            }
+            if (resolution.matches.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("TMDB matches", color = Color.White.copy(alpha = 0.48f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    resolution.matches.take(4).forEach { match ->
+                        TmdbMatchRow(match = match)
+                    }
+                }
+            }
+        }
     }
 }
 
+@Composable
+private fun TmdbMatchRow(match: TmdbMatch) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .clickable { showDialog = true }
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        val poster = tmdbPosterUrl(match.posterPath)
+        if (poster != null) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current).data(poster).crossfade(true).build(),
+                contentDescription = match.title,
+                modifier = Modifier
+                    .size(width = 72.dp, height = 108.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(width = 72.dp, height = 108.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.White.copy(alpha = 0.08f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Image, contentDescription = null, tint = Color.White.copy(alpha = 0.5f))
+            }
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(match.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            match.originalTitle?.takeIf { it.isNotBlank() && it != match.title }?.let {
+                Text(it, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+            }
+            match.releaseDate?.let {
+                Text("Release: $it", color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
+            }
+            val stats = buildList {
+                match.popularity?.let { add("Popularity: ${String.format(LocalLocale.current.platformLocale, "%.1f", it)}") }
+                match.voteAverage?.let { add("Vote: ${String.format(LocalLocale.current.platformLocale, "%.1f", it)}") }
+            }
+            if (stats.isNotEmpty()) {
+                Text(stats.joinToString(" · "), color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+            }
+            match.overview?.takeIf { it.isNotBlank() }?.let {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    it,
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontSize = 12.sp,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = {
+                Text(match.title, fontWeight = FontWeight.SemiBold)
+            },
+            text = {
+                Column {
+                    val poster = tmdbPosterUrl(match.posterPath, size = "w780")
+                    if (poster != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current).data(poster).crossfade(true).build(),
+                            contentDescription = match.title,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(300.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
+                    match.releaseDate?.let { Text("Release: $it", color = Color.White.copy(alpha = 0.7f)) }
+                    match.voteAverage?.let { Text("Rating: ${String.format(LocalLocale.current.platformLocale, "%.1f", it)}/10", color = Color.White.copy(alpha = 0.7f)) }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    match.overview?.let { Text(it, color = Color.White.copy(alpha = 0.85f)) }
+
+                    if (match.cinemaShowtimes.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Showtimes:", fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            match.cinemaShowtimes.forEach { show ->
+                                ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF11111A))) {
+                                    Column(modifier = Modifier.padding(8.dp)) {
+                                        Text(show.cinemaName, fontWeight = FontWeight.SemiBold)
+                                        Text(show.cinemaLocation, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+                                        show.bookingUrl.takeIf { it.isNotBlank() }?.let { url ->
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(url, color = Color(0xFFE50914))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDialog = false }) { Text("Zatvori") }
+            }
+        )
+    }
+}
 
 
 
