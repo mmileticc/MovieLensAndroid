@@ -1,6 +1,7 @@
 package dev.milinko.movielens.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -20,6 +21,16 @@ sealed class Screen(val route: String) {
     object Profile : Screen("profile")
 }
 
+        private fun NavHostController.navigateBottomTab(route: String) {
+            navigate(route) {
+                popUpTo(graph.findStartDestination().id) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+
 @Composable
 fun MovieLensNavHost(navController: NavHostController) {
     NavHost(
@@ -32,13 +43,13 @@ fun MovieLensNavHost(navController: NavHostController) {
                     navController.navigate(Screen.MovieDetail.createRoute(tmdbId))
                 },
                 onNavigateToSearch = {
-                    navController.navigate(Screen.Search.route)
+                    navController.navigateBottomTab(Screen.Search.route)
                 },
                 onNavigateToLibrary = {
-                    navController.navigate(Screen.Library.route)
+                    navController.navigateBottomTab(Screen.Library.route)
                 },
                 onNavigateToProfile = {
-                    navController.navigate(Screen.Profile.route)
+                    navController.navigateBottomTab(Screen.Profile.route)
                 }
             )
         }
@@ -49,13 +60,13 @@ fun MovieLensNavHost(navController: NavHostController) {
                     navController.navigate(Screen.MovieDetail.createRoute(tmdbId))
                 },
                 onNavigateBack = {
-                    navController.navigateUp()
+                    navController.navigateBottomTab(Screen.Home.route)
                 },
                 onNavigateToLibrary = {
-                    navController.navigate(Screen.Library.route)
+                    navController.navigateBottomTab(Screen.Library.route)
                 },
                 onNavigateToProfile = {
-                    navController.navigate(Screen.Profile.route)
+                    navController.navigateBottomTab(Screen.Profile.route)
                 }
             )
         }
@@ -76,15 +87,13 @@ fun MovieLensNavHost(navController: NavHostController) {
                     navController.navigate(Screen.MovieDetail.createRoute(tmdbId))
                 },
                 onNavigateToHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = true }
-                    }
+                    navController.navigateBottomTab(Screen.Home.route)
                 },
                 onNavigateToSearch = {
-                    navController.navigate(Screen.Search.route)
+                    navController.navigateBottomTab(Screen.Search.route)
                 },
                 onNavigateToProfile = {
-                    navController.navigate(Screen.Profile.route)
+                    navController.navigateBottomTab(Screen.Profile.route)
                 }
             )
         }
@@ -92,15 +101,13 @@ fun MovieLensNavHost(navController: NavHostController) {
         composable(Screen.Profile.route) {
             ProfileScreen(
                 onNavigateToHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = true }
-                    }
+                    navController.navigateBottomTab(Screen.Home.route)
                 },
                 onNavigateToSearch = {
-                    navController.navigate(Screen.Search.route)
+                    navController.navigateBottomTab(Screen.Search.route)
                 },
                 onNavigateToLibrary = {
-                    navController.navigate(Screen.Library.route)
+                    navController.navigateBottomTab(Screen.Library.route)
                 }
             )
         }
