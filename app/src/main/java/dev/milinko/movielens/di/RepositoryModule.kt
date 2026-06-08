@@ -4,8 +4,6 @@ import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import dev.milinko.movielens.data.repository.ChatRepository
-import dev.milinko.movielens.data.repository.ChatRepositoryImpl
 import dev.milinko.movielens.data.repository.MovieRepository
 import dev.milinko.movielens.data.repository.MovieRepositoryImpl
 import dev.milinko.movielens.data.repository.UserRepository
@@ -18,11 +16,6 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
 
-    @Binds
-    @Singleton
-    abstract fun bindChatRepository(
-        chatRepositoryImpl: ChatRepositoryImpl
-    ): ChatRepository
 
     @Binds
     @Singleton

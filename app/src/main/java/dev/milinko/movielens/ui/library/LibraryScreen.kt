@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Search
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -100,7 +102,7 @@ fun LibraryScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            TabRow(
+            SecondaryTabRow(
                 selectedTabIndex = selectedTabIndex,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -306,7 +308,8 @@ fun BottomNavigationBar(
             BottomNavItem("Pretraga", Icons.Default.Search, selectedTab == BottomNavTab.SEARCH) {
                 onTabSelected(BottomNavTab.SEARCH)
             }
-            BottomNavItem("Biblioteka", Icons.Default.LibraryBooks, selectedTab == BottomNavTab.LIBRARY) {
+            BottomNavItem("Biblioteka",
+                Icons.AutoMirrored.Filled.LibraryBooks, selectedTab == BottomNavTab.LIBRARY) {
                 onTabSelected(BottomNavTab.LIBRARY)
             }
             BottomNavItem("Profil", Icons.Default.Settings, selectedTab == BottomNavTab.PROFILE) {

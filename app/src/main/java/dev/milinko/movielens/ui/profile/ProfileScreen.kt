@@ -47,6 +47,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import dev.milinko.movielens.ui.components.SettingsDialog
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.runtime.saveable.rememberSaveable
 
 @Composable
@@ -136,7 +137,7 @@ fun ProfileScreen(
             }
 
             item {
-                TabRow(
+                SecondaryTabRow(
                     selectedTabIndex = selectedTabIndex,
                     modifier = Modifier.fillMaxWidth()
                 ) {

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Search
@@ -54,7 +55,8 @@ fun AppBottomNavigationBar(
             AppBottomNavItem("Pretraga", Icons.Default.Search, selectedTab == BottomNavTab.SEARCH) {
                 onTabSelected(BottomNavTab.SEARCH)
             }
-            AppBottomNavItem("Biblioteka", Icons.Default.LibraryBooks, selectedTab == BottomNavTab.LIBRARY) {
+            AppBottomNavItem("Biblioteka",
+                Icons.AutoMirrored.Filled.LibraryBooks, selectedTab == BottomNavTab.LIBRARY) {
                 onTabSelected(BottomNavTab.LIBRARY)
             }
             AppBottomNavItem("Profil", Icons.Default.Settings, selectedTab == BottomNavTab.PROFILE) {
