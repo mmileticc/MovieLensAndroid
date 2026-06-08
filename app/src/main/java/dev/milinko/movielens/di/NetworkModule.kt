@@ -4,9 +4,10 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import dev.milinko.movielens.data.remote.ChatApiService
 import dev.milinko.movielens.data.remote.vision.VisionApi
 import dev.milinko.movielens.data.pref.UrlStorage
+import dev.milinko.movielens.data.remote.AuthApi
+import dev.milinko.movielens.data.remote.interceptor.AuthInterceptor
 import dev.milinko.movielens.data.remote.interceptor.DynamicBaseUrlInterceptor
 import dev.milinko.movielens.data.remote.movie.MovieApiService
 import dev.milinko.movielens.data.remote.user.UserApiService
@@ -25,13 +26,15 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideOkHttpClient(
-        dynamicBaseUrlInterceptor: DynamicBaseUrlInterceptor
+        dynamicBaseUrlInterceptor: DynamicBaseUrlInterceptor,
+        authInterceptor: AuthInterceptor
     ): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
         }
         return OkHttpClient.Builder()
             .addInterceptor(dynamicBaseUrlInterceptor)
+            .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
@@ -50,13 +53,6 @@ object NetworkModule {
             .build()
     }
 
-    @Provides
-    @Singleton
-    fun provideChatApiService(retrofit: Retrofit): ChatApiService {
-        // Logika za Gemini API bi trebala biti ovde ili u interceptoru, 
-        // ali za potrebe ovog zadatka pretpostavljamo da retrofit već radi.
-        return retrofit.create(ChatApiService::class.java)
-    }
 
     @Provides
     @Singleton
@@ -74,5 +70,11 @@ object NetworkModule {
     @Singleton
     fun provideUserApiService(retrofit: Retrofit): UserApiService {
         return retrofit.create(UserApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAuthApi(retrofit: Retrofit): AuthApi {
+        return retrofit.create(AuthApi::class.java)
     }
 }

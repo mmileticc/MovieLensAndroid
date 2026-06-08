@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "688395138951",
+    "project_id": "movielens-90309",
+    "storage_bucket": "movielens-90309.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:688395138951:android:747beb28faf46c7aaa4522",
+        "android_client_info": {
+          "package_name": "dev.milinko.movielens"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "688395138951-64q747lml48uq3idgstjgj5tpa0rkgr2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqpC7kW7m6VTzA78en93cMKocrAUxOQ-s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "688395138951-64q747lml48uq3idgstjgj5tpa0rkgr2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

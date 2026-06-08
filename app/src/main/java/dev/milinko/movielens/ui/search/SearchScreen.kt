@@ -1,5 +1,6 @@
 package dev.milinko.movielens.ui.search
 
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.util.Log
@@ -28,9 +29,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -44,6 +45,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -55,25 +57,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import android.content.Intent
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLocale
-import androidx.core.net.toUri
-import dev.milinko.movielens.data.remote.vision.VisionSearchResponse
-import dev.milinko.movielens.data.remote.vision.CandidateResolution
-import dev.milinko.movielens.data.remote.vision.TmdbMatch
-import dev.milinko.movielens.data.remote.vision.ScrapedMovie
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import dev.milinko.movielens.data.remote.vision.CandidateResolution
+import dev.milinko.movielens.data.remote.vision.ScrapedMovie
+import dev.milinko.movielens.data.remote.vision.TmdbMatch
+import dev.milinko.movielens.data.remote.vision.VisionSearchResponse
 import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
+import dev.milinko.movielens.ui.auth.AuthViewModel
 import java.io.File
 
 @Composable
@@ -82,12 +83,26 @@ fun SearchScreen(
     onNavigateToDetail: (Int) -> Unit,
     onNavigateBack: () -> Unit,
     onNavigateToLibrary: () -> Unit,
-    onNavigateToProfile: () -> Unit
+    onNavigateToProfile: () -> Unit,
+    onRequireSignIn: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    // context removed where unused
+    val authViewModel: AuthViewModel = hiltViewModel()
     val context = LocalContext.current
     var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    fun requireScanAuthOrProceed(onAuthorized: () -> Unit) {
+        if (authViewModel.isAlreadySignedIn()) {
+            onAuthorized()
+        } else {
+            Toast.makeText(
+                context,
+                "Za skeniranje slike moraš prvo da se uloguješ.",
+                Toast.LENGTH_LONG
+            ).show()
+            onRequireSignIn()
+        }
+    }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -156,7 +171,7 @@ fun SearchScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onNavigateBack) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                     Text(
                         "Pretraži filmove",
@@ -253,7 +268,11 @@ fun SearchScreen(
                                         }
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Button(
-                                            onClick = { viewModel.detectImage() }
+                                            onClick = {
+                                                requireScanAuthOrProceed {
+                                                    viewModel.detectImage()
+                                                }
+                                            }
                                         ) {
                                             Text("Analiziraj sliku")
                                         }
@@ -322,14 +341,13 @@ fun SearchScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-                    // If vision detection returned something, display it here (no extra network call)
-                    uiState.visionResult?.let { response ->
-                        item {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            VisionResultSection(response = response, onClear = { viewModel.clearResults() })
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
-                    }
+            uiState.visionResult?.let { response ->
+                item {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    VisionResultSection(response = response, onClear = { viewModel.clearResults() })
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
 
             if (uiState.error != null) {
                 item {
@@ -689,5 +707,4 @@ private fun BottomNavItem(
         )
     }
 }
-
 

@@ -27,7 +27,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,6 +47,7 @@ import dev.milinko.movielens.ui.components.SettingsDialog
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
 import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.saveable.rememberSaveable
 
 @Composable
@@ -55,7 +55,8 @@ fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel(),
     onNavigateToHome: () -> Unit,
     onNavigateToSearch: () -> Unit,
-    onNavigateToLibrary: () -> Unit
+    onNavigateToLibrary: () -> Unit,
+    onSignOut: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
@@ -94,7 +95,7 @@ fun ProfileScreen(
                     fontWeight = FontWeight.Bold
                 )
                 // quick access to backend editor in top bar
-                androidx.compose.material3.TextButton(onClick = { showBackendDialogGlobal.value = true }) {
+                TextButton(onClick = { showBackendDialogGlobal.value = true }) {
                     Text("Backend")
                 }
             }
@@ -158,7 +159,7 @@ fun ProfileScreen(
                 0 -> {
                     item {
                         if (uiState.userSettings != null) {
-                            SettingsSection(uiState.userSettings!!, viewModel)
+                            SettingsSection(uiState.userSettings!!, viewModel, onSignOut)
                         }
                     }
                 }
@@ -246,7 +247,8 @@ private fun StatItem(value: String, label: String) {
 @Composable
 private fun SettingsSection(
     settings: dev.milinko.movielens.data.remote.user.UserSettings,
-    viewModel: ProfileViewModel
+    viewModel: ProfileViewModel,
+    onSignOut: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -367,6 +369,24 @@ private fun SettingsSection(
                     showBackendDialog.value = false
                 }
             )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Sign-out button
+        val authViewModel: dev.milinko.movielens.ui.auth.AuthViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+        androidx.compose.material3.Button(
+            onClick = {
+                authViewModel.signOut()
+                onSignOut()
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer
+            )
+        ) {
+            Text("Odjavi se", fontWeight = FontWeight.SemiBold)
         }
     }
 }
