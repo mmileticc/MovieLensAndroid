@@ -120,6 +120,9 @@ fun MovieLensNavHost(
                     navController.navigate(Screen.SignIn.createRoute(Screen.Home.route)) {
                         popUpTo(0) { inclusive = true }
                     }
+                },
+                {
+                    navController.navigate(Screen.SignIn.createRoute(Screen.Profile.route))
                 }
             )
         }

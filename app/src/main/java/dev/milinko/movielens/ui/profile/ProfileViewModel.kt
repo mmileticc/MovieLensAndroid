@@ -3,15 +3,15 @@ package dev.milinko.movielens.ui.profile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.milinko.movielens.data.pref.UrlStorage
+import dev.milinko.movielens.data.remote.user.FriendActivity
+import dev.milinko.movielens.data.remote.user.FriendInfo
 import dev.milinko.movielens.data.remote.user.UserProfile
 import dev.milinko.movielens.data.remote.user.UserSettings
-import dev.milinko.movielens.data.remote.user.FriendInfo
-import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.data.repository.UserRepository
-import dev.milinko.movielens.data.pref.UrlStorage
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -39,6 +39,9 @@ class ProfileViewModel @Inject constructor(
     private val _baseUrl = MutableStateFlow(urlStorage.getBaseUrl())
     val baseUrl: StateFlow<String> = _baseUrl.asStateFlow()
 
+    private val _savedRoutes = MutableStateFlow(urlStorage.getSavedRoutes())
+    val savedRoutes: StateFlow<List<String>> = _savedRoutes.asStateFlow()
+
     // One-shot UI events (toasts, messages)
     private val _events = MutableSharedFlow<ProfileUiEvent>()
     val events = _events.asSharedFlow()
@@ -47,14 +50,43 @@ class ProfileViewModel @Inject constructor(
         data class ShowMessage(val message: String) : ProfileUiEvent()
     }
 
+    private fun refreshRoutesState() {
+        _baseUrl.value = urlStorage.getBaseUrl()
+        _savedRoutes.value = urlStorage.getSavedRoutes()
+    }
+
     fun updateBaseUrl(newUrl: String) {
         viewModelScope.launch {
             try {
                 urlStorage.setBaseUrl(newUrl)
-                _baseUrl.value = urlStorage.getBaseUrl()
-                _events.emit(ProfileUiEvent.ShowMessage("Backend URL sačuvan. Restart app-a da bi promena stupila na snagu."))
+                refreshRoutesState()
+                _events.emit(ProfileUiEvent.ShowMessage("Backend URL sačuvan."))
             } catch (e: Exception) {
                 _events.emit(ProfileUiEvent.ShowMessage("Greška pri čuvanju URL-a: ${e.message}"))
+            }
+        }
+    }
+
+    fun addSavedRoute(url: String) {
+        viewModelScope.launch {
+            try {
+                urlStorage.addRoute(url)
+                refreshRoutesState()
+                _events.emit(ProfileUiEvent.ShowMessage("Ruta je dodata u listu."))
+            } catch (e: Exception) {
+                _events.emit(ProfileUiEvent.ShowMessage("Greška pri dodavanju rute: ${e.message}"))
+            }
+        }
+    }
+
+    fun removeSavedRoute(url: String) {
+        viewModelScope.launch {
+            try {
+                urlStorage.removeRoute(url)
+                refreshRoutesState()
+                _events.emit(ProfileUiEvent.ShowMessage("Ruta je obrisana."))
+            } catch (e: Exception) {
+                _events.emit(ProfileUiEvent.ShowMessage("Greška pri brisanju rute: ${e.message}"))
             }
         }
     }
@@ -114,5 +146,3 @@ class ProfileViewModel @Inject constructor(
         }
     }
 }
-
-

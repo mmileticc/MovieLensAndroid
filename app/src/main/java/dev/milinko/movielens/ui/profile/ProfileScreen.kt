@@ -1,5 +1,6 @@
 package dev.milinko.movielens.ui.profile
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,36 +20,37 @@ import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.milinko.movielens.ui.auth.AuthUiState
+import dev.milinko.movielens.ui.auth.AuthViewModel
 import dev.milinko.movielens.ui.components.SettingsDialog
-import androidx.compose.ui.platform.LocalContext
-import android.widget.Toast
-import androidx.compose.material3.SecondaryTabRow
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.saveable.rememberSaveable
 
 @Composable
 fun ProfileScreen(
@@ -56,13 +58,13 @@ fun ProfileScreen(
     onNavigateToHome: () -> Unit,
     onNavigateToSearch: () -> Unit,
     onNavigateToLibrary: () -> Unit,
-    onSignOut: () -> Unit = {}
+    onSignOut: () -> Unit = {},
+    onNavigateToSignIn: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
     // quick backend editor visible in header for test flows
     val showBackendDialogGlobal = rememberSaveable { mutableStateOf(false) }
-    val baseUrlGlobal by viewModel.baseUrl.collectAsState()
 
     val context = LocalContext.current
 
@@ -82,6 +84,10 @@ fun ProfileScreen(
 
     Scaffold(
         topBar = {
+            val authViewModel: AuthViewModel = hiltViewModel()
+            val authUiState by authViewModel.uiState.collectAsState()
+            val isSignedIn = authUiState is AuthUiState.SignedIn || authViewModel.isAlreadySignedIn()
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -94,9 +100,27 @@ fun ProfileScreen(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )
-                // quick access to backend editor in top bar
-                TextButton(onClick = { showBackendDialogGlobal.value = true }) {
-                    Text("Backend")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // quick access to backend editor in top bar
+                    TextButton(onClick = { showBackendDialogGlobal.value = true }) {
+                        Text("Backend")
+                    }
+                    if (isSignedIn) {
+                        TextButton(
+                            onClick = {
+                                authViewModel.signOut()
+                                onSignOut()
+                            }
+                        ) {
+                            Text("Odjavi se", color = MaterialTheme.colorScheme.error)
+                        }
+                    } else {
+                        TextButton(
+                            onClick = onNavigateToSignIn
+                        ) {
+                            Text("Prijavi se", color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                 }
             }
         },
@@ -123,17 +147,6 @@ fun ProfileScreen(
             item {
                 if (uiState.userProfile != null) {
                     ProfileHeader(uiState.userProfile!!)
-                }
-
-                if (showBackendDialogGlobal.value) {
-                    SettingsDialog(
-                        currentUrl = baseUrlGlobal,
-                        onDismiss = { showBackendDialogGlobal.value = false },
-                        onSave = {
-                            viewModel.updateBaseUrl(it)
-                            showBackendDialogGlobal.value = false
-                        }
-                    )
                 }
             }
 
@@ -173,6 +186,23 @@ fun ProfileScreen(
             item {
                 Spacer(modifier = Modifier.height(16.dp))
             }
+        }
+
+        // Backend dialog - renderovan izvan LazyColumn-a
+        if (showBackendDialogGlobal.value) {
+            val savedRoutes by viewModel.savedRoutes.collectAsState()
+            val baseUrl by viewModel.baseUrl.collectAsState()
+            SettingsDialog(
+                currentUrl = baseUrl,
+                savedRoutes = savedRoutes,
+                onDismiss = { showBackendDialogGlobal.value = false },
+                onSave = {
+                    viewModel.updateBaseUrl(it)
+                    showBackendDialogGlobal.value = false
+                },
+                onAddRoute = { viewModel.addSavedRoute(it) },
+                onDeleteRoute = { viewModel.removeSavedRoute(it) }
+            )
         }
     }
 }
@@ -354,40 +384,28 @@ private fun SettingsSection(
                     Text("Backend URL", fontWeight = FontWeight.Medium)
                     Text(baseUrl, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                androidx.compose.material3.TextButton(onClick = { showBackendDialog.value = true }) {
+                TextButton(onClick = { showBackendDialog.value = true }) {
                     Text("Edit")
                 }
             }
         }
 
         if (showBackendDialog.value) {
+            val savedRoutes by viewModel.savedRoutes.collectAsState()
             SettingsDialog(
                 currentUrl = baseUrl,
+                savedRoutes = savedRoutes,
                 onDismiss = { showBackendDialog.value = false },
                 onSave = {
                     viewModel.updateBaseUrl(it)
                     showBackendDialog.value = false
-                }
+                },
+                onAddRoute = { viewModel.addSavedRoute(it) },
+                onDeleteRoute = { viewModel.removeSavedRoute(it) }
             )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
-
-        // Sign-out button
-        val authViewModel: dev.milinko.movielens.ui.auth.AuthViewModel = androidx.hilt.navigation.compose.hiltViewModel()
-        androidx.compose.material3.Button(
-            onClick = {
-                authViewModel.signOut()
-                onSignOut()
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.onErrorContainer
-            )
-        ) {
-            Text("Odjavi se", fontWeight = FontWeight.SemiBold)
-        }
     }
 }
 

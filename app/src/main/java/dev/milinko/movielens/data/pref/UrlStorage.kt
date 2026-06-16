@@ -5,6 +5,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONArray
 import javax.inject.Inject
 import javax.inject.Singleton
+import androidx.core.content.edit
 
 @Singleton
 class UrlStorage @Inject constructor(
@@ -53,10 +54,43 @@ class UrlStorage @Inject constructor(
             }
         }.take(MAX_SAVED_ROUTES)
 
-        prefs.edit()
-            .putString(KEY_BASE_URL, formattedUrl)
-            .putString(KEY_SAVED_ROUTES, JSONArray(updatedRoutes).toString())
-            .apply()
+        prefs.edit {
+            putString(KEY_BASE_URL, formattedUrl)
+                .putString(KEY_SAVED_ROUTES, JSONArray(updatedRoutes).toString())
+        }
+    }
+
+    fun addRoute(url: String) {
+        val formattedUrl = normalizeUrl(url)
+        val updatedRoutes = buildList {
+            add(formattedUrl)
+            getSavedRoutes().forEach { existingRoute ->
+                if (existingRoute != formattedUrl) add(existingRoute)
+            }
+        }.take(MAX_SAVED_ROUTES)
+
+        prefs.edit {
+            putString(KEY_SAVED_ROUTES, JSONArray(updatedRoutes).toString())
+        }
+    }
+
+    fun removeRoute(url: String) {
+        val formattedUrl = normalizeUrl(url)
+        val remainingRoutes = getSavedRoutes().filterNot { it == formattedUrl }
+
+        val fallbackUrl = remainingRoutes.firstOrNull() ?: DEFAULT_URL
+        val currentBaseUrl = getBaseUrl()
+
+        prefs.edit {
+            putString(
+                KEY_SAVED_ROUTES,
+                JSONArray(remainingRoutes.ifEmpty { listOf(fallbackUrl) }).toString()
+            )
+                .putString(
+                    KEY_BASE_URL,
+                    if (currentBaseUrl == formattedUrl) fallbackUrl else currentBaseUrl
+                )
+        }
     }
 
     private fun normalizeUrl(url: String): String {
