@@ -7,6 +7,8 @@ import dev.milinko.movielens.data.remote.movie.MovieSearchResult
 import dev.milinko.movielens.data.repository.MovieRepository
 import dev.milinko.movielens.data.repository.VisionRepository
 import dev.milinko.movielens.data.remote.vision.VisionSearchResponse
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,30 +33,54 @@ class SearchViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
-    fun setSearchQuery(query: String) {
-        _uiState.value = _uiState.value.copy(searchQuery = query)
+    // Debounce posao za pretragu dok korisnik kuca - svaki novi karakter otkazuje prethodni.
+    private var searchJob: Job? = null
+
+    private companion object {
+        const val SEARCH_DEBOUNCE_MS = 300L
+        const val MIN_QUERY_LENGTH = 2
     }
 
+    fun setSearchQuery(query: String) {
+        _uiState.value = _uiState.value.copy(searchQuery = query)
+
+        searchJob?.cancel()
+        val trimmed = query.trim()
+        if (trimmed.length < MIN_QUERY_LENGTH) {
+            _uiState.value = _uiState.value.copy(searchResults = emptyList(), error = null)
+            return
+        }
+
+        searchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MS)
+            performSearch(trimmed)
+        }
+    }
+
+    /** Trenutna pretraga na Enter/IME search akciju - preskače debounce, traži odmah. */
     fun searchMovies() {
         val query = _uiState.value.searchQuery.trim()
         if (query.isEmpty()) return
 
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            movieRepository.searchMovies(query)
-                .onSuccess { results ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        searchResults = results
-                    )
-                }
-                .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = e.message ?: "Greška pri pretrazi"
-                    )
-                }
-        }
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch { performSearch(query) }
+    }
+
+    private suspend fun performSearch(query: String) {
+        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        movieRepository.searchMovies(query)
+            .onSuccess { results ->
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    searchResults = results
+                )
+            }
+            .onFailure { e ->
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = e.message ?: "Greška pri pretrazi"
+                )
+            }
     }
 
     fun onImageSelected(uri: String?) {
