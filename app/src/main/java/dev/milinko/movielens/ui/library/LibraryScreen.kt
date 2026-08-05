@@ -17,19 +17,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.LibraryBooks
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SecondaryTabRow
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +44,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
+import dev.milinko.movielens.ui.components.AppBottomNavigationBar
+import dev.milinko.movielens.ui.components.BottomNavTab
 
 @Composable
 fun LibraryScreen(
@@ -63,7 +59,7 @@ fun LibraryScreen(
     var selectedTabIndex by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
-        viewModel.loadLibrary("user123") // TODO: Get actual userId from auth
+        viewModel.loadLibrary()
     }
 
     Scaffold(
@@ -83,7 +79,7 @@ fun LibraryScreen(
             }
         },
         bottomBar = {
-            BottomNavigationBar(
+            AppBottomNavigationBar(
                 selectedTab = BottomNavTab.LIBRARY,
                 onTabSelected = { tab ->
                     when (tab) {
@@ -102,58 +98,67 @@ fun LibraryScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            SecondaryTabRow(
-                selectedTabIndex = selectedTabIndex,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Tab(
-                    selected = selectedTabIndex == 0,
-                    onClick = { selectedTabIndex = 0 },
-                    text = { Text("Watchlist") }
-                )
-                Tab(
-                    selected = selectedTabIndex == 1,
-                    onClick = { selectedTabIndex = 1 },
-                    text = { Text("Istorija") }
-                )
-            }
+            if (uiState.requiresSignIn) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Uloguj se da vidiš svoju biblioteku")
+                }
+            } else {
+                SecondaryTabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Tab(
+                        selected = selectedTabIndex == 0,
+                        onClick = { selectedTabIndex = 0 },
+                        text = { Text("Watchlist") }
+                    )
+                    Tab(
+                        selected = selectedTabIndex == 1,
+                        onClick = { selectedTabIndex = 1 },
+                        text = { Text("Istorija") }
+                    )
+                }
 
-            when (selectedTabIndex) {
-                0 -> {
-                    if (uiState.watchlist.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("Nema filmova u watchlist-u")
-                        }
-                    } else {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(uiState.watchlist) { item ->
-                                WatchlistItemCard(
-                                    item = item,
-                                    onMovieClick = { onNavigateToDetail(item.tmdbId) },
-                                    onRemoveClick = { viewModel.removeFromWatchlist("user123", item.tmdbId) }
-                                )
+                when (selectedTabIndex) {
+                    0 -> {
+                        if (uiState.watchlist.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Nema filmova u watchlist-u")
+                            }
+                        } else {
+                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                items(uiState.watchlist) { item ->
+                                    WatchlistItemCard(
+                                        item = item,
+                                        onMovieClick = { onNavigateToDetail(item.tmdbId) },
+                                        onRemoveClick = { viewModel.removeFromWatchlist(item.tmdbId) }
+                                    )
+                                }
                             }
                         }
                     }
-                }
-                1 -> {
-                    if (uiState.history.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("Nema istorije")
-                        }
-                    } else {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(uiState.history) { item ->
-                                HistoryItemCard(
-                                    item = item,
-                                    onMovieClick = { onNavigateToDetail(item.tmdbId) }
-                                )
+                    1 -> {
+                        if (uiState.history.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Nema istorije")
+                            }
+                        } else {
+                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                items(uiState.history) { item ->
+                                    HistoryItemCard(
+                                        item = item,
+                                        onMovieClick = { onNavigateToDetail(item.tmdbId) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -279,71 +284,5 @@ private fun HistoryItemCard(
     }
 }
 
-enum class BottomNavTab {
-    HOME, SEARCH, LIBRARY, PROFILE
-}
-
-@Composable
-fun BottomNavigationBar(
-    selectedTab: BottomNavTab,
-    onTabSelected: (BottomNavTab) -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(64.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 8.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            BottomNavItem("Home", Icons.Default.Search, selectedTab == BottomNavTab.HOME) {
-                onTabSelected(BottomNavTab.HOME)
-            }
-            BottomNavItem("Pretraga", Icons.Default.Search, selectedTab == BottomNavTab.SEARCH) {
-                onTabSelected(BottomNavTab.SEARCH)
-            }
-            BottomNavItem("Biblioteka",
-                Icons.AutoMirrored.Filled.LibraryBooks, selectedTab == BottomNavTab.LIBRARY) {
-                onTabSelected(BottomNavTab.LIBRARY)
-            }
-            BottomNavItem("Profil", Icons.Default.Settings, selectedTab == BottomNavTab.PROFILE) {
-                onTabSelected(BottomNavTab.PROFILE)
-            }
-        }
-    }
-}
-
-@Composable
-private fun BottomNavItem(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        androidx.compose.material3.Icon(
-            icon,
-            contentDescription = label,
-            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            label,
-            fontSize = 10.sp,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
+// Zajednička AppBottomNavigationBar komponenta (ui/components) — bez lokalnih duplikata.
 

@@ -16,16 +16,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 // ...existing imports...
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -44,6 +41,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
+import dev.milinko.movielens.ui.components.AppBottomNavigationBar
+import dev.milinko.movielens.ui.components.BottomNavTab
 // ...existing code...
 
 @Composable
@@ -70,7 +69,7 @@ fun HomeScreen(
             }
         },
         bottomBar = {
-            BottomNavigationBar(
+            AppBottomNavigationBar(
                 selectedTab = BottomNavTab.HOME,
                 onTabSelected = { tab ->
                     when (tab) {
@@ -203,73 +202,6 @@ private fun ErrorCard(message: String) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(message, fontSize = 13.sp)
         }
-    }
-}
-
-enum class BottomNavTab {
-    HOME, SEARCH, LIBRARY, PROFILE
-}
-
-@Composable
-fun BottomNavigationBar(
-    selectedTab: BottomNavTab,
-    onTabSelected: (BottomNavTab) -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(64.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 8.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            BottomNavItem("Home", Icons.Default.Search, selectedTab == BottomNavTab.HOME) {
-                onTabSelected(BottomNavTab.HOME)
-            }
-            BottomNavItem("Pretraga", Icons.Default.Search, selectedTab == BottomNavTab.SEARCH) {
-                onTabSelected(BottomNavTab.SEARCH)
-            }
-            BottomNavItem("Biblioteka", Icons.AutoMirrored.Filled.LibraryBooks, selectedTab == BottomNavTab.LIBRARY) {
-                onTabSelected(BottomNavTab.LIBRARY)
-            }
-            BottomNavItem("Profil", Icons.Default.Settings, selectedTab == BottomNavTab.PROFILE) {
-                onTabSelected(BottomNavTab.PROFILE)
-            }
-        }
-    }
-}
-
-@Composable
-private fun BottomNavItem(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            icon,
-            contentDescription = label,
-            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            label,
-            fontSize = 10.sp,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 

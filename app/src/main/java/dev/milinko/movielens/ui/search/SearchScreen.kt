@@ -29,12 +29,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -43,7 +40,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -75,6 +71,8 @@ import dev.milinko.movielens.data.remote.vision.TmdbMatch
 import dev.milinko.movielens.data.remote.vision.VisionSearchResponse
 import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 import dev.milinko.movielens.ui.auth.AuthViewModel
+import dev.milinko.movielens.ui.components.AppBottomNavigationBar
+import dev.milinko.movielens.ui.components.BottomNavTab
 import java.io.File
 
 @Composable
@@ -144,7 +142,7 @@ fun SearchScreen(
 
     Scaffold(
         bottomBar = {
-            BottomNavigationBar(
+            AppBottomNavigationBar(
                 selectedTab = BottomNavTab.SEARCH,
                 onTabSelected = { tab ->
                     when (tab) {
@@ -639,72 +637,5 @@ private fun MovieSearchResultCard(
     }
 }
 
-// Reuse BottomNavigationBar from HomeScreen - duplicate for now
-
-enum class BottomNavTab {
-    HOME, SEARCH, LIBRARY, PROFILE
-}
-
-@Composable
-fun BottomNavigationBar(
-    selectedTab: BottomNavTab,
-    onTabSelected: (BottomNavTab) -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(64.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 8.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            BottomNavItem("Home", Icons.Default.Search, selectedTab == BottomNavTab.HOME) {
-                onTabSelected(BottomNavTab.HOME)
-            }
-            BottomNavItem("Pretraga", Icons.Default.Search, selectedTab == BottomNavTab.SEARCH) {
-                onTabSelected(BottomNavTab.SEARCH)
-            }
-            BottomNavItem("Biblioteka", Icons.AutoMirrored.Filled.LibraryBooks, selectedTab == BottomNavTab.LIBRARY) {
-                onTabSelected(BottomNavTab.LIBRARY)
-            }
-            BottomNavItem("Profil", Icons.Default.Settings, selectedTab == BottomNavTab.PROFILE) {
-                onTabSelected(BottomNavTab.PROFILE)
-            }
-        }
-    }
-}
-
-@Composable
-private fun BottomNavItem(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            icon,
-            contentDescription = label,
-            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            label,
-            fontSize = 10.sp,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
+// Zajednička AppBottomNavigationBar komponenta (ui/components) — bez lokalnih duplikata.
 

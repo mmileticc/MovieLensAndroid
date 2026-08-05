@@ -3,6 +3,7 @@ package dev.milinko.movielens.ui.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.milinko.movielens.data.pref.SessionManager
 import dev.milinko.movielens.data.remote.movie.WatchlistItem
 import dev.milinko.movielens.data.remote.movie.HistoryItem
 import dev.milinko.movielens.data.repository.UserRepository
@@ -16,21 +17,30 @@ data class LibraryUiState(
     val watchlist: List<WatchlistItem> = emptyList(),
     val history: List<HistoryItem> = emptyList(),
     val isLoading: Boolean = false,
+    val requiresSignIn: Boolean = false,
     val error: String? = null
 )
 
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LibraryUiState())
     val uiState: StateFlow<LibraryUiState> = _uiState.asStateFlow()
 
-    fun loadLibrary(userId: String) {
+    /** Učitava biblioteku za trenutno ulogovanog korisnika (iz SessionManager-a). */
+    fun loadLibrary() {
+        val userId = sessionManager.getUserId()
+        if (userId == null) {
+            _uiState.value = _uiState.value.copy(requiresSignIn = true, isLoading = false)
+            return
+        }
+
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
-            
+            _uiState.value = _uiState.value.copy(isLoading = true, requiresSignIn = false)
+
             // Load both watchlist and history
             val watchlistResult = userRepository.getWatchlist(userId)
             val historyResult = userRepository.getHistory(userId)
@@ -57,7 +67,8 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    fun removeFromWatchlist(userId: String, tmdbId: Int) {
+    fun removeFromWatchlist(tmdbId: Int) {
+        val userId = sessionManager.getUserId() ?: return
         viewModelScope.launch {
             userRepository.removeFromWatchlist(userId, tmdbId)
                 .onSuccess {

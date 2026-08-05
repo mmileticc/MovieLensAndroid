@@ -16,10 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -48,8 +45,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import dev.milinko.movielens.ui.auth.AuthUiState
 import dev.milinko.movielens.ui.auth.AuthViewModel
+import dev.milinko.movielens.ui.components.AppBottomNavigationBar
+import dev.milinko.movielens.ui.components.BottomNavTab
 import dev.milinko.movielens.ui.components.SettingsDialog
 
 @Composable
@@ -62,6 +63,7 @@ fun ProfileScreen(
     onNavigateToSignIn: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val sessionUser by viewModel.sessionUser.collectAsState()
     var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
     // quick backend editor visible in header for test flows
     val showBackendDialogGlobal = rememberSaveable { mutableStateOf(false) }
@@ -79,7 +81,7 @@ fun ProfileScreen(
     }
 
     LaunchedEffect(Unit) {
-        viewModel.loadProfile("user123") // TODO: Get actual userId
+        viewModel.loadProfile()
     }
 
     Scaffold(
@@ -125,7 +127,7 @@ fun ProfileScreen(
             }
         },
         bottomBar = {
-            BottomNavigationBar(
+            AppBottomNavigationBar(
                 selectedTab = BottomNavTab.PROFILE,
                 onTabSelected = { tab ->
                     when (tab) {
@@ -145,8 +147,14 @@ fun ProfileScreen(
                 .background(MaterialTheme.colorScheme.background)
         ) {
             item {
-                if (uiState.userProfile != null) {
-                    ProfileHeader(uiState.userProfile!!)
+                val fullProfile = uiState.userProfile
+                if (fullProfile != null) {
+                    // Backend profil (sa statistikom) kad GET /api/users/{id} bude dostupan.
+                    ProfileHeader(fullProfile)
+                } else if (sessionUser != null) {
+                    // Dok taj endpoint ne postoji, prikazujemo bar ono što već imamo lokalno
+                    // iz Firebase/backend auth exchange-a (ime, email, avatar) — bez čekanja mreže.
+                    SessionIdentityHeader(sessionUser!!)
                 }
             }
 
@@ -267,6 +275,61 @@ private fun ProfileHeader(profile: dev.milinko.movielens.data.remote.user.UserPr
 }
 
 @Composable
+private fun SessionIdentityHeader(user: SessionUserInfo) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        if (!user.avatarUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(user.avatarUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = user.username,
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+            )
+        } else {
+            Surface(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape),
+                color = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(
+                    Icons.Default.Person,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            user.username?.takeIf { it.isNotBlank() } ?: "Korisnik",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold
+        )
+        user.email?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                it,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+    }
+}
+
+@Composable
 private fun StatItem(value: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -304,7 +367,7 @@ private fun SettingsSection(
                 Switch(
                     checked = settings.darkMode,
                     onCheckedChange = {
-                        viewModel.toggleDarkMode("user123")
+                        viewModel.toggleDarkMode()
                     }
                 )
             }
@@ -456,72 +519,5 @@ private fun FriendCard(friend: dev.milinko.movielens.data.remote.user.FriendInfo
     }
 }
 
-enum class BottomNavTab {
-    HOME, SEARCH, LIBRARY, PROFILE
-}
-
-@Composable
-fun BottomNavigationBar(
-    selectedTab: BottomNavTab,
-    onTabSelected: (BottomNavTab) -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(64.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 8.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            BottomNavItem("Home", Icons.Default.Search, selectedTab == BottomNavTab.HOME) {
-                onTabSelected(BottomNavTab.HOME)
-            }
-            BottomNavItem("Pretraga", Icons.Default.Search, selectedTab == BottomNavTab.SEARCH) {
-                onTabSelected(BottomNavTab.SEARCH)
-            }
-            BottomNavItem("Biblioteka", Icons.AutoMirrored.Filled.LibraryBooks, selectedTab == BottomNavTab.LIBRARY) {
-                onTabSelected(BottomNavTab.LIBRARY)
-            }
-            BottomNavItem("Profil", Icons.Default.Settings, selectedTab == BottomNavTab.PROFILE) {
-                onTabSelected(BottomNavTab.PROFILE)
-            }
-        }
-    }
-}
-
-@Composable
-private fun BottomNavItem(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            icon,
-            contentDescription = label,
-            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            label,
-            fontSize = 10.sp,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-
+// Zajednička AppBottomNavigationBar komponenta (ui/components) — bez lokalnih duplikata.
 

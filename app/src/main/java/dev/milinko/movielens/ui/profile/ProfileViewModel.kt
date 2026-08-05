@@ -3,6 +3,7 @@ package dev.milinko.movielens.ui.profile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.milinko.movielens.data.pref.SessionManager
 import dev.milinko.movielens.data.pref.UrlStorage
 import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.data.remote.user.FriendInfo
@@ -26,14 +27,29 @@ data class ProfileUiState(
     val error: String? = null
 )
 
+/**
+ * Osnovni identitet ulogovanog korisnika, čuvan lokalno u SessionManager-u odmah nakon
+ * Firebase/backend auth exchange-a (vidi AuthViewModel.finishGoogleSignIn). Ne zavisi od
+ * GET /api/users/{id} (koji jos ne postoji na backendu) - prikazuje se odmah, bez čekanja mreže.
+ */
+data class SessionUserInfo(
+    val username: String?,
+    val email: String?,
+    val avatarUrl: String?
+)
+
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val userRepository: UserRepository,
-    private val urlStorage: UrlStorage
+    private val urlStorage: UrlStorage,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
+
+    private val _sessionUser = MutableStateFlow(readSessionUser())
+    val sessionUser: StateFlow<SessionUserInfo?> = _sessionUser.asStateFlow()
 
     // Expose base URL from UrlStorage so UI can edit backend address during testing
     private val _baseUrl = MutableStateFlow(urlStorage.getBaseUrl())
@@ -41,6 +57,20 @@ class ProfileViewModel @Inject constructor(
 
     private val _savedRoutes = MutableStateFlow(urlStorage.getSavedRoutes())
     val savedRoutes: StateFlow<List<String>> = _savedRoutes.asStateFlow()
+
+    private fun readSessionUser(): SessionUserInfo? {
+        val userId = sessionManager.getUserId() ?: return null
+        return SessionUserInfo(
+            username = sessionManager.getUsername(),
+            email = sessionManager.getEmail(),
+            avatarUrl = sessionManager.getAvatarUrl()
+        )
+    }
+
+    /** Poziva se pri ponovnom ulasku na Profile ekran (npr. nakon prijave/odjave). */
+    fun refreshSessionUser() {
+        _sessionUser.value = readSessionUser()
+    }
 
     // One-shot UI events (toasts, messages)
     private val _events = MutableSharedFlow<ProfileUiEvent>()
@@ -91,7 +121,11 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    fun loadProfile(userId: String) {
+    /** Učitava profil trenutno ulogovanog korisnika (iz SessionManager-a). */
+    fun loadProfile() {
+        refreshSessionUser()
+        val userId = sessionManager.getUserId() ?: return
+
         // avoid reloading the same profile repeatedly
         if (_uiState.value.userProfile?.userId == userId) return
 
@@ -138,7 +172,8 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    fun toggleDarkMode(userId: String) {
+    fun toggleDarkMode() {
+        val userId = sessionManager.getUserId() ?: return
         val currentSettings = _uiState.value.userSettings
         if (currentSettings != null) {
             val updated = currentSettings.copy(darkMode = !currentSettings.darkMode)
