@@ -1,5 +1,7 @@
 package dev.milinko.movielens.data.repository
 
+import dev.milinko.movielens.data.remote.user.AddToHistoryBody
+import dev.milinko.movielens.data.remote.user.UpdateHistoryBody
 import dev.milinko.movielens.data.remote.user.UserApiService
 import dev.milinko.movielens.data.remote.user.UserProfile
 import dev.milinko.movielens.data.remote.user.UserSettings
@@ -23,8 +25,12 @@ interface UserRepository {
     suspend fun removeFromWatchlist(userId: String, tmdbId: Int): Result<Unit>
     
     suspend fun getHistory(userId: String): Result<List<HistoryItem>>
-    suspend fun addToHistory(userId: String, tmdbId: Int, rating: Double, duration: Int): Result<HistoryItem>
+    // rating/duration su opcioni - "označeno kao odgledano bez ocene" šalje oba kao null (ne kao
+    // 0.0, koji bi backend zaokružio na ocenu 1 - videti Double?.toRatingIntOrNull() na backendu).
+    suspend fun addToHistory(userId: String, tmdbId: Int, rating: Double? = null, duration: Int? = null): Result<HistoryItem>
     suspend fun updateHistoryItem(userId: String, tmdbId: Int, rating: Double): Result<HistoryItem>
+    // "Undo" za slučajno "označi kao odgledano" - briše i ocenu (isti red na backendu).
+    suspend fun removeFromHistory(userId: String, tmdbId: Int): Result<Unit>
     
     suspend fun getFriends(userId: String): Result<List<FriendInfo>>
     suspend fun addFriend(userId: String, friendId: String): Result<Unit>
@@ -144,14 +150,11 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun addToHistory(userId: String, tmdbId: Int, rating: Double, duration: Int): Result<HistoryItem> {
+    override suspend fun addToHistory(userId: String, tmdbId: Int, rating: Double?, duration: Int?): Result<HistoryItem> {
         return try {
-            val data = mapOf(
-                "tmdbId" to tmdbId,
-                "rating" to rating,
-                "duration" to duration
-            )
-            val response = userApiService.addToHistory(userId, data)
+            // rating/duration null se serijalizuju kao JSON null (Gson) - backend AddToHistoryRequest
+            // ima podrazumevanu vrednost null za oba, pa je to ekvivalentno izostavljanju polja.
+            val response = userApiService.addToHistory(userId, AddToHistoryBody(tmdbId, rating, duration))
             if (response.isSuccessful) {
                 Result.success(response.body() ?: throw Exception("Empty response"))
             } else {
@@ -164,12 +167,24 @@ class UserRepositoryImpl @Inject constructor(
 
     override suspend fun updateHistoryItem(userId: String, tmdbId: Int, rating: Double): Result<HistoryItem> {
         return try {
-            val data = mapOf("rating" to rating)
-            val response = userApiService.updateHistoryItem(userId, tmdbId, data)
+            val response = userApiService.updateHistoryItem(userId, tmdbId, UpdateHistoryBody(rating))
             if (response.isSuccessful) {
                 Result.success(response.body() ?: throw Exception("Empty response"))
             } else {
                 Result.failure(Exception("Update history failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun removeFromHistory(userId: String, tmdbId: Int): Result<Unit> {
+        return try {
+            val response = userApiService.removeFromHistory(userId, tmdbId)
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Remove from history failed: ${response.code()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)

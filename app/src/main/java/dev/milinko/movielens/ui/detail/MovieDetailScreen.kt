@@ -1,6 +1,8 @@
 package dev.milinko.movielens.ui.detail
 
+import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,14 +18,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,12 +54,26 @@ import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 fun MovieDetailScreen(
     tmdbId: Int,
     viewModel: MovieDetailViewModel = hiltViewModel(),
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onRequireSignIn: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(tmdbId) {
         viewModel.loadMovieDetail(tmdbId)
+    }
+
+    LaunchedEffect(uiState.watchlistError) {
+        uiState.watchlistError?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    LaunchedEffect(uiState.historyError) {
+        uiState.historyError?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+        }
     }
 
     Scaffold(
@@ -166,16 +187,63 @@ fun MovieDetailScreen(
                             Text("${String.format("%.1f", movie.voteAverage)}/10", fontWeight = FontWeight.SemiBold)
                         }
                         Spacer(modifier = Modifier.height(12.dp))
-                        Row {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
-                                onClick = { /* TODO */ },
+                                onClick = {
+                                    val startedRequest = viewModel.toggleWatchlist(tmdbId)
+                                    if (!startedRequest) {
+                                        Toast.makeText(context, "Prijavi se da bi koristio watchlistu", Toast.LENGTH_SHORT).show()
+                                        onRequireSignIn()
+                                    }
+                                },
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Icon(Icons.Default.FavoriteBorder, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(
+                                    if (uiState.isInWatchlist) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Watchlist")
+                                Text(if (uiState.isInWatchlist) "U watchlisti" else "Watchlist")
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    val startedRequest = viewModel.toggleWatched(tmdbId)
+                                    if (!startedRequest) {
+                                        Toast.makeText(context, "Prijavi se da bi označio film kao odgledan", Toast.LENGTH_SHORT).show()
+                                        onRequireSignIn()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    if (uiState.isWatched) Icons.Default.CheckCircle else Icons.Default.Visibility,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(if (uiState.isWatched) "Odgledano" else "Označi kao odgledano")
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "Tvoja ocena" + if (uiState.userRating > 0) ": ${uiState.userRating.toInt()}/10" else "",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        RatingStars(
+                            rating = uiState.userRating.toInt(),
+                            onRate = { stars ->
+                                val startedRequest = viewModel.rateMovie(tmdbId, stars)
+                                if (!startedRequest) {
+                                    Toast.makeText(context, "Prijavi se da bi ocenio film", Toast.LENGTH_SHORT).show()
+                                    onRequireSignIn()
+                                }
+                            }
+                        )
                     }
                 }
 
@@ -240,6 +308,30 @@ fun MovieDetailScreen(
                 item {
                     Spacer(modifier = Modifier.height(16.dp))
                 }
+            }
+        }
+    }
+}
+
+/** Red od 10 zvezdica (1-10 skala, ista kao backend) - tap na zvezdicu N postavlja ocenu N. */
+@Composable
+private fun RatingStars(rating: Int, onRate: (Int) -> Unit) {
+    Row {
+        for (i in 1..10) {
+            // Ikonica je namerno manja od dodirnog cilja (Box 32dp) - 10 zvezdica u redu bi inače
+            // bilo skoro nemoguće precizno pogoditi (svaka bi imala samo ~22dp bez razmaka).
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clickable { onRate(i) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (i <= rating) Icons.Default.Star else Icons.Default.StarBorder,
+                    contentDescription = "Oceni sa $i",
+                    tint = if (i <= rating) Color(0xFFF5C518) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }

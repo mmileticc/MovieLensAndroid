@@ -95,7 +95,10 @@ fun MovieLensNavHost(
             val tmdbId = backStackEntry.arguments?.getString("tmdbId")?.toIntOrNull() ?: return@composable
             MovieDetailScreen(
                 tmdbId = tmdbId,
-                onNavigateBack = { navController.navigateUp() }
+                onNavigateBack = { navController.navigateUp() },
+                onRequireSignIn = {
+                    navController.navigate(Screen.SignIn.createRoute(Screen.MovieDetail.createRoute(tmdbId)))
+                }
             )
         }
 

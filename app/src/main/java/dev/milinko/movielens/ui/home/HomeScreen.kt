@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 // ...existing code...
@@ -54,6 +55,13 @@ fun HomeScreen(
     onNavigateToProfile: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // Ako popularni filmovi nisu uspeli da se učitaju na paljenje app-a (npr. hladan start
+    // backend-a) ovo je jedina prilika da se ponovo pokuša - HomeViewModel inače živi celu sesiju
+    // pa mu se init{} poziva samo jednom.
+    LaunchedEffect(Unit) {
+        viewModel.ensureTrendingLoaded()
+    }
 
     Scaffold(
         floatingActionButton = {

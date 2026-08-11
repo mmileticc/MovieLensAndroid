@@ -12,6 +12,17 @@ import retrofit2.http.DELETE
 import retrofit2.http.Path
 import retrofit2.http.Body
 
+// Tela zahteva za POST/PUT rute ispod - namerno pravi tipovi umesto Map<String, Any>.
+// Kotlin-ov Map<K, out V> je kovarijantan u V; kad je V == Any, kompajlirani JVM potpis dobija
+// "? extends Object" wildcard u generic signature-u, a Retrofit-ova (lenjy, tek pri prvom pozivu
+// te metode) validacija to eksplicitno odbija sa "Parameter type must not include a type variable
+// or wildcard". Ovo se dešavalo baš na addToHistory/updateHistoryItem (Map<String, Any>) - i
+// Map<String, Int>/Map<String, String> na drugim rutama slučajno rade jer generic signature za te
+// value tipove ne dobija problematičan wildcard. Umesto da se oslanjamo na tu slučajnost, sve nove
+// body tipove pišemo kao prave data klase.
+data class AddToHistoryBody(val tmdbId: Int, val rating: Double? = null, val duration: Int? = null)
+data class UpdateHistoryBody(val rating: Double)
+
 interface UserApiService {
     // Profile
     @GET("api/users/{userId}")
@@ -64,15 +75,22 @@ interface UserApiService {
     @POST("api/users/{userId}/history")
     suspend fun addToHistory(
         @Path("userId") userId: String,
-        @Body item: Map<String, Any>
+        @Body item: AddToHistoryBody
     ): Response<HistoryItem>
 
     @PUT("api/users/{userId}/history/{tmdbId}")
     suspend fun updateHistoryItem(
         @Path("userId") userId: String,
         @Path("tmdbId") tmdbId: Int,
-        @Body item: Map<String, Any>
+        @Body item: UpdateHistoryBody
     ): Response<HistoryItem>
+
+    // "Undo" za "označi kao odgledano" (lapsus klik) - briše i ocenu, ista tabela/red na backendu.
+    @DELETE("api/users/{userId}/history/{tmdbId}")
+    suspend fun removeFromHistory(
+        @Path("userId") userId: String,
+        @Path("tmdbId") tmdbId: Int
+    ): Response<Unit>
 
     // Friends
     @GET("api/users/{userId}/friends")

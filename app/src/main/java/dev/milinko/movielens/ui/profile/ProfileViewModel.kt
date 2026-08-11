@@ -10,6 +10,7 @@ import dev.milinko.movielens.data.remote.user.FriendInfo
 import dev.milinko.movielens.data.remote.user.UserProfile
 import dev.milinko.movielens.data.remote.user.UserSettings
 import dev.milinko.movielens.data.repository.UserRepository
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -133,27 +134,25 @@ class ProfileViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
             try {
-                val profileResult = userRepository.getUserProfile(userId)
-                if (profileResult.isSuccess) {
-                    _uiState.value = _uiState.value.copy(userProfile = profileResult.getOrNull())
-                }
+                // Sva četiri poziva su nezavisna - paralelno umesto sekvencijalno, inače se vreme
+                // čekanja sabira (4x round-trip umesto 1x).
+                val profileDeferred = async { userRepository.getUserProfile(userId) }
+                val settingsDeferred = async { userRepository.getUserSettings(userId) }
+                val friendsDeferred = async { userRepository.getFriends(userId) }
+                val activityDeferred = async { userRepository.getFriendActivity(userId) }
 
-                val settingsResult = userRepository.getUserSettings(userId)
-                if (settingsResult.isSuccess) {
-                    _uiState.value = _uiState.value.copy(userSettings = settingsResult.getOrNull())
-                }
+                val profileResult = profileDeferred.await()
+                val settingsResult = settingsDeferred.await()
+                val friendsResult = friendsDeferred.await()
+                val activityResult = activityDeferred.await()
 
-                val friendsResult = userRepository.getFriends(userId)
-                if (friendsResult.isSuccess) {
-                    _uiState.value = _uiState.value.copy(friends = friendsResult.getOrNull() ?: emptyList())
-                }
-
-                val activityResult = userRepository.getFriendActivity(userId)
-                if (activityResult.isSuccess) {
-                    _uiState.value = _uiState.value.copy(friendActivity = activityResult.getOrNull() ?: emptyList())
-                }
-
-                _uiState.value = _uiState.value.copy(isLoading = false)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    userProfile = profileResult.getOrNull() ?: _uiState.value.userProfile,
+                    userSettings = settingsResult.getOrNull() ?: _uiState.value.userSettings,
+                    friends = friendsResult.getOrNull() ?: _uiState.value.friends,
+                    friendActivity = activityResult.getOrNull() ?: _uiState.value.friendActivity
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: "Greška pri učitavanju profila")
             }
