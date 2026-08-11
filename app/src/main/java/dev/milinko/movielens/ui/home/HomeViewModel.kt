@@ -7,6 +7,7 @@ import dev.milinko.movielens.data.remote.movie.MovieSearchResult
 import dev.milinko.movielens.data.repository.MovieRepository
 import dev.milinko.movielens.data.repository.VisionRepository
 import dev.milinko.movielens.data.remote.vision.VisionSearchResponse
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -67,6 +68,8 @@ class HomeViewModel @Inject constructor(
                     visionResult = response,
                     selectedImageUri = null
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,

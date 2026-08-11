@@ -10,6 +10,7 @@ import dev.milinko.movielens.data.remote.user.FriendInfo
 import dev.milinko.movielens.data.remote.user.UserProfile
 import dev.milinko.movielens.data.remote.user.UserSettings
 import dev.milinko.movielens.data.repository.UserRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -92,6 +93,8 @@ class ProfileViewModel @Inject constructor(
                 urlStorage.setBaseUrl(newUrl)
                 refreshRoutesState()
                 _events.emit(ProfileUiEvent.ShowMessage("Backend URL sačuvan."))
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _events.emit(ProfileUiEvent.ShowMessage("Greška pri čuvanju URL-a: ${e.message}"))
             }
@@ -104,6 +107,8 @@ class ProfileViewModel @Inject constructor(
                 urlStorage.addRoute(url)
                 refreshRoutesState()
                 _events.emit(ProfileUiEvent.ShowMessage("Ruta je dodata u listu."))
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _events.emit(ProfileUiEvent.ShowMessage("Greška pri dodavanju rute: ${e.message}"))
             }
@@ -116,6 +121,8 @@ class ProfileViewModel @Inject constructor(
                 urlStorage.removeRoute(url)
                 refreshRoutesState()
                 _events.emit(ProfileUiEvent.ShowMessage("Ruta je obrisana."))
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _events.emit(ProfileUiEvent.ShowMessage("Greška pri brisanju rute: ${e.message}"))
             }
@@ -153,6 +160,8 @@ class ProfileViewModel @Inject constructor(
                     friends = friendsResult.getOrNull() ?: _uiState.value.friends,
                     friendActivity = activityResult.getOrNull() ?: _uiState.value.friendActivity
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: "Greška pri učitavanju profila")
             }

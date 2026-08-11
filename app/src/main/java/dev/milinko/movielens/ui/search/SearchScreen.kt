@@ -191,7 +191,9 @@ fun SearchScreen(
                     placeholder = { Text("Pretraži po naslovu...") },
                     singleLine = true,
                     trailingIcon = {
-                        if (uiState.searchQuery.isNotEmpty()) {
+                        if (uiState.isSearching) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else if (uiState.searchQuery.isNotEmpty()) {
                             IconButton(onClick = { viewModel.setSearchQuery("") }) {
                                 Icon(Icons.Default.Clear, contentDescription = "Clear")
                             }
@@ -246,7 +248,7 @@ fun SearchScreen(
                                     .padding(16.dp),
                                 contentAlignment = Alignment.BottomCenter
                             ) {
-                                if (uiState.isLoading) {
+                                if (uiState.isAnalyzingImage) {
                                     Button(
                                         onClick = { },
                                         enabled = false

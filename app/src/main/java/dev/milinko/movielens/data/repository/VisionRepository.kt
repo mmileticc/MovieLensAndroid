@@ -7,6 +7,7 @@ import androidx.core.net.toUri
 import dev.milinko.movielens.data.remote.vision.VisionApi
 import dev.milinko.movielens.data.remote.vision.VisionSearchResponse
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -54,6 +55,8 @@ class VisionRepositoryImpl @Inject constructor(
                 parsedMessage.takeIf { it.isNotBlank() }
                     ?: "Greška servera (${response.code()})"
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalStateException(e.toUserFacingMessage(), e)
         }

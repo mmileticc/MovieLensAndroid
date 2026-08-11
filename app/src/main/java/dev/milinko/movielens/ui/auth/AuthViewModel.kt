@@ -8,6 +8,7 @@ import dev.milinko.movielens.data.pref.SessionManager
 import dev.milinko.movielens.data.remote.AuthApi
 import dev.milinko.movielens.data.remote.AuthFirebaseRequest
 import dev.milinko.movielens.data.remote.UserDto
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -53,6 +54,8 @@ class AuthViewModel @Inject constructor(
                 } else {
                     _uiState.value = AuthUiState.Error("Backend nije vratio token. Pokušaj ponovo.")
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = AuthUiState.Error(e.message ?: "Nepoznata greška")
             }

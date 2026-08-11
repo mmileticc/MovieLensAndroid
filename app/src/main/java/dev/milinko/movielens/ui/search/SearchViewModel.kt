@@ -7,6 +7,7 @@ import dev.milinko.movielens.data.remote.movie.MovieSearchResult
 import dev.milinko.movielens.data.repository.MovieRepository
 import dev.milinko.movielens.data.repository.VisionRepository
 import dev.milinko.movielens.data.remote.vision.VisionSearchResponse
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,7 +18,10 @@ import javax.inject.Inject
 
 data class SearchUiState(
     val searchQuery: String = "",
-    val isLoading: Boolean = false,
+    // Odvojeno od isAnalyzingImage - deljeno "isLoading" polje je značilo da kucanje teksta dok je
+    // slika izabrana zna da prikaže "Analiziram sliku..." dugme iako se ne dešava nikakva analiza.
+    val isSearching: Boolean = false,
+    val isAnalyzingImage: Boolean = false,
     val selectedImageUri: String? = null,
     val searchResults: List<MovieSearchResult> = emptyList(),
     val visionResult: VisionSearchResponse? = null,
@@ -67,17 +71,17 @@ class SearchViewModel @Inject constructor(
     }
 
     private suspend fun performSearch(query: String) {
-        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        _uiState.value = _uiState.value.copy(isSearching = true, error = null)
         movieRepository.searchMovies(query)
             .onSuccess { results ->
                 _uiState.value = _uiState.value.copy(
-                    isLoading = false,
+                    isSearching = false,
                     searchResults = results
                 )
             }
             .onFailure { e ->
                 _uiState.value = _uiState.value.copy(
-                    isLoading = false,
+                    isSearching = false,
                     error = e.message ?: "Greška pri pretrazi"
                 )
             }
@@ -94,17 +98,19 @@ class SearchViewModel @Inject constructor(
     fun detectImage() {
         val imageUri = _uiState.value.selectedImageUri ?: return
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(isAnalyzingImage = true, error = null)
             try {
                 val response = visionRepository.detect(imageUri)
                 _uiState.value = _uiState.value.copy(
-                    isLoading = false,
+                    isAnalyzingImage = false,
                     visionResult = response,
                     selectedImageUri = null
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
-                    isLoading = false,
+                    isAnalyzingImage = false,
                     error = e.message ?: "Greška pri analizi slike"
                 )
             }
