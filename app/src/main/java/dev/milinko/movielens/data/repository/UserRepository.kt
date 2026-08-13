@@ -1,9 +1,12 @@
 package dev.milinko.movielens.data.repository
 
 import dev.milinko.movielens.data.remote.user.AddToHistoryBody
+import dev.milinko.movielens.data.remote.user.FriendActionBody
+import dev.milinko.movielens.data.remote.user.PendingRequest
 import dev.milinko.movielens.data.remote.user.UpdateHistoryBody
 import dev.milinko.movielens.data.remote.user.UserApiService
 import dev.milinko.movielens.data.remote.user.UserProfile
+import dev.milinko.movielens.data.remote.user.UserSearchResult
 import dev.milinko.movielens.data.remote.user.UserSettings
 import dev.milinko.movielens.data.remote.user.FriendInfo
 import dev.milinko.movielens.data.remote.user.FriendActivity
@@ -33,8 +36,14 @@ interface UserRepository {
     // "Undo" za slučajno "označi kao odgledano" - briše i ocenu (isti red na backendu).
     suspend fun removeFromHistory(userId: String, tmdbId: Int): Result<Unit>
 
+    // Pretraga korisnika za dodavanje prijatelja (search-as-you-type, kao Search filmova).
+    suspend fun searchUsers(query: String): Result<List<UserSearchResult>>
+    suspend fun getPendingFriendRequests(userId: String): Result<List<PendingRequest>>
+
     suspend fun getFriends(userId: String): Result<List<FriendInfo>>
     suspend fun addFriend(userId: String, friendId: String): Result<Unit>
+    suspend fun acceptFriendRequest(userId: String, friendId: String): Result<Unit>
+    suspend fun rejectFriendRequest(userId: String, friendId: String): Result<Unit>
     suspend fun removeFriend(userId: String, friendId: String): Result<Unit>
 
     suspend fun getFriendActivity(userId: String): Result<List<FriendActivity>>
@@ -144,6 +153,24 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun searchUsers(query: String): Result<List<UserSearchResult>> = safeApiCall {
+        val response = userApiService.searchUsers(query)
+        if (response.isSuccessful) {
+            response.body()?.users ?: emptyList()
+        } else {
+            throw Exception("Search users failed: ${response.code()}")
+        }
+    }
+
+    override suspend fun getPendingFriendRequests(userId: String): Result<List<PendingRequest>> = safeApiCall {
+        val response = userApiService.getPendingFriendRequests(userId)
+        if (response.isSuccessful) {
+            response.body()?.requests ?: emptyList()
+        } else {
+            throw Exception("Get pending requests failed: ${response.code()}")
+        }
+    }
+
     override suspend fun getFriends(userId: String): Result<List<FriendInfo>> = safeApiCall {
         val response = userApiService.getFriends(userId)
         if (response.isSuccessful) {
@@ -154,14 +181,28 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override suspend fun addFriend(userId: String, friendId: String): Result<Unit> = safeApiCall {
-        val response = userApiService.manageFriend(userId, friendId, mapOf("action" to "add"))
+        val response = userApiService.manageFriend(userId, friendId, FriendActionBody("add"))
         if (!response.isSuccessful) {
             throw Exception("Add friend failed: ${response.code()}")
         }
     }
 
+    override suspend fun acceptFriendRequest(userId: String, friendId: String): Result<Unit> = safeApiCall {
+        val response = userApiService.manageFriend(userId, friendId, FriendActionBody("accept"))
+        if (!response.isSuccessful) {
+            throw Exception("Accept friend request failed: ${response.code()}")
+        }
+    }
+
+    override suspend fun rejectFriendRequest(userId: String, friendId: String): Result<Unit> = safeApiCall {
+        val response = userApiService.manageFriend(userId, friendId, FriendActionBody("reject"))
+        if (!response.isSuccessful) {
+            throw Exception("Reject friend request failed: ${response.code()}")
+        }
+    }
+
     override suspend fun removeFriend(userId: String, friendId: String): Result<Unit> = safeApiCall {
-        val response = userApiService.manageFriend(userId, friendId, mapOf("action" to "remove"))
+        val response = userApiService.removeFriend(userId, friendId)
         if (!response.isSuccessful) {
             throw Exception("Remove friend failed: ${response.code()}")
         }

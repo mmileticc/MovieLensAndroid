@@ -16,11 +16,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
@@ -47,6 +55,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import dev.milinko.movielens.data.remote.user.FriendActivity
+import dev.milinko.movielens.data.remote.user.PendingRequest
+import dev.milinko.movielens.data.remote.user.UserSearchResult
 import dev.milinko.movielens.ui.auth.AuthUiState
 import dev.milinko.movielens.ui.auth.AuthViewModel
 import dev.milinko.movielens.ui.components.AppBottomNavigationBar
@@ -82,6 +93,13 @@ fun ProfileScreen(
 
     LaunchedEffect(Unit) {
         viewModel.loadProfile()
+    }
+
+    LaunchedEffect(uiState.friendActionError) {
+        uiState.friendActionError?.let { message ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            viewModel.consumeFriendActionError()
+        }
     }
 
     Scaffold(
@@ -185,8 +203,54 @@ fun ProfileScreen(
                     }
                 }
                 1 -> {
-                    items(uiState.friends, key = { it.friendId }) { friend ->
-                        FriendCard(friend)
+                    item {
+                        FriendSearchSection(
+                            query = uiState.friendSearchQuery,
+                            isSearching = uiState.isSearchingFriends,
+                            results = uiState.friendSearchResults,
+                            onQueryChange = viewModel::setFriendSearchQuery,
+                            onAdd = viewModel::sendFriendRequest
+                        )
+                    }
+
+                    if (uiState.pendingRequests.isNotEmpty()) {
+                        item {
+                            SectionHeader("Zahtevi za prijateljstvo")
+                        }
+                        items(uiState.pendingRequests, key = { "pending-${it.id}" }) { request ->
+                            PendingRequestCard(
+                                request = request,
+                                onAccept = { viewModel.acceptFriendRequest(request.id) },
+                                onReject = { viewModel.rejectFriendRequest(request.id) }
+                            )
+                        }
+                    }
+
+                    item {
+                        SectionHeader("Prijatelji")
+                    }
+                    if (uiState.friends.isEmpty()) {
+                        item {
+                            Text(
+                                "Još nemaš prijatelja. Pretraži iznad da dodaš nekoga.",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                    } else {
+                        items(uiState.friends, key = { it.friendId }) { friend ->
+                            FriendCard(friend, onRemove = { viewModel.removeFriend(friend.friendId) })
+                        }
+                    }
+
+                    if (uiState.friendActivity.isNotEmpty()) {
+                        item {
+                            SectionHeader("Aktivnost prijatelja")
+                        }
+                        items(uiState.friendActivity, key = { it.activityId }) { activity ->
+                            FriendActivityCard(activity)
+                        }
                     }
                 }
             }
@@ -473,7 +537,7 @@ private fun SettingsSection(
 }
 
 @Composable
-private fun FriendCard(friend: dev.milinko.movielens.data.remote.user.FriendInfo) {
+private fun FriendCard(friend: dev.milinko.movielens.data.remote.user.FriendInfo, onRemove: () -> Unit) {
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -486,24 +550,9 @@ private fun FriendCard(friend: dev.milinko.movielens.data.remote.user.FriendInfo
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(friend.username, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Match: ${String.format(LocalLocale.current.platformLocale, "%.0f", friend.matchScore)}%",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (friend.commonGenres.isNotEmpty()) {
-                    Text(
-                        "Žanrovi: ${friend.commonGenres.take(2).joinToString(", ")}",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
             Surface(
                 modifier = Modifier
-                    .size(50.dp)
+                    .size(44.dp)
                     .clip(CircleShape),
                 color = MaterialTheme.colorScheme.primaryContainer
             ) {
@@ -513,6 +562,174 @@ private fun FriendCard(friend: dev.milinko.movielens.data.remote.user.FriendInfo
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(8.dp)
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 12.dp)
+            ) {
+                Text(friend.username, fontWeight = FontWeight.SemiBold)
+                // match_score/common_genres su placeholder (0f/prazno) dok se ne uradi Faza 4
+                // (profilisanje) - prikazujemo ih samo kad je backend stvarno popunio vrednosti.
+                if (friend.matchScore > 0f) {
+                    Text(
+                        "Match: ${String.format(LocalLocale.current.platformLocale, "%.0f", friend.matchScore)}%",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (friend.commonGenres.isNotEmpty()) {
+                    Text(
+                        "Žanrovi: ${friend.commonGenres.take(2).joinToString(", ")}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            TextButton(onClick = onRemove) {
+                Text("Ukloni", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        title,
+        fontSize = 16.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+    )
+}
+
+@Composable
+private fun FriendSearchSection(
+    query: String,
+    isSearching: Boolean,
+    results: List<UserSearchResult>,
+    onQueryChange: (String) -> Unit,
+    onAdd: (String) -> Unit
+) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Pretraži korisnike (ime ili email)") },
+            singleLine = true,
+            trailingIcon = {
+                if (isSearching) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                }
+            }
+        )
+
+        if (results.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Column {
+                results.forEach { result ->
+                    UserSearchResultRow(result = result, onAdd = { onAdd(result.id) })
+                }
+            }
+        } else if (!isSearching && query.trim().length >= 2) {
+            Text(
+                "Nema rezultata za \"$query\"",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun UserSearchResultRow(result: UserSearchResult, onAdd: () -> Unit) {
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                result.username?.takeIf { it.isNotBlank() } ?: "Korisnik",
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
+            when (result.status) {
+                "NONE" -> Button(onClick = onAdd) { Text("Dodaj") }
+                "PENDING_SENT" -> OutlinedButton(onClick = {}, enabled = false) { Text("Zahtev poslat") }
+                "PENDING_RECEIVED" -> OutlinedButton(onClick = {}, enabled = false) { Text("Odgovori ispod ↓") }
+                "ACCEPTED" -> OutlinedButton(onClick = {}, enabled = false) { Text("Već prijatelji") }
+                else -> Button(onClick = onAdd) { Text("Dodaj") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PendingRequestCard(request: PendingRequest, onAccept: () -> Unit, onReject: () -> Unit) {
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                request.username?.takeIf { it.isNotBlank() } ?: "Korisnik",
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = onAccept) {
+                Icon(Icons.Default.Check, contentDescription = "Prihvati", tint = MaterialTheme.colorScheme.primary)
+            }
+            IconButton(onClick = onReject) {
+                Icon(Icons.Default.Close, contentDescription = "Odbij", tint = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FriendActivityCard(activity: FriendActivity) {
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                val text = if (activity.action == "rated" && activity.metadata.rating != null) {
+                    "${activity.friendName} je ocenio/la \"${activity.movieTitle}\" sa ${activity.metadata.rating.toInt()}/10"
+                } else {
+                    "${activity.friendName} je odgledao/la \"${activity.movieTitle}\""
+                }
+                Text(text, fontSize = 13.sp)
+            }
+            if (activity.action == "rated" && activity.metadata.rating != null) {
+                Icon(
+                    Icons.Default.Star,
+                    contentDescription = null,
+                    tint = androidx.compose.ui.graphics.Color(0xFFF5C518),
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

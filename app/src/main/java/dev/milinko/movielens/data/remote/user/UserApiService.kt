@@ -10,6 +10,7 @@ import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.DELETE
 import retrofit2.http.Path
+import retrofit2.http.Query
 import retrofit2.http.Body
 
 // Tela zahteva za POST/PUT rute ispod - namerno pravi tipovi umesto Map<String, Any>.
@@ -92,17 +93,35 @@ interface UserApiService {
         @Path("tmdbId") tmdbId: Int
     ): Response<Unit>
 
+    // Pretraga korisnika (search-as-you-type za dodavanje prijatelja) - flat ruta, "ko sam ja" se
+    // čita iz JWT-a na backendu, ne šalje se kao path parametar.
+    @GET("api/users/search")
+    suspend fun searchUsers(
+        @Query("q") query: String
+    ): Response<UserSearchResponse>
+
     // Friends
     @GET("api/users/{userId}/friends")
     suspend fun getFriends(
         @Path("userId") userId: String
     ): Response<FriendsResponse>
 
+    @GET("api/users/{userId}/friends/pending")
+    suspend fun getPendingFriendRequests(
+        @Path("userId") userId: String
+    ): Response<PendingRequestsResponse>
+
     @POST("api/users/{userId}/friends/{friendId}")
     suspend fun manageFriend(
         @Path("userId") userId: String,
         @Path("friendId") friendId: String,
-        @Body action: Map<String, String>
+        @Body body: FriendActionBody
+    ): Response<Unit>
+
+    @DELETE("api/users/{userId}/friends/{friendId}")
+    suspend fun removeFriend(
+        @Path("userId") userId: String,
+        @Path("friendId") friendId: String
     ): Response<Unit>
 
     // Friend Activity

@@ -69,6 +69,43 @@ data class FriendsResponse(
     val friends: List<FriendInfo> = emptyList()
 )
 
+// Pretraga korisnika za dodavanje prijatelja (search-as-you-type)
+data class UserSearchResult(
+    @SerializedName("id")
+    val id: String,
+    @SerializedName("username")
+    val username: String? = null,
+    @SerializedName("avatar_url")
+    val avatarUrl: String? = null,
+    // NONE / PENDING_SENT / PENDING_RECEIVED / ACCEPTED - videti FriendshipStatus na backendu
+    @SerializedName("status")
+    val status: String = "NONE"
+)
+
+data class UserSearchResponse(
+    @SerializedName("users")
+    val users: List<UserSearchResult> = emptyList()
+)
+
+// Dolazni (nerešeni) zahtevi za prijateljstvo
+data class PendingRequest(
+    @SerializedName("id")
+    val id: String,
+    @SerializedName("username")
+    val username: String? = null,
+    @SerializedName("avatar_url")
+    val avatarUrl: String? = null
+)
+
+data class PendingRequestsResponse(
+    @SerializedName("requests")
+    val requests: List<PendingRequest> = emptyList()
+)
+
+// Telo POST /friends/{friendId} - "add" | "accept" | "reject". Pravi tip umesto Map<String, Any> -
+// videti napomenu u UserApiService.kt o Kotlin Map<K, out V> + Retrofit wildcard bug-u.
+data class FriendActionBody(val action: String)
+
 // Friend Activity
 data class FriendActivity(
     @SerializedName("activity_id")
