@@ -46,6 +46,7 @@ import coil.request.ImageRequest
 import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 import dev.milinko.movielens.ui.components.AppBottomNavigationBar
 import dev.milinko.movielens.ui.components.BottomNavTab
+import dev.milinko.movielens.ui.components.RatingStars
 
 @Composable
 fun LibraryScreen(
@@ -153,10 +154,11 @@ fun LibraryScreen(
                             }
                         } else {
                             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                items(uiState.history) { item ->
+                                items(uiState.history, key = { it.tmdbId }) { item ->
                                     HistoryItemCard(
                                         item = item,
-                                        onMovieClick = { onNavigateToDetail(item.tmdbId) }
+                                        onMovieClick = { onNavigateToDetail(item.tmdbId) },
+                                        onRate = { stars -> viewModel.rateMovie(item.tmdbId, stars) }
                                     )
                                 }
                             }
@@ -231,55 +233,80 @@ private fun WatchlistItemCard(
 @Composable
 private fun HistoryItemCard(
     item: dev.milinko.movielens.data.remote.movie.HistoryItem,
-    onMovieClick: () -> Unit
+    onMovieClick: () -> Unit,
+    onRate: (Int) -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onMovieClick)
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        if (item.posterPath != null) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(tmdbPosterUrl(item.posterPath, "w92"))
-                    .crossfade(true)
-                    .build(),
-                contentDescription = item.title,
+    // Tap na ocenu otvara/zatvara red od 10 zvezdica za brzu izmenu, bez odlaska na Movie Detail.
+    var isEditingRating by remember { mutableStateOf(false) }
+
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onMovieClick)
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (item.posterPath != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(tmdbPosterUrl(item.posterPath, "w92"))
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = item.title,
+                    modifier = Modifier
+                        .width(60.dp)
+                        .height(90.dp),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .width(60.dp)
+                        .height(90.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                )
+            }
+
+            Column(
                 modifier = Modifier
-                    .width(60.dp)
-                    .height(90.dp),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .width(60.dp)
-                    .height(90.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
+                    .weight(1f)
+                    .align(Alignment.CenterVertically)
+            ) {
+                Text(item.title, fontWeight = FontWeight.SemiBold)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .padding(top = 4.dp)
+                        .clickable { isEditingRating = !isEditingRating }
+                ) {
+                    androidx.compose.material3.Icon(
+                        Icons.Default.Star,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = Color(0xFFF5C518)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("${String.format("%.1f", item.userRating)}/10", fontSize = 12.sp)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        if (isEditingRating) "Zatvori" else "Izmeni",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
         }
 
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .align(Alignment.CenterVertically)
-        ) {
-            Text(item.title, fontWeight = FontWeight.SemiBold)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 4.dp)
-            ) {
-                androidx.compose.material3.Icon(
-                    Icons.Default.Star,
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                    tint = Color(0xFFF5C518)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("${String.format("%.1f", item.userRating)}/10", fontSize = 12.sp)
-            }
+        if (isEditingRating) {
+            RatingStars(
+                rating = item.userRating.toInt(),
+                onRate = { stars ->
+                    onRate(stars)
+                    isEditingRating = false
+                },
+                modifier = Modifier.padding(start = 84.dp, bottom = 8.dp)
+            )
         }
     }
 }

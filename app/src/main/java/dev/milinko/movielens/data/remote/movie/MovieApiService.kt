@@ -1,5 +1,6 @@
 package dev.milinko.movielens.data.remote.movie
 
+import dev.milinko.movielens.data.remote.user.FriendsWatchedResponse
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Path
@@ -28,5 +29,12 @@ interface MovieApiService {
     suspend fun getFeaturedMovies(
         @Query("userId") userId: String? = null
     ): Response<TrendingResponse>
+
+    // "Prijatelji su gledali" bedž - JWT zaštićena ruta (za razliku od ostalih ruta u ovom
+    // interfejsu koje su javne), userId se čita iz JWT-a na backendu.
+    @GET("api/movies/{tmdbId}/friends-watched")
+    suspend fun getFriendsWhoWatched(
+        @Path("tmdbId") tmdbId: Int
+    ): Response<FriendsWatchedResponse>
 }
 

@@ -124,6 +124,14 @@ interface UserApiService {
         @Path("friendId") friendId: String
     ): Response<Unit>
 
+    // Profil prijatelja (ili sopstveni) - dozvoljeno samo za sebe ili ACCEPTED prijatelja,
+    // backend vraća 403 inače.
+    @GET("api/users/{userId}/friends/{friendId}/profile")
+    suspend fun getFriendProfile(
+        @Path("userId") userId: String,
+        @Path("friendId") friendId: String
+    ): Response<FriendProfileResponse>
+
     // Friend Activity
     @GET("api/users/{userId}/friends/activity")
     suspend fun getFriendActivity(

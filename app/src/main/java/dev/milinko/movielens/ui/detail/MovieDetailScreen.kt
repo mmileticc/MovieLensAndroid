@@ -22,7 +22,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -48,14 +47,17 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import dev.milinko.movielens.data.remote.user.FriendWatched
 import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
+import dev.milinko.movielens.ui.components.RatingStars
 
 @Composable
 fun MovieDetailScreen(
     tmdbId: Int,
     viewModel: MovieDetailViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
-    onRequireSignIn: () -> Unit = {}
+    onRequireSignIn: () -> Unit = {},
+    onNavigateToFriendProfile: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -244,6 +246,14 @@ fun MovieDetailScreen(
                                 }
                             }
                         )
+
+                        if (uiState.friendsWatched.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            FriendsWatchedBadge(
+                                friends = uiState.friendsWatched,
+                                onFriendClick = onNavigateToFriendProfile
+                            )
+                        }
                     }
                 }
 
@@ -313,27 +323,45 @@ fun MovieDetailScreen(
     }
 }
 
-/** Red od 10 zvezdica (1-10 skala, ista kao backend) - tap na zvezdicu N postavlja ocenu N. */
+/**
+ * "Prijatelji su gledali ovaj film" bedž - prost upit nad postojećim WATCHED podacima (bez
+ * ikakvog match algoritma, to je Faza 4). Klik na ime prijatelja vodi na njegov profil.
+ */
 @Composable
-private fun RatingStars(rating: Int, onRate: (Int) -> Unit) {
-    Row {
-        for (i in 1..10) {
-            // Ikonica je namerno manja od dodirnog cilja (Box 32dp) - 10 zvezdica u redu bi inače
-            // bilo skoro nemoguće precizno pogoditi (svaka bi imala samo ~22dp bez razmaka).
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clickable { onRate(i) },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (i <= rating) Icons.Default.Star else Icons.Default.StarBorder,
-                    contentDescription = "Oceni sa $i",
-                    tint = if (i <= rating) Color(0xFFF5C518) else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
+private fun FriendsWatchedBadge(friends: List<FriendWatched>, onFriendClick: (String) -> Unit) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                if (friends.size == 1) "1 prijatelj je gledao ovaj film" else "${friends.size} prijatelja su gledala ovaj film",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            friends.forEach { friend ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onFriendClick(friend.friendId) }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(friend.friendName, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    if (friend.rating != null) {
+                        Icon(
+                            Icons.Default.Star,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = Color(0xFFF5C518)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("${friend.rating}/10", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         }
     }
 }
+
+// RatingStars je premešten u ui/components/RatingStars.kt (deljena komponenta - koristi je i
+// Library/Istorija tab za izmenu ocene, videti LibraryScreen.kt).
 

@@ -130,6 +130,27 @@ class ProfileViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(friendSearchQuery = "", friendSearchResults = emptyList(), isSearchingFriends = false)
     }
 
+    /**
+     * Otkazuje već poslat zahtev (PENDING_SENT -> NONE u rezultatima pretrage). Backend nema
+     * poseban "cancel" - isti DELETE endpoint koji se koristi za unfriend/reject briše red
+     * bez obzira na smer/status, pa radi i ovde.
+     */
+    fun cancelFriendRequest(targetUserId: String) {
+        val userId = sessionManager.getUserId() ?: return
+        val previousResults = _uiState.value.friendSearchResults
+        _uiState.value = _uiState.value.copy(
+            friendSearchResults = previousResults.map { if (it.id == targetUserId) it.copy(status = "NONE") else it }
+        )
+        viewModelScope.launch {
+            userRepository.removeFriend(userId, targetUserId).onFailure { e ->
+                _uiState.value = _uiState.value.copy(
+                    friendSearchResults = previousResults,
+                    friendActionError = e.message ?: "Greška pri otkazivanju zahteva"
+                )
+            }
+        }
+    }
+
     /** Optimistički - status rezultata pretrage se odmah menja u PENDING_SENT, vraća se ako padne. */
     fun sendFriendRequest(targetUserId: String) {
         val userId = sessionManager.getUserId() ?: return

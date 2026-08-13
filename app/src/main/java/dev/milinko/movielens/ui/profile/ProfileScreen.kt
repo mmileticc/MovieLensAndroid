@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -56,6 +57,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import dev.milinko.movielens.data.remote.user.FriendActivity
+import dev.milinko.movielens.data.remote.user.FriendInfo
 import dev.milinko.movielens.data.remote.user.PendingRequest
 import dev.milinko.movielens.data.remote.user.UserSearchResult
 import dev.milinko.movielens.ui.auth.AuthUiState
@@ -71,13 +73,17 @@ fun ProfileScreen(
     onNavigateToSearch: () -> Unit,
     onNavigateToLibrary: () -> Unit,
     onSignOut: () -> Unit = {},
-    onNavigateToSignIn: () -> Unit = {}
+    onNavigateToSignIn: () -> Unit = {},
+    onNavigateToFriendProfile: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val sessionUser by viewModel.sessionUser.collectAsState()
     var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
     // quick backend editor visible in header for test flows
     val showBackendDialogGlobal = rememberSaveable { mutableStateOf(false) }
+    // Potvrda pre nego što se prijatelj stvarno ukloni - nema pravog "undo" jer bi ponovno
+    // dodavanje zahtevalo da druga strana opet prihvati zahtev (nije simetrično kao watched-undo).
+    var friendPendingRemoval by remember { mutableStateOf<FriendInfo?>(null) }
 
     val context = LocalContext.current
 
@@ -209,7 +215,9 @@ fun ProfileScreen(
                             isSearching = uiState.isSearchingFriends,
                             results = uiState.friendSearchResults,
                             onQueryChange = viewModel::setFriendSearchQuery,
-                            onAdd = viewModel::sendFriendRequest
+                            onAdd = viewModel::sendFriendRequest,
+                            onCancelRequest = viewModel::cancelFriendRequest,
+                            onOpenProfile = onNavigateToFriendProfile
                         )
                     }
 
@@ -240,7 +248,11 @@ fun ProfileScreen(
                         }
                     } else {
                         items(uiState.friends, key = { it.friendId }) { friend ->
-                            FriendCard(friend, onRemove = { viewModel.removeFriend(friend.friendId) })
+                            FriendCard(
+                                friend,
+                                onClick = { onNavigateToFriendProfile(friend.friendId) },
+                                onRemove = { friendPendingRemoval = friend }
+                            )
                         }
                     }
 
@@ -274,6 +286,27 @@ fun ProfileScreen(
                 },
                 onAddRoute = { viewModel.addSavedRoute(it) },
                 onDeleteRoute = { viewModel.removeSavedRoute(it) }
+            )
+        }
+
+        friendPendingRemoval?.let { friend ->
+            AlertDialog(
+                onDismissRequest = { friendPendingRemoval = null },
+                title = { Text("Ukloni prijatelja?") },
+                text = { Text("${friend.username} će biti uklonjen/a iz liste prijatelja. Ako se predomisliš, moraćeš ponovo da pošalješ zahtev.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.removeFriend(friend.friendId)
+                        friendPendingRemoval = null
+                    }) {
+                        Text("Ukloni", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { friendPendingRemoval = null }) {
+                        Text("Otkaži")
+                    }
+                }
             )
         }
     }
@@ -537,11 +570,16 @@ private fun SettingsSection(
 }
 
 @Composable
-private fun FriendCard(friend: dev.milinko.movielens.data.remote.user.FriendInfo, onRemove: () -> Unit) {
+private fun FriendCard(
+    friend: FriendInfo,
+    onClick: () -> Unit,
+    onRemove: () -> Unit
+) {
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(8.dp)
+            .clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier
@@ -610,7 +648,9 @@ private fun FriendSearchSection(
     isSearching: Boolean,
     results: List<UserSearchResult>,
     onQueryChange: (String) -> Unit,
-    onAdd: (String) -> Unit
+    onAdd: (String) -> Unit,
+    onCancelRequest: (String) -> Unit,
+    onOpenProfile: (String) -> Unit
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         OutlinedTextField(
@@ -630,7 +670,12 @@ private fun FriendSearchSection(
             Spacer(modifier = Modifier.height(8.dp))
             Column {
                 results.forEach { result ->
-                    UserSearchResultRow(result = result, onAdd = { onAdd(result.id) })
+                    UserSearchResultRow(
+                        result = result,
+                        onAdd = { onAdd(result.id) },
+                        onCancelRequest = { onCancelRequest(result.id) },
+                        onClick = { if (result.status == "ACCEPTED") onOpenProfile(result.id) }
+                    )
                 }
             }
         } else if (!isSearching && query.trim().length >= 2) {
@@ -645,11 +690,17 @@ private fun FriendSearchSection(
 }
 
 @Composable
-private fun UserSearchResultRow(result: UserSearchResult, onAdd: () -> Unit) {
+private fun UserSearchResultRow(
+    result: UserSearchResult,
+    onAdd: () -> Unit,
+    onCancelRequest: () -> Unit,
+    onClick: () -> Unit
+) {
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
+            .clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier
@@ -665,7 +716,7 @@ private fun UserSearchResultRow(result: UserSearchResult, onAdd: () -> Unit) {
             )
             when (result.status) {
                 "NONE" -> Button(onClick = onAdd) { Text("Dodaj") }
-                "PENDING_SENT" -> OutlinedButton(onClick = {}, enabled = false) { Text("Zahtev poslat") }
+                "PENDING_SENT" -> TextButton(onClick = onCancelRequest) { Text("Otkaži zahtev", color = MaterialTheme.colorScheme.error) }
                 "PENDING_RECEIVED" -> OutlinedButton(onClick = {}, enabled = false) { Text("Odgovori ispod ↓") }
                 "ACCEPTED" -> OutlinedButton(onClick = {}, enabled = false) { Text("Već prijatelji") }
                 else -> Button(onClick = onAdd) { Text("Dodaj") }

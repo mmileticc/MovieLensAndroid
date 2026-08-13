@@ -1,7 +1,12 @@
 package dev.milinko.movielens.data.repository
 
+import dev.milinko.movielens.data.local.HistoryDao
+import dev.milinko.movielens.data.local.HistoryEntity
+import dev.milinko.movielens.data.local.WatchlistDao
+import dev.milinko.movielens.data.local.WatchlistEntity
 import dev.milinko.movielens.data.remote.user.AddToHistoryBody
 import dev.milinko.movielens.data.remote.user.FriendActionBody
+import dev.milinko.movielens.data.remote.user.FriendProfileResponse
 import dev.milinko.movielens.data.remote.user.PendingRequest
 import dev.milinko.movielens.data.remote.user.UpdateHistoryBody
 import dev.milinko.movielens.data.remote.user.UserApiService
@@ -14,6 +19,8 @@ import dev.milinko.movielens.data.remote.user.MovieSuggestion
 import dev.milinko.movielens.data.remote.movie.WatchlistItem
 import dev.milinko.movielens.data.remote.movie.HistoryItem
 import dev.milinko.movielens.util.safeApiCall
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,10 +31,16 @@ interface UserRepository {
     suspend fun getUserSettings(userId: String): Result<UserSettings>
     suspend fun updateUserSettings(userId: String, settings: UserSettings): Result<UserSettings>
 
+    // Offline-first: čita se odmah iz Room keša (instant, radi i bez interneta), getWatchlist
+    // ispod ostaje "osveži sa mreže" - poziva se u pozadini, upisuje u isti keš, Flow automatski
+    // emituje novu vrednost UI-ju. Videti diskusiju u MOVIELENS_ROADMAP.md o offline obimu -
+    // namerno SAMO watchlist/istorija, ne i pretraga/trending/bioskopski termini.
+    fun observeWatchlist(userId: String): Flow<List<WatchlistItem>>
     suspend fun getWatchlist(userId: String): Result<List<WatchlistItem>>
     suspend fun addToWatchlist(userId: String, tmdbId: Int): Result<WatchlistItem>
     suspend fun removeFromWatchlist(userId: String, tmdbId: Int): Result<Unit>
 
+    fun observeHistory(userId: String): Flow<List<HistoryItem>>
     suspend fun getHistory(userId: String): Result<List<HistoryItem>>
     // rating/duration su opcioni - "označeno kao odgledano bez ocene" šalje oba kao null (ne kao
     // 0.0, koji bi backend zaokružio na ocenu 1 - videti Double?.toRatingIntOrNull() na backendu).
@@ -45,15 +58,54 @@ interface UserRepository {
     suspend fun acceptFriendRequest(userId: String, friendId: String): Result<Unit>
     suspend fun rejectFriendRequest(userId: String, friendId: String): Result<Unit>
     suspend fun removeFriend(userId: String, friendId: String): Result<Unit>
+    suspend fun getFriendProfile(userId: String, friendId: String): Result<FriendProfileResponse>
 
     suspend fun getFriendActivity(userId: String): Result<List<FriendActivity>>
 
     suspend fun getMovieNightSuggestions(userId: String, friendId: String): Result<List<MovieSuggestion>>
 }
 
+private fun WatchlistEntity.toDomain() = WatchlistItem(
+    tmdbId = tmdbId,
+    title = title,
+    posterPath = posterPath,
+    addedAt = addedAt,
+    priority = priority
+)
+
+private fun WatchlistItem.toEntity(userId: String) = WatchlistEntity(
+    userId = userId,
+    tmdbId = tmdbId,
+    title = title,
+    posterPath = posterPath,
+    addedAt = addedAt,
+    priority = priority
+)
+
+private fun HistoryEntity.toDomain() = HistoryItem(
+    tmdbId = tmdbId,
+    title = title,
+    posterPath = posterPath,
+    userRating = userRating,
+    watchedAt = watchedAt,
+    duration = duration
+)
+
+private fun HistoryItem.toEntity(userId: String) = HistoryEntity(
+    userId = userId,
+    tmdbId = tmdbId,
+    title = title,
+    posterPath = posterPath,
+    userRating = userRating,
+    watchedAt = watchedAt,
+    duration = duration
+)
+
 @Singleton
 class UserRepositoryImpl @Inject constructor(
-    private val userApiService: UserApiService
+    private val userApiService: UserApiService,
+    private val watchlistDao: WatchlistDao,
+    private val historyDao: HistoryDao
 ) : UserRepository {
 
     override suspend fun getUserProfile(userId: String): Result<UserProfile> = safeApiCall {
@@ -92,10 +144,17 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
+    override fun observeWatchlist(userId: String): Flow<List<WatchlistItem>> =
+        watchlistDao.observeWatchlist(userId).map { entities -> entities.map { it.toDomain() } }
+
     override suspend fun getWatchlist(userId: String): Result<List<WatchlistItem>> = safeApiCall {
         val response = userApiService.getWatchlist(userId)
         if (response.isSuccessful) {
-            response.body()?.items ?: emptyList()
+            val items = response.body()?.items ?: emptyList()
+            // Osveži lokalni keš sa serverom - Flow iz observeWatchlist automatski emituje ovu
+            // novu vrednost svakom kolektoru (Room je single source of truth za UI).
+            watchlistDao.replaceAll(userId, items.map { it.toEntity(userId) })
+            items
         } else {
             throw Exception("Get watchlist failed: ${response.code()}")
         }
@@ -104,7 +163,9 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun addToWatchlist(userId: String, tmdbId: Int): Result<WatchlistItem> = safeApiCall {
         val response = userApiService.addToWatchlist(userId, mapOf("tmdbId" to tmdbId))
         if (response.isSuccessful) {
-            response.body() ?: throw Exception("Empty response")
+            val item = response.body() ?: throw Exception("Empty response")
+            watchlistDao.insert(item.toEntity(userId))
+            item
         } else {
             throw Exception("Add to watchlist failed: ${response.code()}")
         }
@@ -112,15 +173,22 @@ class UserRepositoryImpl @Inject constructor(
 
     override suspend fun removeFromWatchlist(userId: String, tmdbId: Int): Result<Unit> = safeApiCall {
         val response = userApiService.removeFromWatchlist(userId, tmdbId)
-        if (!response.isSuccessful) {
+        if (response.isSuccessful) {
+            watchlistDao.delete(userId, tmdbId)
+        } else {
             throw Exception("Remove from watchlist failed: ${response.code()}")
         }
     }
 
+    override fun observeHistory(userId: String): Flow<List<HistoryItem>> =
+        historyDao.observeHistory(userId).map { entities -> entities.map { it.toDomain() } }
+
     override suspend fun getHistory(userId: String): Result<List<HistoryItem>> = safeApiCall {
         val response = userApiService.getHistory(userId)
         if (response.isSuccessful) {
-            response.body()?.items ?: emptyList()
+            val items = response.body()?.items ?: emptyList()
+            historyDao.replaceAll(userId, items.map { it.toEntity(userId) })
+            items
         } else {
             throw Exception("Get history failed: ${response.code()}")
         }
@@ -131,7 +199,9 @@ class UserRepositoryImpl @Inject constructor(
         // ima podrazumevanu vrednost null za oba, pa je to ekvivalentno izostavljanju polja.
         val response = userApiService.addToHistory(userId, AddToHistoryBody(tmdbId, rating, duration))
         if (response.isSuccessful) {
-            response.body() ?: throw Exception("Empty response")
+            val item = response.body() ?: throw Exception("Empty response")
+            historyDao.insert(item.toEntity(userId))
+            item
         } else {
             throw Exception("Add to history failed: ${response.code()}")
         }
@@ -140,7 +210,9 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun updateHistoryItem(userId: String, tmdbId: Int, rating: Double): Result<HistoryItem> = safeApiCall {
         val response = userApiService.updateHistoryItem(userId, tmdbId, UpdateHistoryBody(rating))
         if (response.isSuccessful) {
-            response.body() ?: throw Exception("Empty response")
+            val item = response.body() ?: throw Exception("Empty response")
+            historyDao.insert(item.toEntity(userId))
+            item
         } else {
             throw Exception("Update history failed: ${response.code()}")
         }
@@ -148,7 +220,9 @@ class UserRepositoryImpl @Inject constructor(
 
     override suspend fun removeFromHistory(userId: String, tmdbId: Int): Result<Unit> = safeApiCall {
         val response = userApiService.removeFromHistory(userId, tmdbId)
-        if (!response.isSuccessful) {
+        if (response.isSuccessful) {
+            historyDao.delete(userId, tmdbId)
+        } else {
             throw Exception("Remove from history failed: ${response.code()}")
         }
     }
@@ -205,6 +279,15 @@ class UserRepositoryImpl @Inject constructor(
         val response = userApiService.removeFriend(userId, friendId)
         if (!response.isSuccessful) {
             throw Exception("Remove friend failed: ${response.code()}")
+        }
+    }
+
+    override suspend fun getFriendProfile(userId: String, friendId: String): Result<FriendProfileResponse> = safeApiCall {
+        val response = userApiService.getFriendProfile(userId, friendId)
+        if (response.isSuccessful) {
+            response.body() ?: throw Exception("Empty response")
+        } else {
+            throw Exception("Get friend profile failed: ${response.code()}")
         }
     }
 

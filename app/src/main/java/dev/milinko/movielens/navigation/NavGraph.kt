@@ -10,6 +10,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import dev.milinko.movielens.ui.auth.SignInScreen
 import dev.milinko.movielens.ui.detail.MovieDetailScreen
+import dev.milinko.movielens.ui.friendprofile.FriendProfileScreen
 import dev.milinko.movielens.ui.home.HomeScreen
 import dev.milinko.movielens.ui.library.LibraryScreen
 import dev.milinko.movielens.ui.profile.ProfileScreen
@@ -29,6 +30,9 @@ sealed class Screen(val route: String) {
 
     object Library : Screen("library")
     object Profile : Screen("profile")
+    object FriendProfile : Screen("friend_profile/{friendId}") {
+        fun createRoute(friendId: String) = "friend_profile/$friendId"
+    }
 }
 
 private fun NavHostController.navigateBottomTab(route: String) {
@@ -98,6 +102,9 @@ fun MovieLensNavHost(
                 onNavigateBack = { navController.navigateUp() },
                 onRequireSignIn = {
                     navController.navigate(Screen.SignIn.createRoute(Screen.MovieDetail.createRoute(tmdbId)))
+                },
+                onNavigateToFriendProfile = { friendId: String ->
+                    navController.navigate(Screen.FriendProfile.createRoute(friendId))
                 }
             )
         }
@@ -126,6 +133,18 @@ fun MovieLensNavHost(
                 },
                 {
                     navController.navigate(Screen.SignIn.createRoute(Screen.Profile.route))
+                },
+                onNavigateToFriendProfile = { friendId: String ->
+                    navController.navigate(Screen.FriendProfile.createRoute(friendId))
+                }
+            )
+        }
+
+        composable(Screen.FriendProfile.route) {
+            FriendProfileScreen(
+                onNavigateBack = { navController.navigateUp() },
+                onNavigateToDetail = { tmdbId: Int ->
+                    navController.navigate(Screen.MovieDetail.createRoute(tmdbId))
                 }
             )
         }

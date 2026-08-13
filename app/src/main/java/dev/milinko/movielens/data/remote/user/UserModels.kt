@@ -106,6 +106,46 @@ data class PendingRequestsResponse(
 // videti napomenu u UserApiService.kt o Kotlin Map<K, out V> + Retrofit wildcard bug-u.
 data class FriendActionBody(val action: String)
 
+// Profil prijatelja - osnovni info + WATCHED lista (watchlist ostaje privatan, nikad se ne vraća).
+data class FriendProfileMovie(
+    @SerializedName("tmdb_id")
+    val tmdbId: Int,
+    @SerializedName("title")
+    val title: String,
+    @SerializedName("poster_path")
+    val posterPath: String? = null,
+    @SerializedName("rating")
+    val rating: Int? = null,
+    @SerializedName("watched_at")
+    val watchedAt: Long = 0L
+)
+
+data class FriendProfileResponse(
+    @SerializedName("id")
+    val id: String,
+    @SerializedName("username")
+    val username: String,
+    @SerializedName("avatar_url")
+    val avatarUrl: String? = null,
+    @SerializedName("watched_movies")
+    val watchedMovies: List<FriendProfileMovie> = emptyList()
+)
+
+// "Prijatelji su gledali ovaj film" bedž na Movie Detail-u
+data class FriendWatched(
+    @SerializedName("friend_id")
+    val friendId: String,
+    @SerializedName("friend_name")
+    val friendName: String,
+    @SerializedName("rating")
+    val rating: Int? = null
+)
+
+data class FriendsWatchedResponse(
+    @SerializedName("friends")
+    val friends: List<FriendWatched> = emptyList()
+)
+
 // Friend Activity
 data class FriendActivity(
     @SerializedName("activity_id")

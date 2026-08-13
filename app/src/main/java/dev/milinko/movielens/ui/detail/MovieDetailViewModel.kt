@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.milinko.movielens.data.pref.SessionManager
 import dev.milinko.movielens.data.remote.movie.MovieDetail
+import dev.milinko.movielens.data.remote.user.FriendWatched
 import dev.milinko.movielens.data.repository.MovieRepository
 import dev.milinko.movielens.data.repository.UserRepository
 import kotlinx.coroutines.async
@@ -21,6 +22,9 @@ data class MovieDetailUiState(
     val isWatched: Boolean = false,
     // 0.0 = odgledano bez ocene (isti dogovor kao na backendu - videti UserActionsRouting.kt)
     val userRating: Double = 0.0,
+    // Prijatelji koji su odgledali ovaj film (i njihova ocena, ako postoji). Tiho prazno ako
+    // korisnik nije ulogovan ili poziv padne - nije kritična funkcionalnost, ne blokira ekran.
+    val friendsWatched: List<FriendWatched> = emptyList(),
     val watchlistError: String? = null,
     val historyError: String? = null,
     val error: String? = null
@@ -46,6 +50,7 @@ class MovieDetailViewModel @Inject constructor(
             val userId = sessionManager.getUserId()
             val watchlistDeferred = userId?.let { async { userRepository.getWatchlist(it) } }
             val historyDeferred = userId?.let { async { userRepository.getHistory(it) } }
+            val friendsWatchedDeferred = userId?.let { async { movieRepository.getFriendsWhoWatched(tmdbId) } }
 
             detailDeferred.await()
                 .onSuccess { detail ->
@@ -75,6 +80,9 @@ class MovieDetailViewModel @Inject constructor(
                 if (item != null) {
                     _uiState.value = _uiState.value.copy(isWatched = true, userRating = item.userRating)
                 }
+            }
+            friendsWatchedDeferred?.await()?.onSuccess { friends ->
+                _uiState.value = _uiState.value.copy(friendsWatched = friends)
             }
         }
     }
