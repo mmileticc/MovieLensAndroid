@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,7 +51,8 @@ import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 fun FriendProfileScreen(
     viewModel: FriendProfileViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
-    onNavigateToDetail: (Int) -> Unit
+    onNavigateToDetail: (Int) -> Unit,
+    onNavigateToMovieNight: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -144,6 +146,12 @@ fun FriendProfileScreen(
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                if (!uiState.isSelf) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Button(onClick = { onNavigateToMovieNight(profile.id) }) {
+                                        Text("Predlozi za zajedničko gledanje")
+                                    }
+                                }
                             }
                         }
 

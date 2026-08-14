@@ -132,6 +132,12 @@ interface UserApiService {
         @Path("friendId") friendId: String
     ): Response<FriendProfileResponse>
 
+    // Taste profile (Faza 4) - prosečna ocena po žanru, samo za sebe.
+    @GET("api/users/{userId}/taste-profile")
+    suspend fun getTasteProfile(
+        @Path("userId") userId: String
+    ): Response<TasteProfileResponse>
+
     // Friend Activity
     @GET("api/users/{userId}/friends/activity")
     suspend fun getFriendActivity(

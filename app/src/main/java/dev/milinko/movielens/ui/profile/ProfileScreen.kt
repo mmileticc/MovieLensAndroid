@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -48,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +61,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.data.remote.user.FriendInfo
+import dev.milinko.movielens.data.remote.user.GenreAffinity
 import dev.milinko.movielens.data.remote.user.PendingRequest
 import dev.milinko.movielens.data.remote.user.UserSearchResult
 import dev.milinko.movielens.ui.auth.AuthUiState
@@ -182,6 +186,12 @@ fun ProfileScreen(
                 }
             }
 
+            if (uiState.tasteProfile.isNotEmpty()) {
+                item {
+                    TasteProfileSection(uiState.tasteProfile)
+                }
+            }
+
             item {
                 SecondaryTabRow(
                     selectedTabIndex = selectedTabIndex,
@@ -237,7 +247,21 @@ fun ProfileScreen(
                     item {
                         SectionHeader("Prijatelji")
                     }
-                    if (uiState.friends.isEmpty()) {
+                    if (uiState.isLoading && uiState.friends.isEmpty()) {
+                        // Dok se prvi ikad poziv ne vrati, ne pokazujemo "nemaš prijatelja" -
+                        // to bi bilo lažno ako korisnik zapravo ima prijatelje, samo se lista
+                        // još nije stigla da učita (npr. brz prelazak na ovaj tab).
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            }
+                        }
+                    } else if (uiState.friends.isEmpty()) {
                         item {
                             Text(
                                 "Još nemaš prijatelja. Pretraži iznad da dodaš nekoga.",
@@ -627,6 +651,52 @@ private fun FriendCard(
             }
             TextButton(onClick = onRemove) {
                 Text("Ukloni", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+/**
+ * "Tvoj ukus" - prosečna ocena po žanru (Faza 4, MOVIELENS_ROADMAP.md). Namerno prikazuje broj
+ * filmova uz svaki žanr (npr. "8.3/10 (2 filma)") umesto da bilo šta krije - to je mehanizam
+ * transparentnosti umesto praga/filtriranja na backendu.
+ */
+@Composable
+private fun TasteProfileSection(genres: List<GenreAffinity>) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(
+            "Tvoj ukus",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                genres.take(5).forEach { affinity ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(affinity.genre, fontSize = 13.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Star,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = Color(0xFFF5C518)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "${String.format(LocalLocale.current.platformLocale, "%.1f", affinity.averageRating)}/10 (${affinity.movieCount})",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
         }
     }

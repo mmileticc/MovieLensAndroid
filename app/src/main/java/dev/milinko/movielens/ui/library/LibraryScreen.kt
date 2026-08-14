@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -125,7 +126,16 @@ fun LibraryScreen(
 
                 when (selectedTabIndex) {
                     0 -> {
-                        if (uiState.watchlist.isEmpty()) {
+                        if (uiState.isLoading && uiState.watchlist.isEmpty()) {
+                            // Prvi ikad ulazak (Room prazan, mreža još nije vratila) - spinner
+                            // umesto lažne "nema filmova" poruke dok se ne zna pravo stanje.
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        } else if (uiState.watchlist.isEmpty()) {
                             Box(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
@@ -145,7 +155,14 @@ fun LibraryScreen(
                         }
                     }
                     1 -> {
-                        if (uiState.history.isEmpty()) {
+                        if (uiState.isLoading && uiState.history.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        } else if (uiState.history.isEmpty()) {
                             Box(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center

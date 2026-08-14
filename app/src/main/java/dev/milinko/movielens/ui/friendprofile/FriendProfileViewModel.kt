@@ -16,7 +16,9 @@ import javax.inject.Inject
 data class FriendProfileUiState(
     val profile: FriendProfileResponse? = null,
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    // "Movie Night" dugme ima smisla samo kad gledaš tuđi profil, ne sopstveni.
+    val isSelf: Boolean = false
 )
 
 @HiltViewModel
@@ -28,7 +30,9 @@ class FriendProfileViewModel @Inject constructor(
 
     private val friendId: String = checkNotNull(savedStateHandle["friendId"])
 
-    private val _uiState = MutableStateFlow(FriendProfileUiState())
+    private val _uiState = MutableStateFlow(
+        FriendProfileUiState(isSelf = sessionManager.getUserId() == friendId)
+    )
     val uiState: StateFlow<FriendProfileUiState> = _uiState.asStateFlow()
 
     fun loadProfile() {
@@ -45,6 +49,16 @@ class FriendProfileViewModel @Inject constructor(
                         error = e.message ?: "Greška pri učitavanju profila"
                     )
                 }
+        }
+
+        // Prefetch movienight predloga u pozadini čim se otvori profil prijatelja - dok korisnik
+        // gleda profil/odgledane filmove, MovieNightViewModel kasnije samo čita iz keša (vidi
+        // UserRepository.prefetchMovieNightSuggestions), umesto da čeka mrežu tek na klik dugmeta.
+        // Nema uticaja na uiState/loading - potpuno tiho, ne blokira ni ne signalizira ništa ako padne.
+        if (myUserId != friendId) {
+            viewModelScope.launch {
+                userRepository.prefetchMovieNightSuggestions(myUserId, friendId)
+            }
         }
     }
 }

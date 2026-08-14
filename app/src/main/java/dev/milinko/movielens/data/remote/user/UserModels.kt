@@ -131,6 +131,23 @@ data class FriendProfileResponse(
     val watchedMovies: List<FriendProfileMovie> = emptyList()
 )
 
+// Taste profile (Faza 4) - prosečna ocena po žanru, izvedeno direktno iz korisnikovih ocena.
+data class GenreAffinity(
+    @SerializedName("genre_id")
+    val genreId: Int,
+    @SerializedName("genre")
+    val genre: String,
+    @SerializedName("average_rating")
+    val averageRating: Double,
+    @SerializedName("movie_count")
+    val movieCount: Int
+)
+
+data class TasteProfileResponse(
+    @SerializedName("genres")
+    val genres: List<GenreAffinity> = emptyList()
+)
+
 // "Prijatelji su gledali ovaj film" bedž na Movie Detail-u
 data class FriendWatched(
     @SerializedName("friend_id")

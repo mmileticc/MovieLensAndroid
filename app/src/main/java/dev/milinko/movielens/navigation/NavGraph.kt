@@ -13,6 +13,7 @@ import dev.milinko.movielens.ui.detail.MovieDetailScreen
 import dev.milinko.movielens.ui.friendprofile.FriendProfileScreen
 import dev.milinko.movielens.ui.home.HomeScreen
 import dev.milinko.movielens.ui.library.LibraryScreen
+import dev.milinko.movielens.ui.movienight.MovieNightScreen
 import dev.milinko.movielens.ui.profile.ProfileScreen
 import dev.milinko.movielens.ui.search.SearchScreen
 
@@ -32,6 +33,9 @@ sealed class Screen(val route: String) {
     object Profile : Screen("profile")
     object FriendProfile : Screen("friend_profile/{friendId}") {
         fun createRoute(friendId: String) = "friend_profile/$friendId"
+    }
+    object MovieNight : Screen("movie_night/{friendId}") {
+        fun createRoute(friendId: String) = "movie_night/$friendId"
     }
 }
 
@@ -142,6 +146,18 @@ fun MovieLensNavHost(
 
         composable(Screen.FriendProfile.route) {
             FriendProfileScreen(
+                onNavigateBack = { navController.navigateUp() },
+                onNavigateToDetail = { tmdbId: Int ->
+                    navController.navigate(Screen.MovieDetail.createRoute(tmdbId))
+                },
+                onNavigateToMovieNight = { friendId: String ->
+                    navController.navigate(Screen.MovieNight.createRoute(friendId))
+                }
+            )
+        }
+
+        composable(Screen.MovieNight.route) {
+            MovieNightScreen(
                 onNavigateBack = { navController.navigateUp() },
                 onNavigateToDetail = { tmdbId: Int ->
                     navController.navigate(Screen.MovieDetail.createRoute(tmdbId))

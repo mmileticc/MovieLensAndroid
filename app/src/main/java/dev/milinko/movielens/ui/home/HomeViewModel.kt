@@ -3,6 +3,7 @@ package dev.milinko.movielens.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.milinko.movielens.data.pref.SessionManager
 import dev.milinko.movielens.data.remote.movie.MovieSearchResult
 import dev.milinko.movielens.data.repository.MovieRepository
 import dev.milinko.movielens.data.repository.VisionRepository
@@ -28,7 +29,8 @@ data class HomeUiState(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val movieRepository: MovieRepository,
-    private val visionRepository: VisionRepository
+    private val visionRepository: VisionRepository,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -79,10 +81,21 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Ako je korisnik ulogovan, vuče personalizovan /featured (Faza 4 - taste profile po žanru);
+     * backend sam radi fallback na popularne filmove ako korisnik još nema dovoljno ocena, pa se
+     * ovde ne mora ništa posebno granati po tome. Neulogovan korisnik dobija običan trending.
+     */
     private fun loadTrendingMovies() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isTrendingLoading = true)
-            movieRepository.getTrendingMovies()
+            val userId = sessionManager.getUserId()
+            val result = if (userId != null) {
+                movieRepository.getFeaturedMovies(userId)
+            } else {
+                movieRepository.getTrendingMovies()
+            }
+            result
                 .onSuccess { movies ->
                     _uiState.value = _uiState.value.copy(isTrendingLoading = false, trendingMovies = movies)
                 }

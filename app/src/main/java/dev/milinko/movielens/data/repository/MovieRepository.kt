@@ -14,6 +14,9 @@ interface MovieRepository {
     suspend fun searchMovies(query: String): Result<List<MovieSearchResult>>
     suspend fun getMovieDetail(tmdbId: Int): Result<MovieDetail>
     suspend fun getTrendingMovies(): Result<List<MovieSearchResult>>
+    // Personalizovano (Faza 4) ako je userId poslat i korisnik ima taste profile - backend sam
+    // radi fallback na popularne filmove ako ne postoji dovoljno podataka. Videti MovieRouting.kt.
+    suspend fun getFeaturedMovies(userId: String?): Result<List<MovieSearchResult>>
     suspend fun getFriendsWhoWatched(tmdbId: Int): Result<List<FriendWatched>>
 }
 
@@ -46,6 +49,15 @@ class MovieRepositoryImpl @Inject constructor(
             response.body()?.results ?: emptyList()
         } else {
             throw Exception("Trending failed: ${response.code()}")
+        }
+    }
+
+    override suspend fun getFeaturedMovies(userId: String?): Result<List<MovieSearchResult>> = safeApiCall {
+        val response = movieApiService.getFeaturedMovies(userId)
+        if (response.isSuccessful) {
+            response.body()?.results ?: emptyList()
+        } else {
+            throw Exception("Featured failed: ${response.code()}")
         }
     }
 

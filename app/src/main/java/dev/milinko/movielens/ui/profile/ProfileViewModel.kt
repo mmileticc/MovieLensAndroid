@@ -7,6 +7,7 @@ import dev.milinko.movielens.data.pref.SessionManager
 import dev.milinko.movielens.data.pref.UrlStorage
 import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.data.remote.user.FriendInfo
+import dev.milinko.movielens.data.remote.user.GenreAffinity
 import dev.milinko.movielens.data.remote.user.PendingRequest
 import dev.milinko.movielens.data.remote.user.UserProfile
 import dev.milinko.movielens.data.remote.user.UserSearchResult
@@ -30,6 +31,8 @@ data class ProfileUiState(
     val friends: List<FriendInfo> = emptyList(),
     val friendActivity: List<FriendActivity> = emptyList(),
     val pendingRequests: List<PendingRequest> = emptyList(),
+    // Taste profile (Faza 4) - top žanrovi po prosečnoj oceni, izvedeno iz korisnikovih ocena.
+    val tasteProfile: List<GenreAffinity> = emptyList(),
     // Search-as-you-type za dodavanje prijatelja (isti obrazac kao SearchViewModel za filmove).
     val friendSearchQuery: String = "",
     val friendSearchResults: List<UserSearchResult> = emptyList(),
@@ -287,12 +290,14 @@ class ProfileViewModel @Inject constructor(
                 val friendsDeferred = async { userRepository.getFriends(userId) }
                 val activityDeferred = async { userRepository.getFriendActivity(userId) }
                 val pendingDeferred = async { userRepository.getPendingFriendRequests(userId) }
+                val tasteProfileDeferred = async { userRepository.getTasteProfile(userId) }
 
                 val profileResult = profileDeferred.await()
                 val settingsResult = settingsDeferred.await()
                 val friendsResult = friendsDeferred.await()
                 val activityResult = activityDeferred.await()
                 val pendingResult = pendingDeferred.await()
+                val tasteProfileResult = tasteProfileDeferred.await()
 
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -300,7 +305,8 @@ class ProfileViewModel @Inject constructor(
                     userSettings = settingsResult.getOrNull() ?: _uiState.value.userSettings,
                     friends = friendsResult.getOrNull() ?: _uiState.value.friends,
                     friendActivity = activityResult.getOrNull() ?: _uiState.value.friendActivity,
-                    pendingRequests = pendingResult.getOrNull() ?: _uiState.value.pendingRequests
+                    pendingRequests = pendingResult.getOrNull() ?: _uiState.value.pendingRequests,
+                    tasteProfile = tasteProfileResult.getOrNull() ?: _uiState.value.tasteProfile
                 )
             } catch (e: CancellationException) {
                 throw e

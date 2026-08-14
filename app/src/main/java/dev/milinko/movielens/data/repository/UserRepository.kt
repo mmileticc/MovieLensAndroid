@@ -7,6 +7,7 @@ import dev.milinko.movielens.data.local.WatchlistEntity
 import dev.milinko.movielens.data.remote.user.AddToHistoryBody
 import dev.milinko.movielens.data.remote.user.FriendActionBody
 import dev.milinko.movielens.data.remote.user.FriendProfileResponse
+import dev.milinko.movielens.data.remote.user.GenreAffinity
 import dev.milinko.movielens.data.remote.user.PendingRequest
 import dev.milinko.movielens.data.remote.user.UpdateHistoryBody
 import dev.milinko.movielens.data.remote.user.UserApiService
@@ -59,10 +60,19 @@ interface UserRepository {
     suspend fun rejectFriendRequest(userId: String, friendId: String): Result<Unit>
     suspend fun removeFriend(userId: String, friendId: String): Result<Unit>
     suspend fun getFriendProfile(userId: String, friendId: String): Result<FriendProfileResponse>
+    suspend fun getTasteProfile(userId: String): Result<List<GenreAffinity>>
 
     suspend fun getFriendActivity(userId: String): Result<List<FriendActivity>>
 
     suspend fun getMovieNightSuggestions(userId: String, friendId: String): Result<List<MovieSuggestion>>
+
+    /**
+     * Učitava movienight-suggestions unapred (npr. čim se otvori profil prijatelja) i drži ih u
+     * memoriji da getMovieNightSuggestions posle vrati odmah bez čekanja mreže kad korisnik
+     * stvarno klikne na dugme. Tiho gutа grešku - ovo je samo optimizacija, ne kritičan poziv;
+     * ako ne uspe, obično dugme i dalje radi normalno (samo bez prefetch-a).
+     */
+    suspend fun prefetchMovieNightSuggestions(userId: String, friendId: String)
 }
 
 private fun WatchlistEntity.toDomain() = WatchlistItem(
@@ -107,6 +117,12 @@ class UserRepositoryImpl @Inject constructor(
     private val watchlistDao: WatchlistDao,
     private val historyDao: HistoryDao
 ) : UserRepository {
+
+    // Memorijski keš za movienight predloge (userId:friendId -> lista) - popunjava se preko
+    // prefetchMovieNightSuggestions kad se otvori profil prijatelja, čita se u
+    // getMovieNightSuggestions da MovieNightScreen ne mora da čeka mrežu ako je već prefetch-ovano.
+    // ConcurrentHashMap jer prefetch i stvaran poziv mogu teoretski da se preklope.
+    private val movieNightCache = java.util.concurrent.ConcurrentHashMap<String, List<MovieSuggestion>>()
 
     override suspend fun getUserProfile(userId: String): Result<UserProfile> = safeApiCall {
         val response = userApiService.getUserProfile(userId)
@@ -291,6 +307,15 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getTasteProfile(userId: String): Result<List<GenreAffinity>> = safeApiCall {
+        val response = userApiService.getTasteProfile(userId)
+        if (response.isSuccessful) {
+            response.body()?.genres ?: emptyList()
+        } else {
+            throw Exception("Get taste profile failed: ${response.code()}")
+        }
+    }
+
     override suspend fun getFriendActivity(userId: String): Result<List<FriendActivity>> = safeApiCall {
         val response = userApiService.getFriendActivity(userId)
         if (response.isSuccessful) {
@@ -300,12 +325,25 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getMovieNightSuggestions(userId: String, friendId: String): Result<List<MovieSuggestion>> = safeApiCall {
-        val response = userApiService.getMovieNightSuggestions(userId, friendId)
-        if (response.isSuccessful) {
-            response.body()?.suggestions ?: emptyList()
-        } else {
-            throw Exception("Get suggestions failed: ${response.code()}")
+    override suspend fun getMovieNightSuggestions(userId: String, friendId: String): Result<List<MovieSuggestion>> {
+        val cacheKey = "$userId:$friendId"
+        movieNightCache[cacheKey]?.let { return Result.success(it) }
+
+        return safeApiCall {
+            val response = userApiService.getMovieNightSuggestions(userId, friendId)
+            if (response.isSuccessful) {
+                val suggestions = response.body()?.suggestions ?: emptyList()
+                movieNightCache[cacheKey] = suggestions
+                suggestions
+            } else {
+                throw Exception("Get suggestions failed: ${response.code()}")
+            }
         }
+    }
+
+    override suspend fun prefetchMovieNightSuggestions(userId: String, friendId: String) {
+        val cacheKey = "$userId:$friendId"
+        if (movieNightCache.containsKey(cacheKey)) return
+        getMovieNightSuggestions(userId, friendId)
     }
 }
