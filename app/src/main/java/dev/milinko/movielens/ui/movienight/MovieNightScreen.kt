@@ -20,11 +20,13 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -42,6 +44,7 @@ import coil.request.ImageRequest
 import dev.milinko.movielens.data.remote.user.MovieSuggestion
 import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MovieNightScreen(
     viewModel: MovieNightViewModel = hiltViewModel(),
@@ -82,10 +85,19 @@ fun MovieNightScreen(
             }
         }
     ) { paddingValues ->
-        Box(
+        // Swipe-down radi isto što i "Osveži predloge" dugme u top bar-u (rotira na sledeću TMDB
+        // stranicu, videti MovieNightViewModel.refreshSuggestions) - ista isRefreshing zastavica
+        // pokreće oba, samo dva različita "okidača" iste akcije.
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.refreshSuggestions() },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+        ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
             when {
@@ -119,6 +131,7 @@ fun MovieNightScreen(
                     }
                 }
             }
+        }
         }
     }
 }

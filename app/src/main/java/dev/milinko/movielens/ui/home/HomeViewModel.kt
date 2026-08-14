@@ -12,6 +12,7 @@ import dev.milinko.movielens.data.repository.UserRepository
 import dev.milinko.movielens.data.repository.VisionRepository
 import dev.milinko.movielens.data.remote.vision.VisionSearchResponse
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,6 +43,9 @@ data class HomeUiState(
     // "Nastavi da gledaš" - iz Room keša (isti izvor kao Library, Faza 3.5), prazno ako korisnik
     // nije ulogovan ili nema ništa na watchlisti.
     val watchlistPreview: List<WatchlistItem> = emptyList(),
+    // Swipe-down (pull-to-refresh) na Home ekranu - odvojeno od isTrendingLoading da ne prikazuje
+    // duplirane spinnere (PullToRefreshBox ima sopstveni indikator preko ovog flag-a).
+    val isRefreshing: Boolean = false,
     val error: String? = null
 )
 
@@ -59,6 +63,14 @@ class HomeViewModel @Inject constructor(
     // Trenutna strana za trending/featured - ne ide u uiState jer UI-ju ne treba direktno,
     // samo loadMoreTrending() računa sledeću.
     private var currentPage = 1
+
+    // Trenutna strana za "Predloženo za tebe" - swipe-down na Home-u rotira 1..MAX_PERSONALIZED_PAGE
+    // pa se vrati na početak, isto kao "Osveži predloge" na Movie Night ekranu (MovieNightViewModel).
+    private var personalizedPage = 1
+
+    private companion object {
+        const val MAX_PERSONALIZED_PAGE = 5
+    }
 
     init {
         loadTrendingMovies()
@@ -177,8 +189,9 @@ class HomeViewModel @Inject constructor(
      */
     private fun loadPersonalizedMovies() {
         val userId = sessionManager.getUserId() ?: return
+        personalizedPage = 1
         viewModelScope.launch {
-            movieRepository.getFeaturedMovies(userId, page = 1).onSuccess { movies ->
+            movieRepository.getFeaturedMovies(userId, page = personalizedPage).onSuccess { movies ->
                 _uiState.value = _uiState.value.copy(personalizedMovies = movies)
             }
         }
@@ -213,6 +226,36 @@ class HomeViewModel @Inject constructor(
 
     fun clearResult() {
         _uiState.value = _uiState.value.copy(visionResult = null, error = null)
+    }
+
+    /**
+     * Swipe-down (pull-to-refresh) na Home ekranu. NAMERNO menja samo "Predloženo za tebe" (rotira
+     * TMDB discover stranu 1..MAX_PERSONALIZED_PAGE, isto kao "Osveži predloge" na Movie Night
+     * ekranu) - "Popularni filmovi" i "U bioskopima sada" se ne diraju, tu nema šta novo da se
+     * izvuče na zahtev (TMDB popular lista i skrapovani repertoar se ne menjaju sa svakim swipe-om),
+     * pa bi ponovni fetch samo vratio isti sadržaj bez ikakve vidljive promene. Za neulogovanog
+     * korisnika (nema personalizaciju) gesta i dalje kratko pokaže indikator umesto da deluje mrtvo.
+     */
+    fun refreshAll() {
+        val userId = sessionManager.getUserId()
+        if (userId == null) {
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(isRefreshing = true)
+                delay(300)
+                _uiState.value = _uiState.value.copy(isRefreshing = false)
+            }
+            return
+        }
+
+        val nextPage = if (personalizedPage >= MAX_PERSONALIZED_PAGE) 1 else personalizedPage + 1
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isRefreshing = true)
+            movieRepository.getFeaturedMovies(userId, page = nextPage).onSuccess { movies ->
+                personalizedPage = nextPage
+                _uiState.value = _uiState.value.copy(personalizedMovies = movies)
+            }
+            _uiState.value = _uiState.value.copy(isRefreshing = false)
+        }
     }
 }
 

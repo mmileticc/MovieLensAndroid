@@ -23,11 +23,13 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -56,6 +58,7 @@ import dev.milinko.movielens.ui.components.AppBottomNavigationBar
 import dev.milinko.movielens.ui.components.BottomNavTab
 // ...existing code...
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
@@ -119,11 +122,20 @@ fun HomeScreen(
             }
         }
 
+        // Swipe-down da ponovo učita sve trake odjednom (trending, personalizovano, u bioskopima
+        // sada, watchlist) - standardna Material3 gesta, ne zahteva poseban dugme na Home-u
+        // (za razliku od Movie Night ekrana koji zadržava i eksplicitno dugme).
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.refreshAll() },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
                 .padding(16.dp)
                 .background(MaterialTheme.colorScheme.background)
         ) {
@@ -242,6 +254,7 @@ fun HomeScreen(
             item {
                 Spacer(modifier = Modifier.height(16.dp))
             }
+        }
         }
     }
 
