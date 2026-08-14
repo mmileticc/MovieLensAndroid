@@ -95,4 +95,8 @@ dependencies {
 
     // DataStore for backend URL and session storage
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // EXIF čitanje pri kompresiji slike pre slanja na /chat/vision (VisionRepository) - kamera
+    // slike često imaju orientation tag umesto stvarno rotisanih piksela.
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 }

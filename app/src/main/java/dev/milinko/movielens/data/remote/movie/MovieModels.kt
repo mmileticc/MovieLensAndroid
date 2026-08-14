@@ -68,15 +68,24 @@ data class CastMember(
     val profilePath: String? = null
 )
 
+// Bioskopski termin - polja prate stvarni ScrapedMovie model na backendu (cinema_id/times/city iz
+// ranije verzije ovog modela nisu odgovarali stvarnim podacima i nikad nisu bili popunjeni - videti
+// MOVIELENS_ROADMAP.md, Faza 4.5). distanceKm je null ako korisnik nije dao lokacijsku dozvolu.
 data class Showtime(
-    @SerializedName("cinema_id")
-    val cinemaId: Int,
     @SerializedName("cinema_name")
     val cinemaName: String,
-    @SerializedName("times")
-    val times: List<String> = emptyList(),
-    @SerializedName("city")
-    val city: String
+    @SerializedName("cinema_location")
+    val cinemaLocation: String,
+    @SerializedName("booking_url")
+    val bookingUrl: String,
+    @SerializedName("latitude")
+    val latitude: Double? = null,
+    @SerializedName("longitude")
+    val longitude: Double? = null,
+    @SerializedName("distance_km")
+    val distanceKm: Double? = null,
+    @SerializedName("is_upcoming")
+    val isUpcoming: Boolean = false
 )
 
 // Watchlist
@@ -123,6 +132,26 @@ data class HistoryResponse(
 data class TrendingResponse(
     @SerializedName("results")
     val results: List<MovieSearchResult> = emptyList()
+)
+
+// "U bioskopima sada" traka na Home-u (Faza 4.5, polish pre redizajna) - iz postojećeg
+// skraping repertoara, grupisano po tmdbId sa listom bioskopa.
+data class NowInCinemasMovie(
+    @SerializedName("id")
+    val tmdbId: Int,
+    @SerializedName("title")
+    val title: String,
+    @SerializedName("poster_path")
+    val posterPath: String? = null,
+    @SerializedName("vote_average")
+    val voteAverage: Double = 0.0,
+    @SerializedName("cinemas")
+    val cinemas: List<String> = emptyList()
+)
+
+data class NowInCinemasResponse(
+    @SerializedName("results")
+    val results: List<NowInCinemasMovie> = emptyList()
 )
 
 // Generic API Response wrapper

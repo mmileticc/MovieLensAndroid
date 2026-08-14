@@ -3,6 +3,7 @@ package dev.milinko.movielens.ui.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.milinko.movielens.data.location.LocationHelper
 import dev.milinko.movielens.data.pref.SessionManager
 import dev.milinko.movielens.data.remote.movie.MovieDetail
 import dev.milinko.movielens.data.remote.user.FriendWatched
@@ -34,7 +35,8 @@ data class MovieDetailUiState(
 class MovieDetailViewModel @Inject constructor(
     private val movieRepository: MovieRepository,
     private val userRepository: UserRepository,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val locationHelper: LocationHelper
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MovieDetailUiState())
@@ -44,9 +46,14 @@ class MovieDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
 
+            // Poslednja poznata lokacija - samo ako korisnik već ima uključenu dozvolu (ne
+            // tražimo je ovde, to radi UI preko sistemskog dijaloga). Ako je nema, showtimes
+            // dolaze nesortirani po udaljenosti, ne prazni - to je samo "ukras", ne blokira ništa.
+            val location = locationHelper.getLastKnownLocation()
+
             // Detalji filma, watchlist status i istorija (odgledano/ocena) su nezavisni pozivi -
             // paralelno umesto sekvencijalno da ne čekamo tri round-trip-a zaredom.
-            val detailDeferred = async { movieRepository.getMovieDetail(tmdbId) }
+            val detailDeferred = async { movieRepository.getMovieDetail(tmdbId, location?.latitude, location?.longitude) }
             val userId = sessionManager.getUserId()
             val watchlistDeferred = userId?.let { async { userRepository.getWatchlist(it) } }
             val historyDeferred = userId?.let { async { userRepository.getHistory(it) } }

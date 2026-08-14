@@ -1,8 +1,15 @@
 package dev.milinko.movielens.ui.detail
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +26,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Star
@@ -32,21 +40,33 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import dev.milinko.movielens.data.remote.movie.Showtime
 import dev.milinko.movielens.data.remote.user.FriendWatched
 import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 import dev.milinko.movielens.ui.components.RatingStars
@@ -61,6 +81,25 @@ fun MovieDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+
+    // "Sortiraj po udaljenosti" dugme u sekciji bioskopa - traži dozvolu tek na klik (ne odmah pri
+    // otvaranju ekrana), da ne nagovaramo korisnika za dozvolu na filmovima koji možda i nemaju
+    // bioskopske termine.
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasLocationPermission = granted
+        if (granted) viewModel.loadMovieDetail(tmdbId)
+    }
+
+    // Fullscreen pregled postera na klik (kao u drugim movie/photo aplikacijama) - poster je inače
+    // ContentScale.Crop u fiksnoj visini pa se seče, ovde se vidi ceo + može da se zumira.
+    var showFullPoster by remember { mutableStateOf(false) }
 
     LaunchedEffect(tmdbId) {
         viewModel.loadMovieDetail(tmdbId)
@@ -144,7 +183,8 @@ fun MovieDetailScreen(
                             contentDescription = movie.title,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(300.dp),
+                                .height(300.dp)
+                                .clickable { showFullPoster = true },
                             contentScale = ContentScale.Crop
                         )
                     }
@@ -281,6 +321,38 @@ fun MovieDetailScreen(
                     }
                 }
 
+                if (uiState.movieDetail!!.showtimes.isNotEmpty()) {
+                    item {
+                        val showtimes = uiState.movieDetail!!.showtimes
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "Bioskopski termini",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (!hasLocationPermission) {
+                                    TextButton(onClick = {
+                                        locationPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                                    }) {
+                                        Text("Sortiraj po udaljenosti", fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                showtimes.forEach { show ->
+                                    CinemaShowtimeCard(show = show)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 item {
                     val movie = uiState.movieDetail!!
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -317,6 +389,117 @@ fun MovieDetailScreen(
 
                 item {
                     Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+
+            if (showFullPoster && uiState.movieDetail!!.posterPath != null) {
+                FullScreenPosterDialog(
+                    imageUrl = tmdbPosterUrl(uiState.movieDetail!!.posterPath) ?: "",
+                    onDismiss = { showFullPoster = false }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Pun ekran pregled postera na klik - poster je inače isečen (ContentScale.Crop, fiksna visina)
+ * pa se ceo ne vidi. ContentScale.Fit + pinch-to-zoom/pan (detectTransformGestures - deo Compose
+ * foundation-a, bez nove biblioteke), kao u drugim movie/photo aplikacijama.
+ */
+@Composable
+private fun FullScreenPosterDialog(imageUrl: String, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        var scale by remember { mutableStateOf(1f) }
+        var offset by remember { mutableStateOf(Offset.Zero) }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { onDismiss() }
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(imageUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth()
+                    .graphicsLayer(
+                        scaleX = scale,
+                        scaleY = scale,
+                        translationX = offset.x,
+                        translationY = offset.y
+                    )
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            scale = (scale * zoom).coerceIn(1f, 5f)
+                            offset += pan
+                        }
+                    }
+            )
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "Zatvori", tint = Color.White)
+            }
+        }
+    }
+}
+
+/** Kartica bioskopa u "Bioskopski termini" sekciji - naziv, lokacija, udaljenost (ako je poznata,
+ * tj. korisnik je dao lokacijsku dozvolu), dugme za rezervaciju, "Uskoro" bedž. Isti obrazac kao
+ * ShowtimeCard na Search ekranu (rezultati vision skeniranja), ovde za direktan Movie Detail. */
+@Composable
+private fun CinemaShowtimeCard(show: Showtime) {
+    val context = LocalContext.current
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(show.cinemaName, fontWeight = FontWeight.SemiBold)
+                    Text(show.cinemaLocation, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (show.distanceKm != null) {
+                    Text(
+                        "${String.format("%.1f", show.distanceKm)} km",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                TextButton(onClick = {
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, show.bookingUrl.toUri()))
+                    }
+                }) {
+                    Text("Otvori link")
+                }
+                if (show.isUpcoming) {
+                    Text("Uskoro", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

@@ -16,6 +16,9 @@ import javax.inject.Inject
 data class MovieNightUiState(
     val suggestions: List<MovieSuggestion> = emptyList(),
     val isLoading: Boolean = false,
+    // Odvojeno od isLoading - "Osveži" spinner ide na dugme, ne preko cele liste (korisnik i dalje
+    // vidi stare predloge dok se novi ne učitaju, umesto da ekran trepne prazan).
+    val isRefreshing: Boolean = false,
     val error: String? = null
 )
 
@@ -31,11 +34,20 @@ class MovieNightViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(MovieNightUiState())
     val uiState: StateFlow<MovieNightUiState> = _uiState.asStateFlow()
 
+    // Prati koja je TMDB discover strana trenutno prikazana - "Osveži" rotira kroz 1..MAX_PAGE
+    // pa se vrati na početak, umesto da raste unedogled (posle par strana bi discover mogao
+    // da vrati prazan rezultat za uzak par žanrova).
+    private var currentPage = 1
+
+    private companion object {
+        const val MAX_PAGE = 5
+    }
+
     fun loadSuggestions() {
         val userId = sessionManager.getUserId() ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            userRepository.getMovieNightSuggestions(userId, friendId)
+            userRepository.getMovieNightSuggestions(userId, friendId, page = currentPage)
                 .onSuccess { suggestions ->
                     _uiState.value = _uiState.value.copy(isLoading = false, suggestions = suggestions)
                 }
@@ -43,6 +55,27 @@ class MovieNightViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         error = e.message ?: "Greška pri učitavanju predloga"
+                    )
+                }
+        }
+    }
+
+    /** "Osveži predloge" - traži sledeću TMDB discover stranu (rotira 1..MAX_PAGE). */
+    fun refreshSuggestions() {
+        val userId = sessionManager.getUserId() ?: return
+        val nextPage = if (currentPage >= MAX_PAGE) 1 else currentPage + 1
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isRefreshing = true, error = null)
+            userRepository.getMovieNightSuggestions(userId, friendId, page = nextPage)
+                .onSuccess { suggestions ->
+                    currentPage = nextPage
+                    _uiState.value = _uiState.value.copy(isRefreshing = false, suggestions = suggestions)
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        isRefreshing = false,
+                        error = e.message ?: "Greška pri osvežavanju predloga"
                     )
                 }
         }

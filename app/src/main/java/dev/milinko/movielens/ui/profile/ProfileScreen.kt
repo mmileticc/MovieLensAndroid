@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -45,6 +47,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -69,6 +72,7 @@ import dev.milinko.movielens.ui.auth.AuthViewModel
 import dev.milinko.movielens.ui.components.AppBottomNavigationBar
 import dev.milinko.movielens.ui.components.BottomNavTab
 import dev.milinko.movielens.ui.components.SettingsDialog
+import kotlinx.coroutines.launch
 
 @Composable
 fun ProfileScreen(
@@ -82,7 +86,6 @@ fun ProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val sessionUser by viewModel.sessionUser.collectAsState()
-    var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
     // quick backend editor visible in header for test flows
     val showBackendDialogGlobal = rememberSaveable { mutableStateOf(false) }
     // Potvrda pre nego što se prijatelj stvarno ukloni - nema pravog "undo" jer bi ponovno
@@ -168,135 +171,64 @@ fun ProfileScreen(
             )
         }
     ) { paddingValues ->
-        LazyColumn(
+        // Svajp između tabova (pored klika na naslov kartice) - HorizontalPager za sadržaj ispod
+        // tab reda, dok header (avatar, taste profile) i sam tab red ostaju fiksni iznad.
+        val pagerState = rememberPagerState(pageCount = { 2 })
+        val coroutineScope = rememberCoroutineScope()
+
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            item {
-                val fullProfile = uiState.userProfile
-                if (fullProfile != null) {
-                    // Backend profil (sa statistikom) kad GET /api/users/{id} bude dostupan.
-                    ProfileHeader(fullProfile)
-                } else if (sessionUser != null) {
-                    // Dok taj endpoint ne postoji, prikazujemo bar ono što već imamo lokalno
-                    // iz Firebase/backend auth exchange-a (ime, email, avatar) — bez čekanja mreže.
-                    SessionIdentityHeader(sessionUser!!)
-                }
+            val fullProfile = uiState.userProfile
+            if (fullProfile != null) {
+                // Backend profil (sa statistikom) kad GET /api/users/{id} bude dostupan.
+                ProfileHeader(fullProfile)
+            } else if (sessionUser != null) {
+                // Dok taj endpoint ne postoji, prikazujemo bar ono što već imamo lokalno
+                // iz Firebase/backend auth exchange-a (ime, email, avatar) — bez čekanja mreže.
+                SessionIdentityHeader(sessionUser!!)
             }
 
             if (uiState.tasteProfile.isNotEmpty()) {
-                item {
-                    TasteProfileSection(uiState.tasteProfile)
-                }
+                TasteProfileSection(uiState.tasteProfile)
             }
 
-            item {
-                SecondaryTabRow(
-                    selectedTabIndex = selectedTabIndex,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Tab(
-                        selected = selectedTabIndex == 0,
-                        onClick = { selectedTabIndex = 0 },
-                        text = { Text("Podešavanja") }
+            SecondaryTabRow(
+                selectedTabIndex = pagerState.currentPage,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Tab(
+                    selected = pagerState.currentPage == 0,
+                    onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                    text = { Text("Podešavanja") }
+                )
+                Tab(
+                    selected = pagerState.currentPage == 1,
+                    onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                    text = { Text("Prijatelji") }
+                )
+            }
+
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.weight(1f)
+            ) { page ->
+                when (page) {
+                    0 -> SettingsTabContent(uiState, viewModel, onSignOut)
+                    1 -> FriendsTabContent(
+                        uiState = uiState,
+                        viewModel = viewModel,
+                        onNavigateToFriendProfile = onNavigateToFriendProfile,
+                        onRemoveFriend = { friendPendingRemoval = it }
                     )
-                    Tab(
-                        selected = selectedTabIndex == 1,
-                        onClick = { selectedTabIndex = 1 },
-                        text = { Text("Prijatelji") }
-                    )
                 }
-            }
-
-            when (selectedTabIndex) {
-                0 -> {
-                    item {
-                        if (uiState.userSettings != null) {
-                            SettingsSection(uiState.userSettings!!, viewModel, onSignOut)
-                        }
-                    }
-                }
-                1 -> {
-                    item {
-                        FriendSearchSection(
-                            query = uiState.friendSearchQuery,
-                            isSearching = uiState.isSearchingFriends,
-                            results = uiState.friendSearchResults,
-                            onQueryChange = viewModel::setFriendSearchQuery,
-                            onAdd = viewModel::sendFriendRequest,
-                            onCancelRequest = viewModel::cancelFriendRequest,
-                            onOpenProfile = onNavigateToFriendProfile
-                        )
-                    }
-
-                    if (uiState.pendingRequests.isNotEmpty()) {
-                        item {
-                            SectionHeader("Zahtevi za prijateljstvo")
-                        }
-                        items(uiState.pendingRequests, key = { "pending-${it.id}" }) { request ->
-                            PendingRequestCard(
-                                request = request,
-                                onAccept = { viewModel.acceptFriendRequest(request.id) },
-                                onReject = { viewModel.rejectFriendRequest(request.id) }
-                            )
-                        }
-                    }
-
-                    item {
-                        SectionHeader("Prijatelji")
-                    }
-                    if (uiState.isLoading && uiState.friends.isEmpty()) {
-                        // Dok se prvi ikad poziv ne vrati, ne pokazujemo "nemaš prijatelja" -
-                        // to bi bilo lažno ako korisnik zapravo ima prijatelje, samo se lista
-                        // još nije stigla da učita (npr. brz prelazak na ovaj tab).
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(24.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                            }
-                        }
-                    } else if (uiState.friends.isEmpty()) {
-                        item {
-                            Text(
-                                "Još nemaš prijatelja. Pretraži iznad da dodaš nekoga.",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 16.dp)
-                            )
-                        }
-                    } else {
-                        items(uiState.friends, key = { it.friendId }) { friend ->
-                            FriendCard(
-                                friend,
-                                onClick = { onNavigateToFriendProfile(friend.friendId) },
-                                onRemove = { friendPendingRemoval = friend }
-                            )
-                        }
-                    }
-
-                    if (uiState.friendActivity.isNotEmpty()) {
-                        item {
-                            SectionHeader("Aktivnost prijatelja")
-                        }
-                        items(uiState.friendActivity, key = { it.activityId }) { activity ->
-                            FriendActivityCard(activity)
-                        }
-                    }
-                }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
             }
         }
 
-        // Backend dialog - renderovan izvan LazyColumn-a
+        // Backend dialog - renderovan izvan Column-a
         if (showBackendDialogGlobal.value) {
             val savedRoutes by viewModel.savedRoutes.collectAsState()
             val baseUrl by viewModel.baseUrl.collectAsState()
@@ -332,6 +264,110 @@ fun ProfileScreen(
                     }
                 }
             )
+        }
+    }
+}
+
+/** Sadržaj "Podešavanja" stranice pagera - sopstveni LazyColumn (svaka stranica se skroluje nezavisno). */
+@Composable
+private fun SettingsTabContent(
+    uiState: ProfileUiState,
+    viewModel: ProfileViewModel,
+    onSignOut: () -> Unit
+) {
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item {
+            if (uiState.userSettings != null) {
+                SettingsSection(uiState.userSettings!!, viewModel, onSignOut)
+            }
+        }
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+/** Sadržaj "Prijatelji" stranice pagera - sopstveni LazyColumn (svaka stranica se skroluje nezavisno). */
+@Composable
+private fun FriendsTabContent(
+    uiState: ProfileUiState,
+    viewModel: ProfileViewModel,
+    onNavigateToFriendProfile: (String) -> Unit,
+    onRemoveFriend: (FriendInfo) -> Unit
+) {
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item {
+            FriendSearchSection(
+                query = uiState.friendSearchQuery,
+                isSearching = uiState.isSearchingFriends,
+                results = uiState.friendSearchResults,
+                onQueryChange = viewModel::setFriendSearchQuery,
+                onAdd = viewModel::sendFriendRequest,
+                onCancelRequest = viewModel::cancelFriendRequest,
+                onOpenProfile = onNavigateToFriendProfile
+            )
+        }
+
+        if (uiState.pendingRequests.isNotEmpty()) {
+            item {
+                SectionHeader("Zahtevi za prijateljstvo")
+            }
+            items(uiState.pendingRequests, key = { "pending-${it.id}" }) { request ->
+                PendingRequestCard(
+                    request = request,
+                    onAccept = { viewModel.acceptFriendRequest(request.id) },
+                    onReject = { viewModel.rejectFriendRequest(request.id) }
+                )
+            }
+        }
+
+        item {
+            SectionHeader("Prijatelji")
+        }
+        if (uiState.isLoading && uiState.friends.isEmpty()) {
+            // Dok se prvi ikad poziv ne vrati, ne pokazujemo "nemaš prijatelja" - to bi bilo
+            // lažno ako korisnik zapravo ima prijatelje, samo se lista još nije stigla da učita
+            // (npr. brz prelazak/svajp na ovaj tab).
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
+            }
+        } else if (uiState.friends.isEmpty()) {
+            item {
+                Text(
+                    "Još nemaš prijatelja. Pretraži iznad da dodaš nekoga.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+        } else {
+            items(uiState.friends, key = { it.friendId }) { friend ->
+                FriendCard(
+                    friend,
+                    onClick = { onNavigateToFriendProfile(friend.friendId) },
+                    onRemove = { onRemoveFriend(friend) }
+                )
+            }
+        }
+
+        if (uiState.friendActivity.isNotEmpty()) {
+            item {
+                SectionHeader("Aktivnost prijatelja")
+            }
+            items(uiState.friendActivity, key = { it.activityId }) { activity ->
+                FriendActivityCard(activity)
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

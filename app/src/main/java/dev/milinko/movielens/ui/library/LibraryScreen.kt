@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -32,6 +34,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +51,7 @@ import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 import dev.milinko.movielens.ui.components.AppBottomNavigationBar
 import dev.milinko.movielens.ui.components.BottomNavTab
 import dev.milinko.movielens.ui.components.RatingStars
+import kotlinx.coroutines.launch
 
 @Composable
 fun LibraryScreen(
@@ -58,7 +62,6 @@ fun LibraryScreen(
     onNavigateToProfile: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var selectedTabIndex by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
         viewModel.loadLibrary()
@@ -108,75 +111,84 @@ fun LibraryScreen(
                     Text("Uloguj se da vidiš svoju biblioteku")
                 }
             } else {
+                // Svajp između tabova (pored klika na naslov kartice), isti obrazac kao Profile.
+                val pagerState = rememberPagerState(pageCount = { 2 })
+                val coroutineScope = rememberCoroutineScope()
+
                 SecondaryTabRow(
-                    selectedTabIndex = selectedTabIndex,
+                    selectedTabIndex = pagerState.currentPage,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Tab(
-                        selected = selectedTabIndex == 0,
-                        onClick = { selectedTabIndex = 0 },
+                        selected = pagerState.currentPage == 0,
+                        onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
                         text = { Text("Watchlist") }
                     )
                     Tab(
-                        selected = selectedTabIndex == 1,
-                        onClick = { selectedTabIndex = 1 },
+                        selected = pagerState.currentPage == 1,
+                        onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
                         text = { Text("Istorija") }
                     )
                 }
 
-                when (selectedTabIndex) {
-                    0 -> {
-                        if (uiState.isLoading && uiState.watchlist.isEmpty()) {
-                            // Prvi ikad ulazak (Room prazan, mreža još nije vratila) - spinner
-                            // umesto lažne "nema filmova" poruke dok se ne zna pravo stanje.
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator()
-                            }
-                        } else if (uiState.watchlist.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("Nema filmova u watchlist-u")
-                            }
-                        } else {
-                            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                items(uiState.watchlist) { item ->
-                                    WatchlistItemCard(
-                                        item = item,
-                                        onMovieClick = { onNavigateToDetail(item.tmdbId) },
-                                        onRemoveClick = { viewModel.removeFromWatchlist(item.tmdbId) }
-                                    )
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.weight(1f)
+                ) { page ->
+                    when (page) {
+                        0 -> {
+                            if (uiState.isLoading && uiState.watchlist.isEmpty()) {
+                                // Prvi ikad ulazak (Room prazan, mreža još nije vratila) - spinner
+                                // umesto lažne "nema filmova" poruke dok se ne zna pravo stanje.
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
+                            } else if (uiState.watchlist.isEmpty()) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("Nema filmova u watchlist-u")
+                                }
+                            } else {
+                                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                    items(uiState.watchlist) { item ->
+                                        WatchlistItemCard(
+                                            item = item,
+                                            onMovieClick = { onNavigateToDetail(item.tmdbId) },
+                                            onRemoveClick = { viewModel.removeFromWatchlist(item.tmdbId) }
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
-                    1 -> {
-                        if (uiState.isLoading && uiState.history.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator()
-                            }
-                        } else if (uiState.history.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("Nema istorije")
-                            }
-                        } else {
-                            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                items(uiState.history, key = { it.tmdbId }) { item ->
-                                    HistoryItemCard(
-                                        item = item,
-                                        onMovieClick = { onNavigateToDetail(item.tmdbId) },
-                                        onRate = { stars -> viewModel.rateMovie(item.tmdbId, stars) }
-                                    )
+                        1 -> {
+                            if (uiState.isLoading && uiState.history.isEmpty()) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
+                            } else if (uiState.history.isEmpty()) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("Nema istorije")
+                                }
+                            } else {
+                                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                    items(uiState.history, key = { it.tmdbId }) { item ->
+                                        HistoryItemCard(
+                                            item = item,
+                                            onMovieClick = { onNavigateToDetail(item.tmdbId) },
+                                            onRate = { stars -> viewModel.rateMovie(item.tmdbId, stars) }
+                                        )
+                                    }
                                 }
                             }
                         }

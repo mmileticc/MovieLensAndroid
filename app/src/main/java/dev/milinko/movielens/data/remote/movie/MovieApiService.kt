@@ -13,10 +13,13 @@ interface MovieApiService {
         @Query("query") query: String
     ): Response<MovieSearchResponse>
 
-    // Detail
+    // Detail. lat/lon: opciono, samo ako korisnik ima uključenu lokacijsku dozvolu - backend onda
+    // sortira "Bioskopski termini" po udaljenosti.
     @GET("api/movies/{tmdbId}")
     suspend fun getMovieDetail(
-        @Path("tmdbId") tmdbId: Int
+        @Path("tmdbId") tmdbId: Int,
+        @Query("lat") lat: Double? = null,
+        @Query("lon") lon: Double? = null
     ): Response<MovieDetail>
 
     // Trending/Featured
@@ -27,7 +30,8 @@ interface MovieApiService {
 
     @GET("api/movies/featured")
     suspend fun getFeaturedMovies(
-        @Query("userId") userId: String? = null
+        @Query("userId") userId: String? = null,
+        @Query("page") page: Int = 1
     ): Response<TrendingResponse>
 
     // "Prijatelji su gledali" bedž - JWT zaštićena ruta (za razliku od ostalih ruta u ovom
@@ -36,5 +40,9 @@ interface MovieApiService {
     suspend fun getFriendsWhoWatched(
         @Path("tmdbId") tmdbId: Int
     ): Response<FriendsWatchedResponse>
+
+    // "U bioskopima sada" traka na Home-u - javna ruta, iz postojećeg skraping repertoara.
+    @GET("api/movies/now-in-cinemas")
+    suspend fun getNowInCinemas(): Response<NowInCinemasResponse>
 }
 

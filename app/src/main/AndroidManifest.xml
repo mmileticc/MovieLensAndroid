@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Sortiranje bioskopa na Movie Detail ekranu po udaljenosti - COARSE je dovoljno tačno
+         (nivo grada) i traži manje od korisnika nego FINE. Opciono, aplikacija radi i bez ove
+         dozvole (bioskopi se samo ne sortiraju po udaljenosti). -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 

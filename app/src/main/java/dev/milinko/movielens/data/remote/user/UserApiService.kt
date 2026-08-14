@@ -144,11 +144,12 @@ interface UserApiService {
         @Path("userId") userId: String
     ): Response<FriendActivityResponse>
 
-    // MovieNight Suggestions
+    // MovieNight Suggestions. page: podržava "Osveži predloge" dugme (druga TMDB discover strana).
     @GET("api/users/{userId}/friends/{friendId}/movienight-suggestions")
     suspend fun getMovieNightSuggestions(
         @Path("userId") userId: String,
-        @Path("friendId") friendId: String
+        @Path("friendId") friendId: String,
+        @Query("page") page: Int = 1
     ): Response<MovieNightResponse>
 }
 

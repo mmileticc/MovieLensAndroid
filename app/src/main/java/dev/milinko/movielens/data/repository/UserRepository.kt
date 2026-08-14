@@ -64,7 +64,7 @@ interface UserRepository {
 
     suspend fun getFriendActivity(userId: String): Result<List<FriendActivity>>
 
-    suspend fun getMovieNightSuggestions(userId: String, friendId: String): Result<List<MovieSuggestion>>
+    suspend fun getMovieNightSuggestions(userId: String, friendId: String, page: Int = 1): Result<List<MovieSuggestion>>
 
     /**
      * Učitava movienight-suggestions unapred (npr. čim se otvori profil prijatelja) i drži ih u
@@ -325,12 +325,14 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getMovieNightSuggestions(userId: String, friendId: String): Result<List<MovieSuggestion>> {
-        val cacheKey = "$userId:$friendId"
+    override suspend fun getMovieNightSuggestions(userId: String, friendId: String, page: Int): Result<List<MovieSuggestion>> {
+        // page je deo ključa - "Osveži predloge" traži sledeću stranu pod drugim ključem, pa
+        // prirodno zaobilazi keš (stvaran mrežni poziv) bez posebnog "forceRefresh" parametra.
+        val cacheKey = "$userId:$friendId:$page"
         movieNightCache[cacheKey]?.let { return Result.success(it) }
 
         return safeApiCall {
-            val response = userApiService.getMovieNightSuggestions(userId, friendId)
+            val response = userApiService.getMovieNightSuggestions(userId, friendId, page)
             if (response.isSuccessful) {
                 val suggestions = response.body()?.suggestions ?: emptyList()
                 movieNightCache[cacheKey] = suggestions
@@ -342,8 +344,8 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override suspend fun prefetchMovieNightSuggestions(userId: String, friendId: String) {
-        val cacheKey = "$userId:$friendId"
+        val cacheKey = "$userId:$friendId:1"
         if (movieNightCache.containsKey(cacheKey)) return
-        getMovieNightSuggestions(userId, friendId)
+        getMovieNightSuggestions(userId, friendId, page = 1)
     }
 }
