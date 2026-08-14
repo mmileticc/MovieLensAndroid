@@ -73,6 +73,17 @@ fun MovieLensNavHost(
                         popUpTo(Screen.SignIn.baseRoute) { inclusive = true }
                         launchSingleTop = true
                     }
+                },
+                // Zatvaranje bez prijave - ako ima šta u back stack-u (npr. stiglo se ovde iz
+                // Search/Movie Detail preko onRequireSignIn), ponašaj se kao obično "nazad". Ako
+                // nema (npr. posle odjave iz Profile-a, gde se ceo stack briše - videti onSignOut
+                // ispod), idi na Home umesto da se aplikacija ugasi.
+                onDismiss = {
+                    if (!navController.popBackStack()) {
+                        navController.navigate(Screen.Home.route) {
+                            launchSingleTop = true
+                        }
+                    }
                 }
             )
         }

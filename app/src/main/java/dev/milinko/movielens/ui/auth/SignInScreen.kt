@@ -2,6 +2,7 @@ package dev.milinko.movielens.ui.auth
 
 import android.app.Activity
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,6 +36,11 @@ private const val WEB_CLIENT_ID = "688395138951-64q747lml48uq3idgstjgj5tpa0rkgr2
 @Composable
 fun SignInScreen(
     onSignedIn: () -> Unit,
+    // Zatvara ekran bez prijave - ranije jedini izlaz je bio sistemsko dugme "nazad", što je posle
+    // odjave (back stack potpuno očišćen u NavGraph.kt) gasilo celu aplikaciju umesto da vrati na
+    // Home. Sad se i sistemsko "nazad" (BackHandler ispod) i vidljivo X dugme oslanjaju na isti
+    // callback - NavGraph.kt odlučuje da li ima šta da se pop-uje ili treba direktno na Home.
+    onDismiss: () -> Unit = {},
     viewModel: AuthViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -45,6 +52,8 @@ fun SignInScreen(
             onSignedIn()
         }
     }
+
+    BackHandler(onBack = onDismiss)
 
     // Google Sign-In launcher
     val googleSignInClient = remember {
@@ -85,6 +94,23 @@ fun SignInScreen(
             ),
         contentAlignment = Alignment.Center
     ) {
+        // Vidljivo dugme za zatvaranje - ne oslanjamo se samo na sistemsko "nazad" jer korisnici
+        // ne moraju znati da će ono raditi ovde (posle odjave back stack je bio prazan i pre ove
+        // izmene bi "nazad" ugasio celu aplikaciju).
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Zatvori",
+                tint = Color.White.copy(alpha = 0.7f)
+            )
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
