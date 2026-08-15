@@ -9,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Movie
@@ -20,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -28,6 +28,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import dev.milinko.movielens.R
 
 // ⚠️  Replace this with your actual Web Client ID from Firebase Console →
 //     Project Settings → Your apps → Web client (auto created by Google Service) → Client ID
@@ -84,12 +85,21 @@ fun SignInScreen(
         }
     }
 
+    // Faza 4 redizajna: gradijent je ranije bio inline ljubičasto-crn (#070710/#0F0F1A/#0B0B12),
+    // van teme i van naše palete. Sad ide iz centralizovanih tokena (background -> surfaceElevated1)
+    // - i dalje suptilan vertikalni gradijent (koncept se zadržava, videti MOVIELENS_DESIGN_PLAN.md
+    // 2.1), samo bez tuđe boje. Pozadinski poster-collage je i dalje otvoreno pitanje (plan 6),
+    // nije dodat u ovoj fazi.
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(Color(0xFF070710), Color(0xFF0F0F1A), Color(0xFF0B0B12))
+                    colors = listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.background
+                    )
                 )
             ),
         contentAlignment = Alignment.Center
@@ -106,8 +116,8 @@ fun SignInScreen(
         ) {
             Icon(
                 imageVector = Icons.Default.Close,
-                contentDescription = "Zatvori",
-                tint = Color.White.copy(alpha = 0.7f)
+                contentDescription = stringResource(R.string.action_close),
+                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
             )
         }
 
@@ -122,14 +132,14 @@ fun SignInScreen(
             Box(
                 modifier = Modifier
                     .size(96.dp)
-                    .background(Color(0x22E50914), CircleShape)
-                    .border(1.dp, Color(0x44E50914), CircleShape),
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.13f), CircleShape)
+                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.27f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Movie,
                     contentDescription = null,
-                    tint = Color(0xFFE50914),
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(48.dp)
                 )
             }
@@ -140,17 +150,15 @@ fun SignInScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "MovieLens",
-                    color = Color.White,
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold
+                    text = stringResource(R.string.app_name),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    style = MaterialTheme.typography.displayMedium
                 )
                 Text(
-                    text = "Otkrij, skeniraj i deli filmove\nsa prijateljima",
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontSize = 15.sp,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 22.sp
+                    text = stringResource(R.string.sign_in_tagline),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center
                 )
             }
 
@@ -159,13 +167,13 @@ fun SignInScreen(
             // Error banner
             if (uiState is AuthUiState.Error) {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFF2A1111)
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f)
                 ) {
                     Text(
                         text = (uiState as AuthUiState.Error).message,
-                        color = Color(0xFFFF6B6B),
-                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                         textAlign = TextAlign.Center
                     )
@@ -188,7 +196,7 @@ fun SignInScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = MaterialTheme.shapes.small,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color.White,
                     disabledContainerColor = Color.White.copy(alpha = 0.5f)
@@ -198,16 +206,17 @@ fun SignInScreen(
                     CircularProgressIndicator(
                         modifier = Modifier.size(22.dp),
                         strokeWidth = 2.dp,
-                        color = Color(0xFFE50914)
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        "Prijavljivanje…",
+                        text = stringResource(R.string.sign_in_loading),
                         color = Color.DarkGray,
-                        fontWeight = FontWeight.SemiBold
+                        style = MaterialTheme.typography.titleMedium
                     )
                 } else {
-                    // Google "G" logo via text (works without image dependency)
+                    // Google "G" logo - Google-ova sopstvena brend boja (#4285F4), namerno NE ide
+                    // iz naše teme (obavezan deo Google Sign-In vizuelnog identiteta).
                     Text(
                         text = "G",
                         color = Color(0xFF4285F4),
@@ -216,20 +225,18 @@ fun SignInScreen(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Nastavi sa Google nalogom",
+                        text = stringResource(R.string.sign_in_google_button),
                         color = Color.DarkGray,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp
+                        style = MaterialTheme.typography.titleMedium
                     )
                 }
             }
 
             Text(
-                text = "Prijavljivanjem prihvataš uslove korišćenja i politiku privatnosti.",
-                color = Color.White.copy(alpha = 0.35f),
-                fontSize = 11.sp,
-                textAlign = TextAlign.Center,
-                lineHeight = 16.sp
+                text = stringResource(R.string.sign_in_terms),
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.35f),
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center
             )
         }
     }

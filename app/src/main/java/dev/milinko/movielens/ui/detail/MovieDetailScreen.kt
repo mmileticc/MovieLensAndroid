@@ -13,6 +13,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,22 +23,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,15 +52,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
@@ -66,10 +72,16 @@ import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import dev.milinko.movielens.R
+import dev.milinko.movielens.data.remote.movie.CastMember
 import dev.milinko.movielens.data.remote.movie.Showtime
 import dev.milinko.movielens.data.remote.user.FriendWatched
 import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
+import dev.milinko.movielens.ui.components.AppButton
+import dev.milinko.movielens.ui.components.AppButtonVariant
+import dev.milinko.movielens.ui.components.GenreChip
 import dev.milinko.movielens.ui.components.RatingStars
+import dev.milinko.movielens.ui.components.SectionHeader
 
 @Composable
 fun MovieDetailScreen(
@@ -127,12 +139,11 @@ fun MovieDetailScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { onNavigateBack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
                 Text(
-                    "Film detalji",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    text = stringResource(R.string.movie_detail_top_bar_title),
+                    style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(modifier = Modifier.width(48.dp))
@@ -157,13 +168,18 @@ fun MovieDetailScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Text("Greška", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = stringResource(R.string.movie_detail_error_title),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.titleMedium
+                )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(uiState.error!!)
                 Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = { viewModel.loadMovieDetail(tmdbId) }) {
-                    Text("Pokušaj ponovno")
-                }
+                AppButton(
+                    text = stringResource(R.string.movie_detail_retry),
+                    onClick = { viewModel.loadMovieDetail(tmdbId) }
+                )
             }
         } else if (uiState.movieDetail != null) {
             LazyColumn(
@@ -172,107 +188,136 @@ fun MovieDetailScreen(
                     .padding(paddingValues)
                     .background(MaterialTheme.colorScheme.background)
             ) {
+                // Faza 5 redizajna (videti MOVIELENS_DESIGN_PLAN.md 2.4): poster + naslov su ranije
+                // bili dva odvojena item bloka (poster pa ispod običan tekst). Sad su spojeni u
+                // jedan "hero" - naslov/godina/trajanje se ispisuju PREKO donjeg dela slike uz
+                // "scrim" gradijent (transparent -> background) radi čitljivosti, filmskiji izgled
+                // i štedi vertikalni prostor. Ocena/dugmad/RatingStars/prijatelji ostaju ispod hero-a
+                // kao običan sadržaj (doc eksplicitno pominje samo naslov/godina/trajanje na slici).
                 item {
                     val movie = uiState.movieDetail!!
-                    if (movie.posterPath != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(tmdbPosterUrl(movie.posterPath))
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = movie.title,
+                    Box(modifier = Modifier.fillMaxWidth().height(340.dp)) {
+                        if (movie.posterPath != null) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(tmdbPosterUrl(movie.posterPath))
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = movie.title,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clickable { showFullPoster = true },
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                            )
+                        }
+                        // Frakcioni color stop-ovi (ne raw piksel startY) - nezavisno od gustine
+                        // ekrana, "scrim" uvek počinje od pola visine hero-a naniže.
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(300.dp)
-                                .clickable { showFullPoster = true },
-                            contentScale = ContentScale.Crop
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colorStops = arrayOf(
+                                            0f to Color.Transparent,
+                                            0.5f to Color.Transparent,
+                                            1f to MaterialTheme.colorScheme.background
+                                        )
+                                    )
+                                )
                         )
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(16.dp)
+                        ) {
+                            Text(
+                                text = movie.title,
+                                style = MaterialTheme.typography.displaySmall,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(top = 6.dp)
+                            ) {
+                                Text(
+                                    text = movie.releaseDate?.take(4) ?: "",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = stringResource(R.string.movie_detail_runtime_minutes, movie.runtime),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
 
                 item {
                     val movie = uiState.movieDetail!!
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            movie.title,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold
-                        )
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(top = 8.dp)
-                        ) {
-                            Text(
-                                movie.releaseDate?.take(4) ?: "",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                "${movie.runtime} min",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(top = 8.dp)
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 Icons.Default.Star,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp),
-                                tint = Color(0xFFF5C518)
+                                tint = MaterialTheme.colorScheme.secondary
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("${String.format("%.1f", movie.voteAverage)}/10", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = "${String.format(LocalLocale.current.platformLocale, "%.1f", movie.voteAverage)}/10",
+                                style = MaterialTheme.typography.titleSmall
+                            )
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
+                            AppButton(
+                                text = if (uiState.isInWatchlist) stringResource(R.string.movie_detail_watchlist_added) else stringResource(R.string.movie_detail_watchlist_add),
+                                leadingIcon = if (uiState.isInWatchlist) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                variant = AppButtonVariant.Primary,
+                                modifier = Modifier.weight(1f),
                                 onClick = {
                                     val startedRequest = viewModel.toggleWatchlist(tmdbId)
                                     if (!startedRequest) {
-                                        Toast.makeText(context, "Prijavi se da bi koristio watchlistu", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, context.getString(R.string.movie_detail_watchlist_signin_toast), Toast.LENGTH_SHORT).show()
                                         onRequireSignIn()
                                     }
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    if (uiState.isInWatchlist) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(if (uiState.isInWatchlist) "U watchlisti" else "Watchlist")
-                            }
+                                }
+                            )
 
-                            OutlinedButton(
+                            AppButton(
+                                text = if (uiState.isWatched) stringResource(R.string.movie_detail_watched) else stringResource(R.string.movie_detail_mark_watched),
+                                leadingIcon = if (uiState.isWatched) Icons.Default.CheckCircle else Icons.Default.Visibility,
+                                variant = AppButtonVariant.Secondary,
+                                modifier = Modifier.weight(1f),
                                 onClick = {
                                     val startedRequest = viewModel.toggleWatched(tmdbId)
                                     if (!startedRequest) {
-                                        Toast.makeText(context, "Prijavi se da bi označio film kao odgledan", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, context.getString(R.string.movie_detail_watched_signin_toast), Toast.LENGTH_SHORT).show()
                                         onRequireSignIn()
                                     }
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    if (uiState.isWatched) Icons.Default.CheckCircle else Icons.Default.Visibility,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(if (uiState.isWatched) "Odgledano" else "Označi kao odgledano")
-                            }
+                                }
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            "Tvoja ocena" + if (uiState.userRating > 0) ": ${uiState.userRating.toInt()}/10" else "",
-                            fontSize = 13.sp,
+                            text = if (uiState.userRating > 0) {
+                                stringResource(R.string.movie_detail_your_rating_value, uiState.userRating.toInt())
+                            } else {
+                                stringResource(R.string.movie_detail_your_rating)
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(4.dp))
@@ -281,7 +326,7 @@ fun MovieDetailScreen(
                             onRate = { stars ->
                                 val startedRequest = viewModel.rateMovie(tmdbId, stars)
                                 if (!startedRequest) {
-                                    Toast.makeText(context, "Prijavi se da bi ocenio film", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.movie_detail_rate_signin_toast), Toast.LENGTH_SHORT).show()
                                     onRequireSignIn()
                                 }
                             }
@@ -301,10 +346,8 @@ fun MovieDetailScreen(
                     val movie = uiState.movieDetail!!
                     if (movie.genres.isNotEmpty()) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                "Žanrovi",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
+                            SectionHeader(
+                                title = stringResource(R.string.movie_detail_genres_header),
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
                             Row(
@@ -312,9 +355,7 @@ fun MovieDetailScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 movie.genres.take(3).forEach { genre ->
-                                    ElevatedCard {
-                                        Text(genre.name, modifier = Modifier.padding(8.dp), fontSize = 12.sp)
-                                    }
+                                    GenreChip(text = genre.name)
                                 }
                             }
                         }
@@ -325,24 +366,13 @@ fun MovieDetailScreen(
                     item {
                         val showtimes = uiState.movieDetail!!.showtimes
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    "Bioskopski termini",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                if (!hasLocationPermission) {
-                                    TextButton(onClick = {
-                                        locationPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
-                                    }) {
-                                        Text("Sortiraj po udaljenosti", fontSize = 12.sp)
-                                    }
-                                }
-                            }
+                            SectionHeader(
+                                title = stringResource(R.string.movie_detail_showtimes_header),
+                                actionText = if (!hasLocationPermission) stringResource(R.string.movie_detail_sort_by_distance) else null,
+                                onActionClick = if (!hasLocationPermission) {
+                                    { locationPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }
+                                } else null
+                            )
                             Spacer(modifier = Modifier.height(8.dp))
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 showtimes.forEach { show ->
@@ -356,33 +386,28 @@ fun MovieDetailScreen(
                 item {
                     val movie = uiState.movieDetail!!
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            "Opis",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
+                        SectionHeader(
+                            title = stringResource(R.string.movie_detail_overview_header),
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
-                        movie.overview?.let { Text(it, fontSize = 14.sp) }
+                        movie.overview?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
                     }
                 }
 
                 if (uiState.movieDetail!!.cast.isNotEmpty()) {
                     item {
-                        Text(
-                            "Glumci",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
+                        SectionHeader(
+                            title = stringResource(R.string.movie_detail_cast_header),
                             modifier = Modifier.padding(16.dp)
                         )
-                    }
-                    items(uiState.movieDetail!!.cast.take(6)) { actor ->
-                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                            Text(actor.name, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                actor.character ?: "",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp)
+                        ) {
+                            items(uiState.movieDetail!!.cast.take(6)) { actor ->
+                                CastAvatarCard(actor = actor)
+                            }
                         }
                     }
                 }
@@ -454,15 +479,20 @@ private fun FullScreenPosterDialog(imageUrl: String, onDismiss: () -> Unit) {
                     .align(Alignment.TopEnd)
                     .padding(16.dp)
             ) {
-                Icon(Icons.Default.Close, contentDescription = "Zatvori", tint = Color.White)
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_close), tint = Color.White)
             }
         }
     }
 }
 
-/** Kartica bioskopa u "Bioskopski termini" sekciji - naziv, lokacija, udaljenost (ako je poznata,
- * tj. korisnik je dao lokacijsku dozvolu), dugme za rezervaciju, "Uskoro" bedž. Isti obrazac kao
- * ShowtimeCard na Search ekranu (rezultati vision skeniranja), ovde za direktan Movie Detail. */
+/**
+ * Kartica bioskopa u "Bioskopski termini" sekciji. Faza 5 redizajna (MOVIELENS_DESIGN_PLAN.md
+ * 2.4): dodata ikonica lokacije + jasnija hijerarhija (naziv bioskopa `titleMedium`, adresa/
+ * udaljenost sitnije ispod). Napomena: doc pominje "vreme kao chip", ali `Showtime` model NEMA
+ * eksplicitno polje za vreme termina (samo cinemaName/cinemaLocation/bookingUrl/distanceKm/
+ * isUpcoming - videti MovieModels.kt) - umesto toga, "Uskoro" bedž (jedino dostupno statusno polje)
+ * je taj koji sada koristi `GenreChip` stil umesto običnog teksta, u duhu iste ideje.
+ */
 @Composable
 private fun CinemaShowtimeCard(show: Showtime) {
     val context = LocalContext.current
@@ -472,15 +502,25 @@ private fun CinemaShowtimeCard(show: Showtime) {
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(show.cinemaName, fontWeight = FontWeight.SemiBold)
-                    Text(show.cinemaLocation, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(text = show.cinemaName, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = show.cinemaLocation,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 if (show.distanceKm != null) {
                     Text(
-                        "${String.format("%.1f", show.distanceKm)} km",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
+                        text = "${String.format(LocalLocale.current.platformLocale, "%.1f", show.distanceKm)} km",
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -496,10 +536,10 @@ private fun CinemaShowtimeCard(show: Showtime) {
                         context.startActivity(Intent(Intent.ACTION_VIEW, show.bookingUrl.toUri()))
                     }
                 }) {
-                    Text("Otvori link")
+                    Text(text = stringResource(R.string.movie_detail_open_link), style = MaterialTheme.typography.labelLarge)
                 }
                 if (show.isUpcoming) {
-                    Text("Uskoro", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    GenreChip(text = stringResource(R.string.movie_detail_upcoming_badge))
                 }
             }
         }
@@ -515,9 +555,12 @@ private fun FriendsWatchedBadge(friends: List<FriendWatched>, onFriendClick: (St
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
-                if (friends.size == 1) "1 prijatelj je gledao ovaj film" else "${friends.size} prijatelja su gledala ovaj film",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
+                text = if (friends.size == 1) {
+                    stringResource(R.string.movie_detail_friends_watched_one)
+                } else {
+                    stringResource(R.string.movie_detail_friends_watched_many, friends.size)
+                },
+                style = MaterialTheme.typography.titleSmall
             )
             Spacer(modifier = Modifier.height(6.dp))
             friends.forEach { friend ->
@@ -528,19 +571,77 @@ private fun FriendsWatchedBadge(friends: List<FriendWatched>, onFriendClick: (St
                         .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(friend.friendName, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Text(
+                        text = friend.friendName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
                     if (friend.rating != null) {
                         Icon(
                             Icons.Default.Star,
                             contentDescription = null,
                             modifier = Modifier.size(14.dp),
-                            tint = Color(0xFFF5C518)
+                            tint = MaterialTheme.colorScheme.secondary
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("${friend.rating}/10", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = "${friend.rating}/10",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Avatar kartica za horizontalnu traku glumaca (Faza 5 redizajna, videti MOVIELENS_DESIGN_PLAN.md
+ * 2.4: "mala horizontalna traka sa okruglim avatarima + imenom ispod" - ranije je bio prost
+ * vertikalan tekst red). `AsyncImage` mora imati `fillMaxSize()` PRE `clip()` (naučeno u Fazi 4 -
+ * bez toga slika renderuje na malu podrazumevanu veličinu u gornjem levom uglu Box-a).
+ */
+@Composable
+private fun CastAvatarCard(actor: CastMember) {
+    Column(
+        modifier = Modifier.width(72.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            if (actor.profilePath != null) {
+                AsyncImage(
+                    model = tmdbPosterUrl(actor.profilePath, "w185"),
+                    contentDescription = actor.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = actor.name,
+            style = MaterialTheme.typography.labelMedium,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        actor.character?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

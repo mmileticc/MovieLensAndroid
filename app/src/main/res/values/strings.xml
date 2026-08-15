@@ -7,9 +7,52 @@
     <string name="rating_stars_content_description">Oceni sa %1$d</string>
     <string name="premium_badge_content_description">Premium funkcija</string>
 
+    <!-- Generičke akcije, ponavljaju se na više ekrana (ranije mešavina "Back"/"Nazad" i
+         "Zatvori" razbacana po fajlovima - konsolidovano u dve zajedničke stavke). -->
+    <string name="action_back">Nazad</string>
+    <string name="action_close">Zatvori</string>
+
     <!-- Faza 3 redizajna - AppBottomNavigationBar -->
     <string name="nav_home">Home</string>
     <string name="nav_search">Pretraga</string>
     <string name="nav_library">Biblioteka</string>
     <string name="nav_profile">Profil</string>
+
+    <!-- Faza 4 redizajna - SignInScreen -->
+    <string name="sign_in_tagline">Otkrij, skeniraj i deli filmove\nsa prijateljima</string>
+    <string name="sign_in_google_button">Nastavi sa Google nalogom</string>
+    <string name="sign_in_loading">Prijavljivanje…</string>
+    <string name="sign_in_terms">Prijavljivanjem prihvataš uslove korišćenja i politiku privatnosti.</string>
+
+    <!-- Faza 4 redizajna - HomeScreen -->
+    <string name="home_fab_search_content_description">Pretraga</string>
+    <string name="home_header_subtitle">Skeni, pretraži i pronađi filmove</string>
+    <string name="home_section_personalized">Predloženo za tebe</string>
+    <string name="home_section_now_in_cinemas">U bioskopima sada</string>
+    <string name="home_section_continue_watching">Nastavi da gledaš</string>
+    <string name="home_section_popular">Popularni filmovi</string>
+
+    <!-- Faza 5 redizajna - MovieDetailScreen -->
+    <string name="movie_detail_top_bar_title">Film detalji</string>
+    <string name="movie_detail_error_title">Greška</string>
+    <string name="movie_detail_retry">Pokušaj ponovno</string>
+    <string name="movie_detail_watchlist_add">Watchlist</string>
+    <string name="movie_detail_watchlist_added">U watchlisti</string>
+    <string name="movie_detail_watchlist_signin_toast">Prijavi se da bi koristio watchlistu</string>
+    <string name="movie_detail_mark_watched">Označi kao odgledano</string>
+    <string name="movie_detail_watched">Odgledano</string>
+    <string name="movie_detail_watched_signin_toast">Prijavi se da bi označio film kao odgledan</string>
+    <string name="movie_detail_your_rating">Tvoja ocena</string>
+    <string name="movie_detail_your_rating_value">Tvoja ocena: %1$d/10</string>
+    <string name="movie_detail_rate_signin_toast">Prijavi se da bi ocenio film</string>
+    <string name="movie_detail_genres_header">Žanrovi</string>
+    <string name="movie_detail_showtimes_header">Bioskopski termini</string>
+    <string name="movie_detail_sort_by_distance">Sortiraj po udaljenosti</string>
+    <string name="movie_detail_overview_header">Opis</string>
+    <string name="movie_detail_cast_header">Glumci</string>
+    <string name="movie_detail_open_link">Otvori link</string>
+    <string name="movie_detail_upcoming_badge">Uskoro</string>
+    <string name="movie_detail_friends_watched_one">1 prijatelj je gledao ovaj film</string>
+    <string name="movie_detail_friends_watched_many">%1$d prijatelja su gledala ovaj film</string>
+    <string name="movie_detail_runtime_minutes">%1$d min</string>
 </resources>

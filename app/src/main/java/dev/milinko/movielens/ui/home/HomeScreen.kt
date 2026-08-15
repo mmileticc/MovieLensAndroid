@@ -1,28 +1,23 @@
 package dev.milinko.movielens.ui.home
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 // ...existing imports...
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -39,23 +34,19 @@ import androidx.compose.runtime.remember
 // ...existing code...
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalLocale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import dev.milinko.movielens.R
 import dev.milinko.movielens.data.remote.movie.NowInCinemasMovie
 import dev.milinko.movielens.data.remote.movie.WatchlistItem
-import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 import dev.milinko.movielens.ui.components.AppBottomNavigationBar
 import dev.milinko.movielens.ui.components.BottomNavTab
+import dev.milinko.movielens.ui.components.MovieListRow
+import dev.milinko.movielens.ui.components.MoviePosterCard
+import dev.milinko.movielens.ui.components.SectionHeader
 // ...existing code...
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,15 +69,24 @@ fun HomeScreen(
 
     Scaffold(
         floatingActionButton = {
+            // Faza 4 redizajna: boja iz teme (accentPrimary) umesto inline hex-a, + suptilan
+            // crveni "glow" (jedini dozvoljeni drop-shadow u dizajn sistemu, videti
+            // MOVIELENS_DESIGN_PLAN.md 1.3 - "premium" osećaj na primarnim akcijama).
             FloatingActionButton(
                 onClick = { onNavigateToSearch() },
-                containerColor = Color(0xFFE50914),
-                contentColor = Color.White,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier
                     .padding(16.dp)
                     .size(56.dp)
+                    .shadow(
+                        elevation = 12.dp,
+                        shape = CircleShape,
+                        ambientColor = MaterialTheme.colorScheme.primary,
+                        spotColor = MaterialTheme.colorScheme.primary
+                    )
             ) {
-                Icon(Icons.Default.Search, contentDescription = "Search")
+                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.home_fab_search_content_description))
             }
         },
         bottomBar = {
@@ -148,10 +148,8 @@ fun HomeScreen(
             if (uiState.personalizedMovies.isNotEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        "Predloženo za tebe",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
+                    SectionHeader(
+                        title = stringResource(R.string.home_section_personalized),
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
                     LazyRow(
@@ -168,10 +166,8 @@ fun HomeScreen(
             if (uiState.nowInCinemas.isNotEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        "U bioskopima sada",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
+                    SectionHeader(
+                        title = stringResource(R.string.home_section_now_in_cinemas),
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
                     LazyRow(
@@ -188,10 +184,8 @@ fun HomeScreen(
             if (uiState.watchlistPreview.isNotEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        "Nastavi da gledaš",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
+                    SectionHeader(
+                        title = stringResource(R.string.home_section_continue_watching),
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
                     LazyRow(
@@ -207,10 +201,8 @@ fun HomeScreen(
 
             item {
                 Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    "Popularni filmovi",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
+                SectionHeader(
+                    title = stringResource(R.string.home_section_popular),
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
@@ -230,8 +222,11 @@ fun HomeScreen(
                 }
             } else {
                 items(uiState.trendingMovies, key = { it.tmdbId }) { movie ->
-                    MovieCard(
-                        movie = movie,
+                    MovieListRow(
+                        title = movie.title,
+                        posterPath = movie.posterPath,
+                        metaText = movie.releaseDate?.take(4),
+                        ratingText = "${String.format(LocalLocale.current.platformLocale, "%.1f", movie.voteAverage)}/10",
                         onClick = { onNavigateToDetail(movie.tmdbId) }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -266,125 +261,36 @@ fun HomeScreen(
 
 @Composable
 private fun HomeHeader() {
+    // Faza 4 redizajna: wordmark je ranije bio 28sp Bold - dominirao je ekran (videti
+    // MOVIELENS_DESIGN_PLAN.md 2.2: "manji i tanji ... pomera fokus na sadržaj"). Sad koristi
+    // `titleLarge` (20sp SemiBold) iz teme, akcentna boja se zadržava radi prepoznatljivosti brenda.
     Column {
         Text(
-            "MovieLens",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
+            text = stringResource(R.string.app_name),
+            style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.primary
         )
         Text(
-            "Skeni, pretraži i pronađi filmove",
-            fontSize = 14.sp,
+            text = stringResource(R.string.home_header_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
 
-@Composable
-private fun MovieCard(
-    movie: dev.milinko.movielens.data.remote.movie.MovieSearchResult,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        if (movie.posterPath != null) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(tmdbPosterUrl(movie.posterPath, "w92"))
-                    .crossfade(true)
-                    .build(),
-                contentDescription = movie.title,
-                modifier = Modifier
-                    .width(60.dp)
-                    .height(90.dp),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .width(60.dp)
-                    .height(90.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .align(Alignment.CenterVertically)
-        ) {
-            Text(movie.title, fontWeight = FontWeight.SemiBold)
-            Text(movie.releaseDate?.take(4) ?: "", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 4.dp)
-            ) {
-                Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFFF5C518))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("${String.format(LocalLocale.current.platformLocale, "%.1f", movie.voteAverage)}/10", fontSize = 12.sp)
-            }
-        }
-    }
-}
-
 /**
- * Kompaktna vertikalna poster kartica za horizontalne redove ("U bioskopima sada", "Nastavi da
- * gledaš") - za razliku od MovieCard (Row layout za vertikalnu listu "Popularni filmovi").
+ * Faza 4 redizajna: PosterCard/MovieCard privatni composable-i su uklonjeni - zamenjeni deljenim
+ * `MoviePosterCard`/`MovieListRow` (Faza 2, videti MOVIELENS_DESIGN_PLAN.md 1.4). Ovi tanki
+ * wrapper-i samo mapiraju svaki model na gole parametre komponente (nema jedinstven "movie" model
+ * u appu). Takođe uklonjen mrtav privatni `ErrorCard` - nije se nigde pozivao, postoji već
+ * zajednička verzija u `ui/components/StateCards.kt`.
  */
-@Composable
-private fun PosterCard(
-    title: String,
-    posterPath: String?,
-    caption: String?,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .width(110.dp)
-            .clickable(onClick = onClick)
-    ) {
-        if (posterPath != null) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(tmdbPosterUrl(posterPath, "w154"))
-                    .crossfade(true)
-                    .build(),
-                contentDescription = title,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(150.dp)
-                    .clip(RoundedCornerShape(8.dp)),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(150.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(title, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (caption != null) {
-            Text(caption, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
 @Composable
 private fun PersonalizedMovieCard(
     movie: dev.milinko.movielens.data.remote.movie.MovieSearchResult,
     onClick: () -> Unit
 ) {
-    PosterCard(
+    MoviePosterCard(
         title = movie.title,
         posterPath = movie.posterPath,
         caption = "★ ${String.format(LocalLocale.current.platformLocale, "%.1f", movie.voteAverage)}",
@@ -394,7 +300,7 @@ private fun PersonalizedMovieCard(
 
 @Composable
 private fun NowInCinemasCard(movie: NowInCinemasMovie, onClick: () -> Unit) {
-    PosterCard(
+    MoviePosterCard(
         title = movie.title,
         posterPath = movie.posterPath,
         caption = movie.cinemas.firstOrNull(),
@@ -404,23 +310,11 @@ private fun NowInCinemasCard(movie: NowInCinemasMovie, onClick: () -> Unit) {
 
 @Composable
 private fun WatchlistPreviewCard(item: WatchlistItem, onClick: () -> Unit) {
-    PosterCard(
+    MoviePosterCard(
         title = item.title,
         posterPath = item.posterPath,
-        caption = null,
         onClick = onClick
     )
-}
-
-@Composable
-private fun ErrorCard(message: String) {
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Greška", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(message, fontSize = 13.sp)
-        }
-    }
 }
 
 
