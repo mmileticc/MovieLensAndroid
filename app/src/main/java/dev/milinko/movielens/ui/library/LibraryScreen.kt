@@ -6,22 +6,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -38,21 +33,25 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
+import dev.milinko.movielens.R
+import dev.milinko.movielens.data.remote.movie.HistoryItem
+import dev.milinko.movielens.data.remote.movie.WatchlistItem
 import dev.milinko.movielens.ui.components.AppBottomNavigationBar
 import dev.milinko.movielens.ui.components.BottomNavTab
+import dev.milinko.movielens.ui.components.MovieListRow
 import dev.milinko.movielens.ui.components.RatingStars
 import kotlinx.coroutines.launch
 
+/**
+ * Faza 7 redizajna (MOVIELENS_DESIGN_PLAN.md 2.5). Napomena o tab indikatoru: dokument traži
+ * "accentPrimary indikator umesto default Material boje" - to je već rešeno automatski Fazom 1
+ * (Theme.kt) jer `SecondaryTabRow`/`Tab` po M3 default-u crtaju selektovani indikator/tekst u
+ * `colorScheme.primary`, a taj token je od Faze 1 nadalje naša `MlAccentPrimary` (crvena) -
+ * nema potrebe za custom indicator kodom, dovoljno je da tabovi ostanu nedirani.
+ */
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
@@ -77,9 +76,8 @@ fun LibraryScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Biblioteka",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
+                    text = stringResource(R.string.library_top_bar_title),
+                    style = MaterialTheme.typography.headlineSmall
                 )
             }
         },
@@ -108,7 +106,11 @@ fun LibraryScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Uloguj se da vidiš svoju biblioteku")
+                    Text(
+                        text = stringResource(R.string.library_sign_in_required),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             } else {
                 // Svajp između tabova (pored klika na naslov kartice), isti obrazac kao Profile.
@@ -122,12 +124,12 @@ fun LibraryScreen(
                     Tab(
                         selected = pagerState.currentPage == 0,
                         onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                        text = { Text("Watchlist") }
+                        text = { Text(stringResource(R.string.library_tab_watchlist)) }
                     )
                     Tab(
                         selected = pagerState.currentPage == 1,
                         onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
-                        text = { Text("Istorija") }
+                        text = { Text(stringResource(R.string.library_tab_history)) }
                     )
                 }
 
@@ -147,16 +149,14 @@ fun LibraryScreen(
                                     CircularProgressIndicator()
                                 }
                             } else if (uiState.watchlist.isEmpty()) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("Nema filmova u watchlist-u")
-                                }
+                                LibraryEmptyState(
+                                    title = stringResource(R.string.library_watchlist_empty_title),
+                                    message = stringResource(R.string.library_watchlist_empty_message)
+                                )
                             } else {
                                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                    items(uiState.watchlist) { item ->
-                                        WatchlistItemCard(
+                                    items(uiState.watchlist, key = { it.tmdbId }) { item ->
+                                        WatchlistItemRow(
                                             item = item,
                                             onMovieClick = { onNavigateToDetail(item.tmdbId) },
                                             onRemoveClick = { viewModel.removeFromWatchlist(item.tmdbId) }
@@ -174,16 +174,14 @@ fun LibraryScreen(
                                     CircularProgressIndicator()
                                 }
                             } else if (uiState.history.isEmpty()) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("Nema istorije")
-                                }
+                                LibraryEmptyState(
+                                    title = stringResource(R.string.library_history_empty_title),
+                                    message = stringResource(R.string.library_history_empty_message)
+                                )
                             } else {
                                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                                     items(uiState.history, key = { it.tmdbId }) { item ->
-                                        HistoryItemCard(
+                                        HistoryItemRow(
                                             item = item,
                                             onMovieClick = { onNavigateToDetail(item.tmdbId) },
                                             onRate = { stars -> viewModel.rateMovie(item.tmdbId, stars) }
@@ -200,133 +198,78 @@ fun LibraryScreen(
 }
 
 @Composable
-private fun WatchlistItemCard(
-    item: dev.milinko.movielens.data.remote.movie.WatchlistItem,
-    onMovieClick: () -> Unit,
-    onRemoveClick: () -> Unit
-) {
-    Row(
+private fun LibraryEmptyState(title: String, message: String) {
+    Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onMovieClick)
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            .fillMaxSize()
+            .padding(top = 48.dp, start = 32.dp, end = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (item.posterPath != null) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(tmdbPosterUrl(item.posterPath, "w92"))
-                    .crossfade(true)
-                    .build(),
-                contentDescription = item.title,
-                modifier = Modifier
-                    .width(60.dp)
-                    .height(90.dp),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .width(60.dp)
-                    .height(90.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .align(Alignment.CenterVertically)
-        ) {
-            Text(item.title, fontWeight = FontWeight.SemiBold)
-            if (item.priority > 0) {
-                Text(
-                    "Prioritet: ${item.priority}",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        IconButton(onClick = onRemoveClick) {
-            androidx.compose.material3.Icon(
-                Icons.Default.Delete,
-                contentDescription = "Remove",
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.error
-            )
-        }
+        Text(text = title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp)
+        )
     }
 }
 
 @Composable
-private fun HistoryItemCard(
-    item: dev.milinko.movielens.data.remote.movie.HistoryItem,
+private fun WatchlistItemRow(
+    item: WatchlistItem,
+    onMovieClick: () -> Unit,
+    onRemoveClick: () -> Unit
+) {
+    MovieListRow(
+        title = item.title,
+        posterPath = item.posterPath,
+        metaText = if (item.priority > 0) stringResource(R.string.library_watchlist_priority, item.priority) else null,
+        onClick = onMovieClick,
+        trailing = {
+            IconButton(onClick = onRemoveClick) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = stringResource(R.string.library_remove_content_description),
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    )
+}
+
+/**
+ * Tap na ocenu otvara/zatvara red od 10 zvezdica za brzu izmenu, bez odlaska na Movie Detail -
+ * `MovieListRow`-ov `trailing` slot nosi samo mali toggle, sam `RatingStars` red se širi ISPOD
+ * (dogovoreno u Fazi 2 - stateful UI ostaje u ekranu, ne u deljenoj komponenti).
+ */
+@Composable
+private fun HistoryItemRow(
+    item: HistoryItem,
     onMovieClick: () -> Unit,
     onRate: (Int) -> Unit
 ) {
-    // Tap na ocenu otvara/zatvara red od 10 zvezdica za brzu izmenu, bez odlaska na Movie Detail.
     var isEditingRating by remember { mutableStateOf(false) }
 
     Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onMovieClick)
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (item.posterPath != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(tmdbPosterUrl(item.posterPath, "w92"))
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = item.title,
+        MovieListRow(
+            title = item.title,
+            posterPath = item.posterPath,
+            ratingText = "${String.format("%.1f", item.userRating)}/10",
+            onClick = onMovieClick,
+            trailing = {
+                // Odvojen tap-target od MovieListRow-ovog glavnog onClick-a (koji vodi na Movie
+                // Detail) - ovaj mali tekst samo otvara/zatvara RatingStars red ispod.
+                Text(
+                    text = if (isEditingRating) stringResource(R.string.library_rating_close) else stringResource(R.string.library_rating_edit),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
-                        .width(60.dp)
-                        .height(90.dp),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .width(60.dp)
-                        .height(90.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .align(Alignment.CenterVertically)
-            ) {
-                Text(item.title, fontWeight = FontWeight.SemiBold)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .padding(top = 4.dp)
                         .clickable { isEditingRating = !isEditingRating }
-                ) {
-                    androidx.compose.material3.Icon(
-                        Icons.Default.Star,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = Color(0xFFF5C518)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("${String.format("%.1f", item.userRating)}/10", fontSize = 12.sp)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        if (isEditingRating) "Zatvori" else "Izmeni",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
+                        .padding(4.dp)
+                )
             }
-        }
-
+        )
         if (isEditingRating) {
             RatingStars(
                 rating = item.userRating.toInt(),
@@ -341,4 +284,3 @@ private fun HistoryItemCard(
 }
 
 // Zajednička AppBottomNavigationBar komponenta (ui/components) — bez lokalnih duplikata.
-

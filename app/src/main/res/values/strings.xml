@@ -6,11 +6,14 @@
          MOVIELENS_DESIGN_PLAN.md 5.1). -->
     <string name="rating_stars_content_description">Oceni sa %1$d</string>
     <string name="premium_badge_content_description">Premium funkcija</string>
+    <string name="expandable_card_expand">Prikaži detalje</string>
+    <string name="expandable_card_collapse">Sakrij detalje</string>
 
-    <!-- Generičke akcije, ponavljaju se na više ekrana (ranije mešavina "Back"/"Nazad" i
-         "Zatvori" razbacana po fajlovima - konsolidovano u dve zajedničke stavke). -->
+    <!-- Generičke akcije/labele, ponavljaju se na više ekrana (ranije mešavina "Back"/"Nazad" i
+         "Zatvori" razbacana po fajlovima - konsolidovano u zajedničke stavke). -->
     <string name="action_back">Nazad</string>
     <string name="action_close">Zatvori</string>
+    <string name="error_generic_title">Greška</string>
 
     <!-- Faza 3 redizajna - AppBottomNavigationBar -->
     <string name="nav_home">Home</string>
@@ -34,7 +37,6 @@
 
     <!-- Faza 5 redizajna - MovieDetailScreen -->
     <string name="movie_detail_top_bar_title">Film detalji</string>
-    <string name="movie_detail_error_title">Greška</string>
     <string name="movie_detail_retry">Pokušaj ponovno</string>
     <string name="movie_detail_watchlist_add">Watchlist</string>
     <string name="movie_detail_watchlist_added">U watchlisti</string>
@@ -48,6 +50,8 @@
     <string name="movie_detail_genres_header">Žanrovi</string>
     <string name="movie_detail_showtimes_header">Bioskopski termini</string>
     <string name="movie_detail_sort_by_distance">Sortiraj po udaljenosti</string>
+    <string name="movie_detail_show_more_showtimes">Prikaži još %1$d bioskopa</string>
+    <string name="movie_detail_hide_showtimes">Sakrij ostale bioskope</string>
     <string name="movie_detail_overview_header">Opis</string>
     <string name="movie_detail_cast_header">Glumci</string>
     <string name="movie_detail_open_link">Otvori link</string>
@@ -55,4 +59,102 @@
     <string name="movie_detail_friends_watched_one">1 prijatelj je gledao ovaj film</string>
     <string name="movie_detail_friends_watched_many">%1$d prijatelja su gledala ovaj film</string>
     <string name="movie_detail_runtime_minutes">%1$d min</string>
+
+    <!-- Faza 6 redizajna - SearchScreen -->
+    <string name="search_top_bar_title">Pretraži filmove</string>
+    <string name="search_input_placeholder">Pretraži filmove…</string>
+    <string name="search_clear_content_description">Obriši pretragu</string>
+    <string name="search_image_attach_content_description">Pretraga slikom</string>
+    <string name="search_image_source_gallery">Galerija</string>
+    <string name="search_image_source_camera">Kamera</string>
+    <string name="search_image_preview_ready">Slika spremna za analizu</string>
+    <string name="search_image_analyzing">Analiziram sliku…</string>
+    <string name="search_image_remove_content_description">Ukloni sliku</string>
+    <string name="search_submit_content_description">Pretraži</string>
+    <string name="search_camera_error">Greška pri otvaranju kamere: %1$s</string>
+    <string name="search_signin_required_toast">Za skeniranje slike moraš prvo da se uloguješ.</string>
+    <string name="search_empty_state_title">Pronađi svoj sledeći film</string>
+    <string name="search_empty_state_message">Ukucaj naslov ili pretraži pomoću slike.</string>
+    <string name="search_vision_result_title">Rezultat analize</string>
+    <string name="search_vision_not_movie_like">Slika ne liči na film ili poster.</string>
+    <string name="search_vision_success_message">Pronašli smo moguća podudaranja za tvoju sliku.</string>
+    <string name="search_vision_clear">Obriši</string>
+    <string name="search_vision_best_match_label">Najbolje podudaranje</string>
+    <string name="search_vision_match_percent">%1$d%% podudaranje</string>
+    <string name="search_vision_no_hero">Nema rezultata za prikaz.</string>
+    <string name="search_vision_show_more_matches">Prikaži još %1$d mogućih podudaranja</string>
+    <string name="search_vision_hide_matches">Sakrij ostala podudaranja</string>
+    <string name="search_text_results_header">Rezultati pretrage</string>
+
+    <!-- Faza 7 redizajna - LibraryScreen -->
+    <string name="library_top_bar_title">Biblioteka</string>
+    <string name="library_sign_in_required">Uloguj se da vidiš svoju biblioteku</string>
+    <string name="library_tab_watchlist">Watchlist</string>
+    <string name="library_tab_history">Istorija</string>
+    <string name="library_watchlist_priority">Prioritet: %1$d</string>
+    <string name="library_watchlist_empty_title">Watchlist je prazna</string>
+    <string name="library_watchlist_empty_message">Dodaj filmove koje planiraš da pogledaš.</string>
+    <string name="library_history_empty_title">Nema istorije</string>
+    <string name="library_history_empty_message">Filmovi koje označiš kao odgledane pojaviće se ovde.</string>
+    <string name="library_remove_content_description">Ukloni</string>
+    <string name="library_rating_edit">Izmeni</string>
+    <string name="library_rating_close">Zatvori</string>
+
+    <!-- Faza 7 redizajna - ProfileScreen -->
+    <string name="profile_top_bar_title">Profil</string>
+    <string name="profile_backend_button">Backend</string>
+    <string name="profile_sign_out">Odjavi se</string>
+    <string name="profile_sign_in">Prijavi se</string>
+    <string name="profile_stat_watched">Gledano</string>
+    <string name="profile_stat_rated">Ocenjeno</string>
+    <string name="profile_stat_friends">Prijatelji</string>
+    <string name="profile_favorite_genres">Omiljeni žanrovi: %1$s</string>
+    <string name="profile_default_username">Korisnik</string>
+    <string name="profile_tab_settings">Podešavanja</string>
+    <string name="profile_tab_friends">Prijatelji</string>
+    <string name="profile_taste_title">Tvoj ukus</string>
+    <string name="profile_taste_rating_count">%1$s/10 (%2$d)</string>
+    <string name="profile_settings_app_section">Postavke aplikacije</string>
+    <string name="profile_dark_mode">Tamna tema</string>
+    <string name="profile_notifications">Obaveštenja</string>
+    <string name="profile_data_saver">Modus štednje podataka</string>
+    <string name="profile_about_section">O aplikaciji</string>
+    <string name="profile_version_label">Verzija</string>
+    <string name="profile_backend_url_label">Backend URL</string>
+    <string name="profile_backend_edit">Izmeni</string>
+    <string name="profile_friend_requests_header">Zahtevi za prijateljstvo</string>
+    <string name="profile_friends_header">Prijatelji</string>
+    <string name="profile_friends_empty">Još nemaš prijatelja. Pretraži iznad da dodaš nekoga.</string>
+    <string name="profile_friend_activity_header">Aktivnost prijatelja</string>
+    <string name="profile_remove_friend_dialog_title">Ukloni prijatelja?</string>
+    <string name="profile_remove_friend_dialog_message">%1$s će biti uklonjen/a iz liste prijatelja. Ako se predomisliš, moraćeš ponovo da pošalješ zahtev.</string>
+    <string name="profile_remove_confirm">Ukloni</string>
+    <string name="profile_remove_cancel">Otkaži</string>
+    <string name="profile_search_users_label">Pretraži korisnike (ime ili email)</string>
+    <string name="profile_search_no_results">Nema rezultata za \"%1$s\"</string>
+    <string name="profile_add_friend">Dodaj</string>
+    <string name="profile_cancel_request">Otkaži zahtev</string>
+    <string name="profile_reply_below">Odgovori ispod ↓</string>
+    <string name="profile_already_friends">Već prijatelji</string>
+    <string name="profile_accept_content_description">Prihvati</string>
+    <string name="profile_reject_content_description">Odbij</string>
+    <string name="profile_match_percent">Podudaranje: %1$.0f%%</string>
+    <string name="profile_common_genres">Žanrovi: %1$s</string>
+    <string name="profile_activity_rated">%1$s je ocenio/la \"%2$s\" sa %3$d/10</string>
+    <string name="profile_activity_watched">%1$s je odgledao/la \"%2$s\"</string>
+
+    <!-- Faza 7 redizajna - MovieNightScreen -->
+    <string name="movie_night_top_bar_title">Predlozi za zajedničko gledanje</string>
+    <string name="movie_night_refresh_content_description">Osveži predloge</string>
+    <string name="movie_night_error_generic">Greška</string>
+    <string name="movie_night_empty_state">Nema predloga za sada. Trebalo bi da oboje ocenite još koji film iz istog žanra da bismo imali na osnovu čega pametno da predložimo.</string>
+    <string name="movie_night_your_match_label">Ti</string>
+    <string name="movie_night_friend_match_label">Prijatelj</string>
+
+    <!-- Faza 7 redizajna - FriendProfileScreen -->
+    <string name="friend_profile_default_title">Profil</string>
+    <string name="friend_profile_watched_count">%1$d odgledanih filmova</string>
+    <string name="friend_profile_movie_night_cta">Predlozi za zajedničko gledanje</string>
+    <string name="friend_profile_empty">Još nema odgledanih filmova.</string>
+    <string name="friend_profile_no_rating">Odgledano (bez ocene)</string>
 </resources>

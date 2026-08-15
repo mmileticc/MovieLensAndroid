@@ -79,9 +79,13 @@ import dev.milinko.movielens.data.remote.user.FriendWatched
 import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 import dev.milinko.movielens.ui.components.AppButton
 import dev.milinko.movielens.ui.components.AppButtonVariant
+import dev.milinko.movielens.ui.components.ExpandableMatchCard
 import dev.milinko.movielens.ui.components.GenreChip
 import dev.milinko.movielens.ui.components.RatingStars
 import dev.milinko.movielens.ui.components.SectionHeader
+
+/** Koliko bioskopa se uvek prikazuje pre "Prikaži još N" - videti dorada posle Faze 6 feedback-a. */
+private const val ALWAYS_VISIBLE_SHOWTIMES = 3
 
 @Composable
 fun MovieDetailScreen(
@@ -169,7 +173,7 @@ fun MovieDetailScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = stringResource(R.string.movie_detail_error_title),
+                    text = stringResource(R.string.error_generic_title),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.titleMedium
                 )
@@ -365,6 +369,14 @@ fun MovieDetailScreen(
                 if (uiState.movieDetail!!.showtimes.isNotEmpty()) {
                     item {
                         val showtimes = uiState.movieDetail!!.showtimes
+                        // Dorada posle Faze 6 feedback-a: lista bioskopa je bila ravna i nepregledna
+                        // kad ih ima dosta - isti obrazac sažimanja kao sekundarni pogoci na Search
+                        // ekranu (prvih ALWAYS_VISIBLE_SHOWTIMES uvek vidljivo, ostatak iza
+                        // "Prikaži još N" pomoću ExpandableMatchCard).
+                        val alwaysVisible = showtimes.take(ALWAYS_VISIBLE_SHOWTIMES)
+                        val remaining = showtimes.drop(ALWAYS_VISIBLE_SHOWTIMES)
+                        var showtimesExpanded by remember { mutableStateOf(false) }
+
                         Column(modifier = Modifier.padding(16.dp)) {
                             SectionHeader(
                                 title = stringResource(R.string.movie_detail_showtimes_header),
@@ -375,9 +387,34 @@ fun MovieDetailScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                showtimes.forEach { show ->
+                                alwaysVisible.forEach { show ->
                                     CinemaShowtimeCard(show = show)
                                 }
+                            }
+                            if (remaining.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                ExpandableMatchCard(
+                                    expanded = showtimesExpanded,
+                                    onToggleExpanded = { showtimesExpanded = !showtimesExpanded },
+                                    header = {
+                                        Text(
+                                            text = if (showtimesExpanded) {
+                                                stringResource(R.string.movie_detail_hide_showtimes)
+                                            } else {
+                                                stringResource(R.string.movie_detail_show_more_showtimes, remaining.size)
+                                            },
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    },
+                                    expandedContent = {
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            remaining.forEach { show ->
+                                                CinemaShowtimeCard(show = show)
+                                            }
+                                        }
+                                    }
+                                )
                             }
                         }
                     }

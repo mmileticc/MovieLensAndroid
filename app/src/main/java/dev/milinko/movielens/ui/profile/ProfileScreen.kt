@@ -2,6 +2,7 @@ package dev.milinko.movielens.ui.profile
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
@@ -25,14 +25,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SecondaryTabRow
@@ -53,15 +52,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLocale
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import dev.milinko.movielens.R
 import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.data.remote.user.FriendInfo
 import dev.milinko.movielens.data.remote.user.GenreAffinity
@@ -70,7 +68,11 @@ import dev.milinko.movielens.data.remote.user.UserSearchResult
 import dev.milinko.movielens.ui.auth.AuthUiState
 import dev.milinko.movielens.ui.auth.AuthViewModel
 import dev.milinko.movielens.ui.components.AppBottomNavigationBar
+import dev.milinko.movielens.ui.components.AppButton
+import dev.milinko.movielens.ui.components.AppButtonVariant
 import dev.milinko.movielens.ui.components.BottomNavTab
+import dev.milinko.movielens.ui.components.GenreChip
+import dev.milinko.movielens.ui.components.SectionHeader
 import dev.milinko.movielens.ui.components.SettingsDialog
 import kotlinx.coroutines.launch
 
@@ -129,14 +131,13 @@ fun ProfileScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Profil",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
+                    text = stringResource(R.string.profile_top_bar_title),
+                    style = MaterialTheme.typography.headlineSmall
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // quick access to backend editor in top bar
                     TextButton(onClick = { showBackendDialogGlobal.value = true }) {
-                        Text("Backend")
+                        Text(stringResource(R.string.profile_backend_button))
                     }
                     if (isSignedIn) {
                         TextButton(
@@ -145,13 +146,11 @@ fun ProfileScreen(
                                 onSignOut()
                             }
                         ) {
-                            Text("Odjavi se", color = MaterialTheme.colorScheme.error)
+                            Text(stringResource(R.string.profile_sign_out), color = MaterialTheme.colorScheme.error)
                         }
                     } else {
-                        TextButton(
-                            onClick = onNavigateToSignIn
-                        ) {
-                            Text("Prijavi se", color = MaterialTheme.colorScheme.primary)
+                        TextButton(onClick = onNavigateToSignIn) {
+                            Text(stringResource(R.string.profile_sign_in), color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
@@ -172,7 +171,9 @@ fun ProfileScreen(
         }
     ) { paddingValues ->
         // Svajp između tabova (pored klika na naslov kartice) - HorizontalPager za sadržaj ispod
-        // tab reda, dok header (avatar, taste profile) i sam tab red ostaju fiksni iznad.
+        // tab reda, dok header (avatar, taste profile) i sam tab red ostaju fiksni iznad. Tab
+        // indikator boja: videti napomenu u LibraryScreen.kt - nasleđuje colorScheme.primary
+        // od Faze 1, bez potrebe za custom indicator kodom.
         val pagerState = rememberPagerState(pageCount = { 2 })
         val coroutineScope = rememberCoroutineScope()
 
@@ -203,12 +204,12 @@ fun ProfileScreen(
                 Tab(
                     selected = pagerState.currentPage == 0,
                     onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                    text = { Text("Podešavanja") }
+                    text = { Text(stringResource(R.string.profile_tab_settings)) }
                 )
                 Tab(
                     selected = pagerState.currentPage == 1,
                     onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
-                    text = { Text("Prijatelji") }
+                    text = { Text(stringResource(R.string.profile_tab_friends)) }
                 )
             }
 
@@ -248,19 +249,19 @@ fun ProfileScreen(
         friendPendingRemoval?.let { friend ->
             AlertDialog(
                 onDismissRequest = { friendPendingRemoval = null },
-                title = { Text("Ukloni prijatelja?") },
-                text = { Text("${friend.username} će biti uklonjen/a iz liste prijatelja. Ako se predomisliš, moraćeš ponovo da pošalješ zahtev.") },
+                title = { Text(stringResource(R.string.profile_remove_friend_dialog_title)) },
+                text = { Text(stringResource(R.string.profile_remove_friend_dialog_message, friend.username)) },
                 confirmButton = {
                     TextButton(onClick = {
                         viewModel.removeFriend(friend.friendId)
                         friendPendingRemoval = null
                     }) {
-                        Text("Ukloni", color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.profile_remove_confirm), color = MaterialTheme.colorScheme.error)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { friendPendingRemoval = null }) {
-                        Text("Otkaži")
+                        Text(stringResource(R.string.profile_remove_cancel))
                     }
                 }
             )
@@ -310,7 +311,10 @@ private fun FriendsTabContent(
 
         if (uiState.pendingRequests.isNotEmpty()) {
             item {
-                SectionHeader("Zahtevi za prijateljstvo")
+                SectionHeader(
+                    title = stringResource(R.string.profile_friend_requests_header),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                )
             }
             items(uiState.pendingRequests, key = { "pending-${it.id}" }) { request ->
                 PendingRequestCard(
@@ -322,7 +326,10 @@ private fun FriendsTabContent(
         }
 
         item {
-            SectionHeader("Prijatelji")
+            SectionHeader(
+                title = stringResource(R.string.profile_friends_header),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+            )
         }
         if (uiState.isLoading && uiState.friends.isEmpty()) {
             // Dok se prvi ikad poziv ne vrati, ne pokazujemo "nemaš prijatelja" - to bi bilo
@@ -341,8 +348,8 @@ private fun FriendsTabContent(
         } else if (uiState.friends.isEmpty()) {
             item {
                 Text(
-                    "Još nemaš prijatelja. Pretraži iznad da dodaš nekoga.",
-                    fontSize = 13.sp,
+                    text = stringResource(R.string.profile_friends_empty),
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
@@ -359,7 +366,10 @@ private fun FriendsTabContent(
 
         if (uiState.friendActivity.isNotEmpty()) {
             item {
-                SectionHeader("Aktivnost prijatelja")
+                SectionHeader(
+                    title = stringResource(R.string.profile_friend_activity_header),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                )
             }
             items(uiState.friendActivity, key = { it.activityId }) { activity ->
                 FriendActivityCard(activity)
@@ -372,6 +382,37 @@ private fun FriendsTabContent(
     }
 }
 
+/** Krug avatara sa tankim `accentPrimary` obrubom (Faza 7, MOVIELENS_DESIGN_PLAN.md 2.6) - deljen
+ * između `ProfileHeader`/`SessionIdentityHeader` (sopstveni profil) i `FriendProfileScreen`
+ * (profil prijatelja, "isti stil avatara"). */
+@Composable
+private fun BorderedAvatar(avatarUrl: String?, fallbackLabel: String?, size: Int = 80) {
+    Box(
+        modifier = Modifier
+            .size(size.dp)
+            .clip(CircleShape)
+            .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
+    ) {
+        if (!avatarUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current).data(avatarUrl).crossfade(true).build(),
+                contentDescription = fallbackLabel,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().clip(CircleShape)
+            )
+        } else {
+            Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.primary) {
+                Icon(
+                    Icons.Default.Person,
+                    contentDescription = fallbackLabel,
+                    modifier = Modifier.fillMaxSize().padding(size.dp / 5),
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun ProfileHeader(profile: dev.milinko.movielens.data.remote.user.UserProfile) {
     Column(
@@ -380,31 +421,13 @@ private fun ProfileHeader(profile: dev.milinko.movielens.data.remote.user.UserPr
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Surface(
-            modifier = Modifier
-                .size(80.dp)
-                .clip(CircleShape),
-            color = MaterialTheme.colorScheme.primary
-        ) {
-            Icon(
-                Icons.Default.Person,
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                tint = MaterialTheme.colorScheme.onPrimary
-            )
-        }
+        BorderedAvatar(avatarUrl = profile.avatar, fallbackLabel = profile.username)
 
         Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            profile.username,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold
-        )
+        Text(profile.username, style = MaterialTheme.typography.titleLarge)
         Text(
             profile.email,
-            fontSize = 12.sp,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
@@ -413,16 +436,16 @@ private fun ProfileHeader(profile: dev.milinko.movielens.data.remote.user.UserPr
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            StatItem("${profile.stats.moviesWatched}", "Gledano")
-            StatItem("${profile.stats.moviesRated}", "Ocenjeno")
-            StatItem("${profile.stats.friendCount}", "Prijatelji")
+            StatItem("${profile.stats.moviesWatched}", stringResource(R.string.profile_stat_watched))
+            StatItem("${profile.stats.moviesRated}", stringResource(R.string.profile_stat_rated))
+            StatItem("${profile.stats.friendCount}", stringResource(R.string.profile_stat_friends))
         }
 
         if (profile.favoriteGenres.isNotEmpty()) {
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                "Omiljeni žanrovi: ${profile.favoriteGenres.joinToString(", ")}",
-                fontSize = 12.sp,
+                text = stringResource(R.string.profile_favorite_genres, profile.favoriteGenres.joinToString(", ")),
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -439,47 +462,15 @@ private fun SessionIdentityHeader(user: SessionUserInfo) {
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (!user.avatarUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(user.avatarUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = user.username,
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(CircleShape)
-            )
-        } else {
-            Surface(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(CircleShape),
-                color = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    tint = MaterialTheme.colorScheme.onPrimary
-                )
-            }
-        }
+        BorderedAvatar(avatarUrl = user.avatarUrl, fallbackLabel = user.username)
 
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            user.username?.takeIf { it.isNotBlank() } ?: "Korisnik",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold
+            text = user.username?.takeIf { it.isNotBlank() } ?: stringResource(R.string.profile_default_username),
+            style = MaterialTheme.typography.titleLarge
         )
         user.email?.takeIf { it.isNotBlank() }?.let {
-            Text(
-                it,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
@@ -489,8 +480,8 @@ private fun SessionIdentityHeader(user: SessionUserInfo) {
 @Composable
 private fun StatItem(value: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.titleLarge)
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -506,9 +497,8 @@ private fun SettingsSection(
             .padding(16.dp)
     ) {
         Text(
-            "Postavke aplikacije",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
+            text = stringResource(R.string.profile_settings_app_section),
+            style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(bottom = 12.dp)
         )
 
@@ -520,13 +510,8 @@ private fun SettingsSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Tamna tema")
-                Switch(
-                    checked = settings.darkMode,
-                    onCheckedChange = {
-                        viewModel.toggleDarkMode()
-                    }
-                )
+                Text(stringResource(R.string.profile_dark_mode))
+                Switch(checked = settings.darkMode, onCheckedChange = { viewModel.toggleDarkMode() })
             }
         }
 
@@ -540,11 +525,8 @@ private fun SettingsSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Obaveštenja")
-                Switch(
-                    checked = settings.notifications,
-                    onCheckedChange = { /* TODO */ }
-                )
+                Text(stringResource(R.string.profile_notifications))
+                Switch(checked = settings.notifications, onCheckedChange = { /* TODO */ })
             }
         }
 
@@ -558,19 +540,15 @@ private fun SettingsSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Modus štednje podataka")
-                Switch(
-                    checked = settings.dataSaverMode,
-                    onCheckedChange = { /* TODO */ }
-                )
+                Text(stringResource(R.string.profile_data_saver))
+                Switch(checked = settings.dataSaverMode, onCheckedChange = { /* TODO */ })
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            "O aplikaciji",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
+            text = stringResource(R.string.profile_about_section),
+            style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(bottom = 12.dp)
         )
 
@@ -581,7 +559,7 @@ private fun SettingsSection(
                     .padding(12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Verzija")
+                Text(stringResource(R.string.profile_version_label))
                 Text("1.0.0", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -601,11 +579,11 @@ private fun SettingsSection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("Backend URL", fontWeight = FontWeight.Medium)
-                    Text(baseUrl, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.profile_backend_url_label), style = MaterialTheme.typography.titleSmall)
+                    Text(baseUrl, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 TextButton(onClick = { showBackendDialog.value = true }) {
-                    Text("Edit")
+                    Text(stringResource(R.string.profile_backend_edit))
                 }
             }
         }
@@ -629,6 +607,12 @@ private fun SettingsSection(
     }
 }
 
+/**
+ * Faza 7 redizajna (MOVIELENS_DESIGN_PLAN.md 2.6): "avatar, ime, match%, zajednički žanrovi kao
+ * mali chip-ovi". Usput ispravljen postojeći propust - `friend.avatar` polje je postojalo u
+ * `FriendInfo` modelu ali ga kartica nikad nije koristila, uvek je prikazivala placeholder
+ * ikonicu čak i kad je pravi avatar dostupan.
+ */
 @Composable
 private fun FriendCard(
     friend: FriendInfo,
@@ -648,45 +632,53 @@ private fun FriendCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape),
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(8.dp)
-                )
+            Box(modifier = Modifier.size(44.dp).clip(CircleShape)) {
+                if (!friend.avatar.isNullOrBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current).data(friend.avatar).crossfade(true).build(),
+                        contentDescription = friend.username,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.primaryContainer) {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = friend.username,
+                            modifier = Modifier.fillMaxSize().padding(8.dp)
+                        )
+                    }
+                }
             }
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 12.dp)
             ) {
-                Text(friend.username, fontWeight = FontWeight.SemiBold)
+                Text(friend.username, style = MaterialTheme.typography.titleSmall)
                 // match_score/common_genres su placeholder (0f/prazno) dok se ne uradi Faza 4
                 // (profilisanje) - prikazujemo ih samo kad je backend stvarno popunio vrednosti.
                 if (friend.matchScore > 0f) {
                     Text(
-                        "Match: ${String.format(LocalLocale.current.platformLocale, "%.0f", friend.matchScore)}%",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = stringResource(R.string.profile_match_percent, friend.matchScore),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp)
                     )
                 }
                 if (friend.commonGenres.isNotEmpty()) {
-                    Text(
-                        "Žanrovi: ${friend.commonGenres.take(2).joinToString(", ")}",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(top = 4.dp)
+                    ) {
+                        friend.commonGenres.take(2).forEach { genre ->
+                            GenreChip(text = genre)
+                        }
+                    }
                 }
             }
             TextButton(onClick = onRemove) {
-                Text("Ukloni", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                Text(stringResource(R.string.profile_remove_confirm), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
             }
         }
     }
@@ -695,57 +687,53 @@ private fun FriendCard(
 /**
  * "Tvoj ukus" - prosečna ocena po žanru (Faza 4, MOVIELENS_ROADMAP.md). Namerno prikazuje broj
  * filmova uz svaki žanr (npr. "8.3/10 (2 filma)") umesto da bilo šta krije - to je mehanizam
- * transparentnosti umesto praga/filtriranja na backendu.
+ * transparentnosti umesto praga/filtriranja na backendu. Faza 7 redizajna (2.6): žanr sad ide kao
+ * `GenreChip`, dodata suptilna traka (`LinearProgressIndicator`) koja vizuelno pokazuje jačinu
+ * afiniteta (prosečna ocena / 10) umesto da se to čita samo iz brojke.
  */
 @Composable
 private fun TasteProfileSection(genres: List<GenreAffinity>) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(
-            "Tvoj ukus",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
+            text = stringResource(R.string.profile_taste_title),
+            style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(bottom = 8.dp)
         )
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+            Column(modifier = Modifier.padding(vertical = 8.dp, horizontal = 12.dp)) {
                 genres.take(5).forEach { affinity ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(affinity.genre, fontSize = 13.sp)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Star,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = Color(0xFFF5C518)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
+                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            GenreChip(text = affinity.genre)
                             Text(
-                                "${String.format(LocalLocale.current.platformLocale, "%.1f", affinity.averageRating)}/10 (${affinity.movieCount})",
-                                fontSize = 12.sp,
+                                text = stringResource(
+                                    R.string.profile_taste_rating_count,
+                                    String.format(java.util.Locale.getDefault(), "%.1f", affinity.averageRating),
+                                    affinity.movieCount
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { (affinity.averageRating / 10.0).toFloat().coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(MaterialTheme.shapes.small),
+                            color = MaterialTheme.colorScheme.secondary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
                     }
                 }
             }
         }
     }
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(
-        title,
-        fontSize = 16.sp,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-    )
 }
 
 @Composable
@@ -763,7 +751,7 @@ private fun FriendSearchSection(
             value = query,
             onValueChange = onQueryChange,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Pretraži korisnike (ime ili email)") },
+            label = { Text(stringResource(R.string.profile_search_users_label)) },
             singleLine = true,
             trailingIcon = {
                 if (isSearching) {
@@ -786,8 +774,8 @@ private fun FriendSearchSection(
             }
         } else if (!isSearching && query.trim().length >= 2) {
             Text(
-                "Nema rezultata za \"$query\"",
-                fontSize = 12.sp,
+                text = stringResource(R.string.profile_search_no_results, query),
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp)
             )
@@ -816,16 +804,18 @@ private fun UserSearchResultRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                result.username?.takeIf { it.isNotBlank() } ?: "Korisnik",
-                fontWeight = FontWeight.Medium,
+                text = result.username?.takeIf { it.isNotBlank() } ?: stringResource(R.string.profile_default_username),
+                style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.weight(1f)
             )
             when (result.status) {
-                "NONE" -> Button(onClick = onAdd) { Text("Dodaj") }
-                "PENDING_SENT" -> TextButton(onClick = onCancelRequest) { Text("Otkaži zahtev", color = MaterialTheme.colorScheme.error) }
-                "PENDING_RECEIVED" -> OutlinedButton(onClick = {}, enabled = false) { Text("Odgovori ispod ↓") }
-                "ACCEPTED" -> OutlinedButton(onClick = {}, enabled = false) { Text("Već prijatelji") }
-                else -> Button(onClick = onAdd) { Text("Dodaj") }
+                "NONE" -> AppButton(text = stringResource(R.string.profile_add_friend), onClick = onAdd, variant = AppButtonVariant.Primary)
+                "PENDING_SENT" -> TextButton(onClick = onCancelRequest) {
+                    Text(stringResource(R.string.profile_cancel_request), color = MaterialTheme.colorScheme.error)
+                }
+                "PENDING_RECEIVED" -> AppButton(text = stringResource(R.string.profile_reply_below), onClick = {}, variant = AppButtonVariant.Secondary, enabled = false)
+                "ACCEPTED" -> AppButton(text = stringResource(R.string.profile_already_friends), onClick = {}, variant = AppButtonVariant.Secondary, enabled = false)
+                else -> AppButton(text = stringResource(R.string.profile_add_friend), onClick = onAdd, variant = AppButtonVariant.Primary)
             }
         }
     }
@@ -846,15 +836,15 @@ private fun PendingRequestCard(request: PendingRequest, onAccept: () -> Unit, on
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                request.username?.takeIf { it.isNotBlank() } ?: "Korisnik",
-                fontWeight = FontWeight.Medium,
+                text = request.username?.takeIf { it.isNotBlank() } ?: stringResource(R.string.profile_default_username),
+                style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.weight(1f)
             )
             IconButton(onClick = onAccept) {
-                Icon(Icons.Default.Check, contentDescription = "Prihvati", tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Default.Check, contentDescription = stringResource(R.string.profile_accept_content_description), tint = MaterialTheme.colorScheme.primary)
             }
             IconButton(onClick = onReject) {
-                Icon(Icons.Default.Close, contentDescription = "Odbij", tint = MaterialTheme.colorScheme.error)
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.profile_reject_content_description), tint = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -875,17 +865,17 @@ private fun FriendActivityCard(activity: FriendActivity) {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 val text = if (activity.action == "rated" && activity.metadata.rating != null) {
-                    "${activity.friendName} je ocenio/la \"${activity.movieTitle}\" sa ${activity.metadata.rating.toInt()}/10"
+                    stringResource(R.string.profile_activity_rated, activity.friendName, activity.movieTitle, activity.metadata.rating.toInt())
                 } else {
-                    "${activity.friendName} je odgledao/la \"${activity.movieTitle}\""
+                    stringResource(R.string.profile_activity_watched, activity.friendName, activity.movieTitle)
                 }
-                Text(text, fontSize = 13.sp)
+                Text(text, style = MaterialTheme.typography.bodyMedium)
             }
             if (activity.action == "rated" && activity.metadata.rating != null) {
                 Icon(
                     Icons.Default.Star,
                     contentDescription = null,
-                    tint = androidx.compose.ui.graphics.Color(0xFFF5C518),
+                    tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -893,5 +883,5 @@ private fun FriendActivityCard(activity: FriendActivity) {
     }
 }
 
-// Zajednička AppBottomNavigationBar komponenta (ui/components) — bez lokalnih duplikata.
-
+// Zajednička AppBottomNavigationBar/SectionHeader komponenta (ui/components) — bez lokalnih
+// duplikata (ranije je ovaj fajl imao sopstveni privatni SectionHeader, identičan po nameni).
