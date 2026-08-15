@@ -52,6 +52,11 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    // Inter font (redizajn, Faza 6) - Downloadable Fonts API, preuzima se sa Google Play
+    // services na uređaju umesto da se bandluje .ttf fajl u repo. Verzija se ne navodi eksplicitno
+    // jer se rešava kroz već uvezeni Compose BOM (isti obrazac kao ostali androidx.compose.ui.*
+    // artefakti iznad).
+    implementation("androidx.compose.ui:ui-text-google-fonts")
 
     // Hilt
     implementation(libs.hilt.android)

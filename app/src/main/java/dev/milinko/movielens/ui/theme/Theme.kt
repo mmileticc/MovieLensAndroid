@@ -1,57 +1,50 @@
 package dev.milinko.movielens.ui.theme
 
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
-
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
+/**
+ * Faza 6 redizajna: MovieLens je NAMERNO uvek tamna app (Netflix-inspirisan identitet, videti
+ * MOVIELENS_DESIGN_PLAN.md) - nema light temu, nema dynamicColor (ranije je bilo uključeno, pa je
+ * app slučajno menjala boje prema korisnikovoj pozadini na Android 12+ telefonima umesto da ima
+ * sopstveni identitet). Zato MovieLensTheme() više ne prima darkTheme/dynamicColor parametre -
+ * jedini poziv (MainActivity.kt) ionako nije prosleđivao ništa osim content lambde.
+ */
+private val MovieLensDarkColorScheme = darkColorScheme(
+    primary = MlAccentPrimary,
     onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    primaryContainer = MlAccentPrimaryPressed,
+    onPrimaryContainer = Color.White,
+
+    secondary = MlAccentGold,
+    onSecondary = Color(0xFF3A2C00),
+
+    tertiary = MlSuccess,
+    onTertiary = Color(0xFF06280F),
+
+    background = MlBackground,
+    onBackground = MlTextPrimary,
+
+    surface = MlSurfaceElevated1,
+    onSurface = MlTextPrimary,
+    surfaceVariant = MlSurfaceElevated2,
+    onSurfaceVariant = MlTextSecondary,
+
+    outline = MlBorder,
+    outlineVariant = MlBorder,
+
+    error = Color(0xFFCF6679),
+    onError = Color(0xFF3A0A0F),
 )
 
 @Composable
-fun MovieLensTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit
-) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
+fun MovieLensTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = MovieLensDarkColorScheme,
         typography = Typography,
+        shapes = MovieLensShapes,
         content = content
     )
 }

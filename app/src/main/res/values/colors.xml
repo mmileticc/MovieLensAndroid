@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Faza 6 redizajna - pozadina app-a pre nego što se Compose tema učita (cold start), da
+         ne bude bela/svetla senka pre prvog frame-a. Vrednost mora ručno da prati MlBackground
+         u Color.kt (XML resurs ne može da referencira Compose Color konstantu). -->
+    <color name="ml_background">#FF0A0A0A</color>
+
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>

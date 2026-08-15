@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.MovieLens" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Faza 6 redizajna: bilo je "Theme.Material.Light.NoActionBar" (svetla) - to je značilo
+         bela senka pri hladnom pokretanju app-a pre nego što se Compose MovieLensTheme učita,
+         direktno u suprotnosti sa "uvek tamna app" identitetom. Menja se na tamnu bazu +
+         windowBackground/status/nav bar boje da cold start izgleda tamno od prvog frame-a. -->
+    <style name="Theme.MovieLens" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ml_background</item>
+        <item name="android:statusBarColor">@color/ml_background</item>
+        <item name="android:navigationBarColor">@color/ml_background</item>
+    </style>
 </resources>
