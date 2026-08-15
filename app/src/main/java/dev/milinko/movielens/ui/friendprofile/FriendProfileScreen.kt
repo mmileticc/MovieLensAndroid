@@ -33,16 +33,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import dev.milinko.movielens.R
 import dev.milinko.movielens.data.remote.user.FriendProfileMovie
 import dev.milinko.movielens.ui.components.AppButton
 import dev.milinko.movielens.ui.components.MovieListRow
+import dev.milinko.movielens.ui.components.RemoteAvatarImage
 
 /**
  * Faza 7 redizajna (MOVIELENS_DESIGN_PLAN.md 2.8). Header (avatar/username/broj filmova) unifikovan
@@ -133,11 +132,8 @@ fun FriendProfileScreen(
                                         .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
                                 ) {
                                     if (!profile.avatarUrl.isNullOrBlank()) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(LocalContext.current)
-                                                .data(profile.avatarUrl)
-                                                .crossfade(true)
-                                                .build(),
+                                        RemoteAvatarImage(
+                                            url = profile.avatarUrl,
                                             contentDescription = profile.username,
                                             contentScale = ContentScale.Crop,
                                             modifier = Modifier.fillMaxSize().clip(CircleShape)
@@ -160,6 +156,19 @@ fun FriendProfileScreen(
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                // Faza 7 dorada - prijateljev "mini status", isti izvor podataka
+                                // kao sopstveni profil (UserProfile.bio / UserDao.updateProfile).
+                                if (!profile.bio.isNullOrBlank()) {
+                                    Text(
+                                        text = profile.bio,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 8.dp, start = 24.dp, end = 24.dp)
+                                    )
+                                }
                             }
                         }
 

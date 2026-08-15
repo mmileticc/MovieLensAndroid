@@ -20,8 +20,10 @@ import dev.milinko.movielens.data.remote.user.MovieSuggestion
 import dev.milinko.movielens.data.remote.movie.WatchlistItem
 import dev.milinko.movielens.data.remote.movie.HistoryItem
 import dev.milinko.movielens.util.safeApiCall
+import com.google.gson.Gson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import retrofit2.Response
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -73,6 +75,18 @@ interface UserRepository {
      * ako ne uspe, obično dugme i dalje radi normalno (samo bez prefetch-a).
      */
     suspend fun prefetchMovieNightSuggestions(userId: String, friendId: String)
+}
+
+private data class ApiErrorBody(val error: String? = null)
+
+/** Parsira backend-ovo `{"error": "..."}` telo greške (ErrorResponse.kt) u čitljivu poruku. */
+private fun Response<*>.parseErrorMessage(fallback: String): String {
+    return try {
+        val raw = errorBody()?.string()
+        if (raw.isNullOrBlank()) fallback else Gson().fromJson(raw, ApiErrorBody::class.java)?.error ?: fallback
+    } catch (e: Exception) {
+        fallback
+    }
 }
 
 private fun WatchlistEntity.toDomain() = WatchlistItem(
@@ -138,7 +152,11 @@ class UserRepositoryImpl @Inject constructor(
         if (response.isSuccessful) {
             response.body() ?: throw Exception("Empty response")
         } else {
-            throw Exception("Update profile failed: ${response.code()}")
+            // Backend vraća konkretnu poruku (npr. "Korisničko ime je već zauzeto") u JSON telu
+            // greške ({"error": "..."}) - izvlačimo je da UI može da prikaže nešto korisnije od
+            // golog HTTP koda (jedini poziv u repo-u gde je poruka greške stvarno actionable za
+            // korisnika, za razliku od ostalih mrežnih poziva ovde).
+            throw Exception(response.parseErrorMessage("Ažuriranje profila nije uspelo (${response.code()})"))
         }
     }
 

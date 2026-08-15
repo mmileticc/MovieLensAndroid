@@ -1,6 +1,9 @@
 package dev.milinko.movielens.ui.profile
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,7 +17,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -22,8 +27,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -55,10 +60,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import dev.milinko.movielens.R
 import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.data.remote.user.FriendInfo
@@ -71,10 +76,15 @@ import dev.milinko.movielens.ui.components.AppBottomNavigationBar
 import dev.milinko.movielens.ui.components.AppButton
 import dev.milinko.movielens.ui.components.AppButtonVariant
 import dev.milinko.movielens.ui.components.BottomNavTab
+import dev.milinko.movielens.ui.components.ExpandableMatchCard
 import dev.milinko.movielens.ui.components.GenreChip
+import dev.milinko.movielens.ui.components.MovieListRow
+import dev.milinko.movielens.ui.components.RemoteAvatarImage
 import dev.milinko.movielens.ui.components.SectionHeader
 import dev.milinko.movielens.ui.components.SettingsDialog
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ProfileScreen(
@@ -218,7 +228,7 @@ fun ProfileScreen(
                 modifier = Modifier.weight(1f)
             ) { page ->
                 when (page) {
-                    0 -> SettingsTabContent(uiState, viewModel, onSignOut)
+                    0 -> SettingsTabContent(uiState, sessionUser, viewModel, onSignOut)
                     1 -> FriendsTabContent(
                         uiState = uiState,
                         viewModel = viewModel,
@@ -273,10 +283,20 @@ fun ProfileScreen(
 @Composable
 private fun SettingsTabContent(
     uiState: ProfileUiState,
+    sessionUser: SessionUserInfo?,
     viewModel: ProfileViewModel,
     onSignOut: () -> Unit
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item {
+            // Faza 7 dorada (korisnička žalba: "u podešavanjima nema ništa") - uređivanje profila
+            // je sad glavni sadržaj ovog taba, iznad ostalih postavki.
+            EditProfileSection(
+                uiState = uiState,
+                sessionUser = sessionUser,
+                onSave = { username, bio, avatar -> viewModel.updateProfile(username, bio, avatar) }
+            )
+        }
         item {
             if (uiState.userSettings != null) {
                 SettingsSection(uiState.userSettings!!, viewModel, onSignOut)
@@ -372,7 +392,7 @@ private fun FriendsTabContent(
                 )
             }
             items(uiState.friendActivity, key = { it.activityId }) { activity ->
-                FriendActivityCard(activity)
+                FriendActivityRow(activity)
             }
         }
 
@@ -394,8 +414,8 @@ private fun BorderedAvatar(avatarUrl: String?, fallbackLabel: String?, size: Int
             .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
     ) {
         if (!avatarUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current).data(avatarUrl).crossfade(true).build(),
+            RemoteAvatarImage(
+                url = avatarUrl,
                 contentDescription = fallbackLabel,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize().clip(CircleShape)
@@ -430,6 +450,17 @@ private fun ProfileHeader(profile: dev.milinko.movielens.data.remote.user.UserPr
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        if (!profile.bio.isNullOrBlank()) {
+            Text(
+                text = profile.bio,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp, start = 24.dp, end = 24.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
         Row(
@@ -482,6 +513,164 @@ private fun StatItem(value: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, style = MaterialTheme.typography.titleLarge)
         Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/**
+ * Uređivanje profila (Faza 7 dorada) - korisničko ime (jedinstveno kao Instagram handle, videti
+ * `UserDao.updateProfile` na backendu) i kratak "o meni" opis. `username`/`bio` polja se
+ * inicijalizuju iz `uiState.userProfile` (ili session fallback-a dok se profil ne učita) i drže se
+ * u lokalnom stanju dok korisnik kuca - `remember(uiState.userProfile?.userId)` ih resetuje samo
+ * kad se prvi put učita profil drugog korisnika (u praksi: nikad, ovo je uvek sopstveni profil),
+ * ne pri svakom osvežavanju posle uspešnog čuvanja.
+ */
+@Composable
+private fun EditProfileSection(
+    uiState: ProfileUiState,
+    sessionUser: SessionUserInfo?,
+    onSave: (username: String, bio: String?, newAvatarDataUri: String?) -> Unit
+) {
+    val initialUsername = uiState.userProfile?.username ?: sessionUser?.username ?: ""
+    val initialBio = uiState.userProfile?.bio ?: ""
+    val initialAvatar = uiState.userProfile?.avatar ?: sessionUser?.avatarUrl
+    var username by remember(uiState.userProfile?.userId) { mutableStateOf(initialUsername) }
+    var bio by remember(uiState.userProfile?.userId) { mutableStateOf(initialBio) }
+
+    // Slika izabrana OVOG puta (data URI, već kompresovana) - null dok korisnik ne izabere novu
+    // sliku, u kom slučaju se šalje trenutna (initialAvatar) nepromenjena (videti ViewModel.updateProfile).
+    var pickedAvatarDataUri by remember(uiState.userProfile?.userId) { mutableStateOf<String?>(null) }
+    var isCompressingAvatar by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri ->
+            if (uri != null) {
+                isCompressingAvatar = true
+                coroutineScope.launch {
+                    val dataUri = withContext(Dispatchers.IO) {
+                        dev.milinko.movielens.util.AvatarImage.compressToDataUri(context, uri)
+                    }
+                    isCompressingAvatar = false
+                    if (dataUri != null) {
+                        pickedAvatarDataUri = dataUri
+                    } else {
+                        Toast.makeText(context, context.getString(R.string.profile_avatar_pick_error), Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.profile_edit_section_title),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .padding(bottom = 16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(88.dp)
+                    .clip(CircleShape)
+                    .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                    .clickable(enabled = !isCompressingAvatar) {
+                        photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }
+            ) {
+                val previewAvatar = pickedAvatarDataUri ?: initialAvatar
+                if (isCompressingAvatar) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                    }
+                } else if (!previewAvatar.isNullOrBlank()) {
+                    RemoteAvatarImage(
+                        url = previewAvatar,
+                        contentDescription = stringResource(R.string.profile_edit_section_title),
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize().clip(CircleShape)
+                    )
+                } else {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.primary) {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize().padding(18.dp),
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.secondary)
+                    .border(2.dp, MaterialTheme.colorScheme.background, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = stringResource(R.string.profile_change_avatar),
+                    tint = MaterialTheme.colorScheme.onSecondary,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
+
+        OutlinedTextField(
+            value = username,
+            onValueChange = { username = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(stringResource(R.string.profile_username_label)) },
+            supportingText = { Text(stringResource(R.string.profile_username_helper)) },
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = bio,
+            onValueChange = { if (it.length <= 160) bio = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(stringResource(R.string.profile_bio_label)) },
+            supportingText = { Text(stringResource(R.string.profile_bio_helper, bio.length)) },
+            minLines = 2,
+            maxLines = 4
+        )
+
+        if (uiState.editProfileError != null) {
+            Text(
+                text = uiState.editProfileError,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        AppButton(
+            text = stringResource(
+                if (uiState.isSavingProfile) R.string.profile_saving else R.string.profile_save_changes
+            ),
+            onClick = { onSave(username.trim(), bio.trim().ifBlank { null }, pickedAvatarDataUri) },
+            enabled = !uiState.isSavingProfile && !isCompressingAvatar && username.isNotBlank(),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        HorizontalDivider(modifier = Modifier.padding(top = 20.dp))
     }
 }
 
@@ -634,8 +823,8 @@ private fun FriendCard(
         ) {
             Box(modifier = Modifier.size(44.dp).clip(CircleShape)) {
                 if (!friend.avatar.isNullOrBlank()) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current).data(friend.avatar).crossfade(true).build(),
+                    RemoteAvatarImage(
+                        url = friend.avatar,
                         contentDescription = friend.username,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -685,54 +874,122 @@ private fun FriendCard(
 }
 
 /**
- * "Tvoj ukus" - prosečna ocena po žanru (Faza 4, MOVIELENS_ROADMAP.md). Namerno prikazuje broj
- * filmova uz svaki žanr (npr. "8.3/10 (2 filma)") umesto da bilo šta krije - to je mehanizam
- * transparentnosti umesto praga/filtriranja na backendu. Faza 7 redizajna (2.6): žanr sad ide kao
- * `GenreChip`, dodata suptilna traka (`LinearProgressIndicator`) koja vizuelno pokazuje jačinu
- * afiniteta (prosečna ocena / 10) umesto da se to čita samo iz brojke.
+ * "Tvoj ukus" - prosečna ocena po žanru (Faza 4, MOVIELENS_ROADMAP.md). Faza 7 dorada (korisnička
+ * žalba #1: sekcija je kao vertikalna lista od 5 kartica zauzimala previše prostora iznad tabova i
+ * gurala Prijatelje/Aktivnost duboko dole) - prebačeno u kompaktan horizontalni red (top 3 žanra,
+ * `LazyRow`). Dorada #2 (korisnik je tražio da i dalje može da vidi SVE žanrove, ne samo top 3):
+ * ostatak liste (`sorted.drop(3)`) je sad iza `ExpandableMatchCard` "Prikaži još N žanrova" -
+ * isti sklopivi obrazac kao showtimes na Movie Detail-u i sekundarni pogoci na Search-u, u
+ * originalnom vertikalnom stilu (žanr + ocena + traka po redu) kad se razvije.
  */
 @Composable
 private fun TasteProfileSection(genres: List<GenreAffinity>) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+    val sorted = remember(genres) { genres.sortedByDescending { it.averageRating } }
+    val remaining = sorted.drop(3)
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
         Text(
             text = stringResource(R.string.profile_taste_title),
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(vertical = 8.dp, horizontal = 12.dp)) {
-                genres.take(5).forEach { affinity ->
-                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            GenreChip(text = affinity.genre)
-                            Text(
-                                text = stringResource(
-                                    R.string.profile_taste_rating_count,
-                                    String.format(java.util.Locale.getDefault(), "%.1f", affinity.averageRating),
-                                    affinity.movieCount
-                                ),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        LinearProgressIndicator(
-                            progress = { (affinity.averageRating / 10.0).toFloat().coerceIn(0f, 1f) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(4.dp)
-                                .clip(MaterialTheme.shapes.small),
-                            color = MaterialTheme.colorScheme.secondary,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    }
-                }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(sorted.take(3), key = { it.genreId }) { affinity ->
+                CompactGenreAffinityCard(affinity)
             }
         }
+
+        if (remaining.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            ExpandableMatchCard(
+                expanded = expanded,
+                onToggleExpanded = { expanded = !expanded },
+                header = {
+                    Text(
+                        text = stringResource(
+                            if (expanded) R.string.profile_taste_hide_genres else R.string.profile_taste_show_more_genres,
+                            remaining.size
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
+                expandedContent = {
+                    Column {
+                        remaining.forEach { affinity ->
+                            Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    GenreChip(text = affinity.genre)
+                                    Text(
+                                        text = stringResource(
+                                            R.string.profile_taste_rating_count,
+                                            String.format(java.util.Locale.getDefault(), "%.1f", affinity.averageRating),
+                                            affinity.movieCount
+                                        ),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                LinearProgressIndicator(
+                                    progress = { (affinity.averageRating / 10.0).toFloat().coerceIn(0f, 1f) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp)
+                                        .clip(MaterialTheme.shapes.small),
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompactGenreAffinityCard(affinity: GenreAffinity) {
+    Column(
+        modifier = Modifier
+            .width(96.dp)
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(10.dp)
+    ) {
+        Text(
+            text = affinity.genre,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = stringResource(
+                R.string.profile_taste_rating_count,
+                String.format(java.util.Locale.getDefault(), "%.1f", affinity.averageRating),
+                affinity.movieCount
+            ),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        LinearProgressIndicator(
+            progress = { (affinity.averageRating / 10.0).toFloat().coerceIn(0f, 1f) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+                .clip(MaterialTheme.shapes.small),
+            color = MaterialTheme.colorScheme.secondary,
+            trackColor = MaterialTheme.colorScheme.surface
+        )
     }
 }
 
@@ -850,37 +1107,29 @@ private fun PendingRequestCard(request: PendingRequest, onAccept: () -> Unit, on
     }
 }
 
+/**
+ * Faza 7 dorada #2 (korisnička žalba: prvi pokušaj - ikonica + rečenica - i dalje je izgledao kao
+ * "samo pobrojano"). Prebačeno na deljeni `MovieListRow` (isti poster-red obrazac kao Library/
+ * Search/Movie Night/Friend Profile) - film je sad glavni vizuelni element (poster + naslov), a
+ * "ko i šta" ide kao `description` ispod, umesto da cela stvar bude jedna generička rečenica sa
+ * ikonicom. `FriendActivityDto`/`FriendActivity` su dobili `posterPath` (backend red ga je već
+ * imao iz JOIN-a na `movies`, samo nije bio prosleđen kroz DTO).
+ */
 @Composable
-private fun FriendActivityCard(activity: FriendActivity) {
-    ElevatedCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                val text = if (activity.action == "rated" && activity.metadata.rating != null) {
-                    stringResource(R.string.profile_activity_rated, activity.friendName, activity.movieTitle, activity.metadata.rating.toInt())
-                } else {
-                    stringResource(R.string.profile_activity_watched, activity.friendName, activity.movieTitle)
-                }
-                Text(text, style = MaterialTheme.typography.bodyMedium)
-            }
-            if (activity.action == "rated" && activity.metadata.rating != null) {
-                Icon(
-                    Icons.Default.Star,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
+private fun FriendActivityRow(activity: FriendActivity) {
+    val isRated = activity.action == "rated" && activity.metadata.rating != null
+    val description = if (isRated) {
+        stringResource(R.string.profile_activity_row_rated, activity.friendName, activity.metadata.rating!!.toInt())
+    } else {
+        stringResource(R.string.profile_activity_row_watched, activity.friendName)
     }
+
+    MovieListRow(
+        title = activity.movieTitle,
+        posterPath = activity.posterPath,
+        description = description,
+        modifier = Modifier.padding(horizontal = 16.dp)
+    )
 }
 
 // Zajednička AppBottomNavigationBar/SectionHeader komponenta (ui/components) — bez lokalnih

@@ -114,6 +114,8 @@
     <string name="profile_tab_friends">Prijatelji</string>
     <string name="profile_taste_title">Tvoj ukus</string>
     <string name="profile_taste_rating_count">%1$s/10 (%2$d)</string>
+    <string name="profile_taste_show_more_genres">Prikaži još %1$d žanrova</string>
+    <string name="profile_taste_hide_genres">Sakrij ostale žanrove</string>
     <string name="profile_settings_app_section">Postavke aplikacije</string>
     <string name="profile_dark_mode">Tamna tema</string>
     <string name="profile_notifications">Obaveštenja</string>
@@ -142,6 +144,20 @@
     <string name="profile_common_genres">Žanrovi: %1$s</string>
     <string name="profile_activity_rated">%1$s je ocenio/la \"%2$s\" sa %3$d/10</string>
     <string name="profile_activity_watched">%1$s je odgledao/la \"%2$s\"</string>
+    <!-- Faza 7 dorada #2 - poster-red format (MovieListRow), naslov filma je već iznad kao heading -->
+    <string name="profile_activity_row_rated">%1$s je ocenio/la sa %2$d/10</string>
+    <string name="profile_activity_row_watched">%1$s je odgledao/la</string>
+
+    <!-- Faza 7 dorada - uređivanje profila (username jedinstven kao Instagram handle + bio) -->
+    <string name="profile_edit_section_title">Uredi profil</string>
+    <string name="profile_username_label">Korisničko ime</string>
+    <string name="profile_username_helper">3-30 karaktera: slova, brojevi, tačka i donja crta. Mora biti jedinstveno.</string>
+    <string name="profile_bio_label">O meni</string>
+    <string name="profile_bio_helper">%1$d/160 karaktera - kratak opis koji prijatelji vide na tvom profilu.</string>
+    <string name="profile_save_changes">Sačuvaj promene</string>
+    <string name="profile_saving">Čuvanje…</string>
+    <string name="profile_change_avatar">Promeni profilnu sliku</string>
+    <string name="profile_avatar_pick_error">Nije uspelo učitavanje slike. Probaj ponovo.</string>
 
     <!-- Faza 7 redizajna - MovieNightScreen -->
     <string name="movie_night_top_bar_title">Predlozi za zajedničko gledanje</string>

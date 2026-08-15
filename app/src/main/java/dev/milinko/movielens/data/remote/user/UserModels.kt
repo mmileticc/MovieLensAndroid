@@ -12,6 +12,9 @@ data class UserProfile(
     val email: String,
     @SerializedName("avatar")
     val avatar: String? = null,
+    // Faza 7 redizajna - kratak, korisnički konfigurabilan "mini status" ispod imena.
+    @SerializedName("bio")
+    val bio: String? = null,
     @SerializedName("favorite_genres")
     val favoriteGenres: List<String> = emptyList(),
     @SerializedName("stats")
@@ -127,6 +130,9 @@ data class FriendProfileResponse(
     val username: String,
     @SerializedName("avatar_url")
     val avatarUrl: String? = null,
+    // Faza 7 redizajna - prijateljev "mini status", isto polje kao sopstveni UserProfile.bio.
+    @SerializedName("bio")
+    val bio: String? = null,
     @SerializedName("watched_movies")
     val watchedMovies: List<FriendProfileMovie> = emptyList()
 )
@@ -177,6 +183,9 @@ data class FriendActivity(
     val tmdbId: Int,
     @SerializedName("movie_title")
     val movieTitle: String,
+    // Faza 7 dorada - Profile ekran prikazuje poster umesto plain ikonice/rečenice.
+    @SerializedName("poster_path")
+    val posterPath: String? = null,
     @SerializedName("metadata")
     val metadata: ActivityMetadata = ActivityMetadata(),
     @SerializedName("timestamp")

@@ -39,7 +39,10 @@ data class ProfileUiState(
     val isSearchingFriends: Boolean = false,
     val friendActionError: String? = null,
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    // Uređivanje profila (username/bio) - Faza 7 redizajna, MOVIELENS_DESIGN_PLAN.md.
+    val isSavingProfile: Boolean = false,
+    val editProfileError: String? = null
 )
 
 /**
@@ -222,6 +225,50 @@ class ProfileViewModel @Inject constructor(
 
     fun consumeFriendActionError() {
         _uiState.value = _uiState.value.copy(friendActionError = null)
+    }
+
+    /**
+     * Čuva novi username/bio/avatar (Faza 7 redizajna + dorada) - GET/PUT /api/users/{userId}/profile.
+     * Android Retrofit ugovor šalje ceo `UserProfile` objekat (postojeći `updateUserProfile` potpis),
+     * pa ovde uzimamo trenutno učitan profil kao osnovu i menjamo username/bio (i avatar, samo ako
+     * je korisnik stvarno izabrao novu sliku - `newAvatarDataUri == null` znači "ostavi trenutnu
+     * sliku netaknutu", videti `UserDao.updateProfile` na backendu). Backend ionako ignoriše ostala
+     * polja (stats/favoriteGenres se uvek izvode server-side, ne pišu se ovom rutom). Greška (npr.
+     * "Korisničko ime je već zauzeto") se vraća sa backend-a kroz `UserRepositoryImpl.parseErrorMessage`
+     * i prikazuje se direktno korisniku.
+     */
+    fun updateProfile(username: String, bio: String?, newAvatarDataUri: String? = null) {
+        val userId = sessionManager.getUserId() ?: return
+        val current = _uiState.value.userProfile
+        val base = current ?: dev.milinko.movielens.data.remote.user.UserProfile(
+            userId = userId,
+            username = username,
+            email = sessionManager.getEmail() ?: ""
+        )
+        val body = base.copy(
+            username = username,
+            bio = bio,
+            avatar = newAvatarDataUri ?: base.avatar
+        )
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSavingProfile = true, editProfileError = null)
+            userRepository.updateUserProfile(userId, body)
+                .onSuccess { updated ->
+                    _uiState.value = _uiState.value.copy(isSavingProfile = false, userProfile = updated)
+                    _events.emit(ProfileUiEvent.ShowMessage("Profil je sačuvan."))
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        isSavingProfile = false,
+                        editProfileError = e.message ?: "Greška pri čuvanju profila"
+                    )
+                }
+        }
+    }
+
+    fun consumeEditProfileError() {
+        _uiState.value = _uiState.value.copy(editProfileError = null)
     }
 
     private fun refreshRoutesState() {
