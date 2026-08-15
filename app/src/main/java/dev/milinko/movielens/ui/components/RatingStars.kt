@@ -12,13 +12,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import dev.milinko.movielens.R
 
 /**
  * Red od 10 zvezdica (1-10 skala, ista kao backend) - tap na zvezdicu N postavlja ocenu N.
  * Zajednička komponenta (MovieDetailScreen + Library/Istorija tab) - videti MOVIELENS_ROADMAP.md,
  * ranije je postojala samo kao privatna komponenta na MovieDetailScreen.
+ *
+ * Faza 6 redizajna: boja popunjene zvezdice je sad `MaterialTheme.colorScheme.secondary` umesto
+ * hardkodovanog Color(0xFFF5C518) literala - u novoj temi je secondary = MlAccentGold (ista
+ * vrednost), ali sad ide preko teme radi doslednosti/održivosti. contentDescription prebačen u
+ * strings.xml (rating_stars_content_description) po novoj konvenciji lokalizacije.
  */
 @Composable
 fun RatingStars(rating: Int, onRate: (Int) -> Unit, modifier: Modifier = Modifier) {
@@ -34,8 +40,8 @@ fun RatingStars(rating: Int, onRate: (Int) -> Unit, modifier: Modifier = Modifie
             ) {
                 Icon(
                     imageVector = if (i <= rating) Icons.Default.Star else Icons.Default.StarBorder,
-                    contentDescription = "Oceni sa $i",
-                    tint = if (i <= rating) Color(0xFFF5C518) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    contentDescription = stringResource(R.string.rating_stars_content_description, i),
+                    tint = if (i <= rating) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
             }

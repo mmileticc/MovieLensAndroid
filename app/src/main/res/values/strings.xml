@@ -1,3 +1,15 @@
 <resources>
     <string name="app_name">MovieLens</string>
+
+    <!-- Faza 6 redizajna - deljene komponente (ui/components). Konvencija od ove faze nadalje:
+         sav novi/dodirnut tekst ide u ovaj fajl, radi buduće višejezičnosti (videti
+         MOVIELENS_DESIGN_PLAN.md 5.1). -->
+    <string name="rating_stars_content_description">Oceni sa %1$d</string>
+    <string name="premium_badge_content_description">Premium funkcija</string>
+
+    <!-- Faza 3 redizajna - AppBottomNavigationBar -->
+    <string name="nav_home">Home</string>
+    <string name="nav_search">Pretraga</string>
+    <string name="nav_library">Biblioteka</string>
+    <string name="nav_profile">Profil</string>
 </resources>
