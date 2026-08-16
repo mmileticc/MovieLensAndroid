@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
@@ -43,6 +44,7 @@ import dev.milinko.movielens.ui.components.AppBottomNavigationBar
 import dev.milinko.movielens.ui.components.BottomNavTab
 import dev.milinko.movielens.ui.components.MovieListRow
 import dev.milinko.movielens.ui.components.RatingStars
+import dev.milinko.movielens.ui.components.SignInRequiredState
 import kotlinx.coroutines.launch
 
 /**
@@ -58,7 +60,8 @@ fun LibraryScreen(
     onNavigateToDetail: (Int) -> Unit,
     onNavigateToHome: () -> Unit,
     onNavigateToSearch: () -> Unit,
-    onNavigateToProfile: () -> Unit
+    onNavigateToProfile: () -> Unit,
+    onNavigateToSignIn: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -68,9 +71,17 @@ fun LibraryScreen(
 
     Scaffold(
         topBar = {
+            // Bug fix (17. avgust 2026, korisnička žalba): ovo je custom Row, ne Material3
+            // TopAppBar - Material3 TopAppBar sam po sebi konzumira status bar inset preko
+            // svog windowInsets parametra, ali plain Row to ne radi automatski. Pošto
+            // MainActivity zove enableEdgeToEdge(), sadržaj se crta ispod statusne trake, pa
+            // je naslov bez ove linije bio zalepljen skroz za vrh ekrana (ispod notch-a/sata) -
+            // isti bug postojao je na svih 5 ekrana sa custom topBar-om (Library, Profile,
+            // Movie Detail, Friend Profile, Movie Night), popravljeno svuda odjednom.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -102,16 +113,15 @@ fun LibraryScreen(
                 .background(MaterialTheme.colorScheme.background)
         ) {
             if (uiState.requiresSignIn) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.library_sign_in_required),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                // Dorada (17. avgust 2026, korisnička žalba) - zamenjen goli tekstualni red
+                // deljenim SignInRequiredState prikazom (ikonica + naslov + poruka + dugme za
+                // prijavu), isti obrazac sad koristi i Profile kad korisnik nije prijavljen.
+                SignInRequiredState(
+                    title = stringResource(R.string.library_sign_in_required),
+                    message = stringResource(R.string.library_sign_in_required_message),
+                    buttonText = stringResource(R.string.profile_sign_in),
+                    onSignInClick = onNavigateToSignIn
+                )
             } else {
                 // Svajp između tabova (pored klika na naslov kartice), isti obrazac kao Profile.
                 val pagerState = rememberPagerState(pageCount = { 2 })

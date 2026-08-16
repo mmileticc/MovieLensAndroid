@@ -131,7 +131,8 @@ fun MovieLensNavHost(
                 },
                 onNavigateToHome = { navController.navigateBottomTab(Screen.Home.route) },
                 onNavigateToSearch = { navController.navigateBottomTab(Screen.Search.route) },
-                onNavigateToProfile = { navController.navigateBottomTab(Screen.Profile.route) }
+                onNavigateToProfile = { navController.navigateBottomTab(Screen.Profile.route) },
+                onNavigateToSignIn = { navController.navigate(Screen.SignIn.createRoute(Screen.Library.route)) }
             )
         }
 

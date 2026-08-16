@@ -1,4 +1,9 @@
 package dev.milinko.movielens.ui.home
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,16 +18,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 // ...existing imports...
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -31,10 +37,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 // ...existing code...
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -47,6 +53,7 @@ import dev.milinko.movielens.ui.components.BottomNavTab
 import dev.milinko.movielens.ui.components.MovieListRow
 import dev.milinko.movielens.ui.components.MoviePosterCard
 import dev.milinko.movielens.ui.components.SectionHeader
+import kotlinx.coroutines.launch
 // ...existing code...
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,6 +66,8 @@ fun HomeScreen(
     onNavigateToProfile: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
 
     // Ako popularni filmovi nisu uspeli da se učitaju na paljenje app-a (npr. hladan start
     // backend-a) ovo je jedina prilika da se ponovo pokuša - HomeViewModel inače živi celu sesiju
@@ -69,24 +78,33 @@ fun HomeScreen(
 
     Scaffold(
         floatingActionButton = {
-            // Faza 4 redizajna: boja iz teme (accentPrimary) umesto inline hex-a, + suptilan
-            // crveni "glow" (jedini dozvoljeni drop-shadow u dizajn sistemu, videti
-            // MOVIELENS_DESIGN_PLAN.md 1.3 - "premium" osećaj na primarnim akcijama).
-            FloatingActionButton(
-                onClick = { onNavigateToSearch() },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier
-                    .padding(16.dp)
-                    .size(56.dp)
-                    .shadow(
-                        elevation = 12.dp,
-                        shape = CircleShape,
-                        ambientColor = MaterialTheme.colorScheme.primary,
-                        spotColor = MaterialTheme.colorScheme.primary
-                    )
+            // Dorada (17. avgust 2026, korisnička žalba "nema potrebe za lupicom") - FAB za
+            // pretragu uklonjen, pretraga je već dostupna preko donje navigacije (Search tab) pa
+            // je FAB bio suvišan drugi ulaz za istu akciju. Zamenjen dugmetom "nazad na vrh" koje
+            // se pojavljuje tek kad korisnik dovoljno odskroluje nadole (isti obrazac kao većina
+            // aplikacija sa dugim skrolom) - nema razloga da zauzima prostor dok je vrh liste već
+            // vidljiv. `SmallFloatingActionButton` sa `surfaceVariant` bojom (ne crveni `primary`
+            // glow rezervisan za glavne CTA akcije, videti MOVIELENS_DESIGN_PLAN.md 1.3) jer je ovo
+            // sporedna, ne primarna akcija.
+            val showScrollToTop by remember {
+                derivedStateOf { listState.firstVisibleItemIndex > 2 }
+            }
+            AnimatedVisibility(
+                visible = showScrollToTop,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut()
             ) {
-                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.home_fab_search_content_description))
+                SmallFloatingActionButton(
+                    onClick = { coroutineScope.launch { listState.animateScrollToItem(0) } },
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Icon(
+                        Icons.Default.KeyboardArrowUp,
+                        contentDescription = stringResource(R.string.home_scroll_to_top_content_description)
+                    )
+                }
             }
         },
         bottomBar = {
@@ -103,8 +121,6 @@ fun HomeScreen(
             )
         }
     ) { paddingValues ->
-        val listState = rememberLazyListState()
-
         // Beskonačan skrol: kad je poslednja vidljiva stavka blizu kraja liste, tražimo sledeću
         // TMDB stranicu. derivedStateOf da se ovo ne preračunava na svaki recompose, samo kad se
         // stvarno promeni indeks poslednje vidljive stavke.
@@ -145,19 +161,33 @@ fun HomeScreen(
 
             // Search / scan lives on the Search screen. Home keeps a quick FAB for search.
 
+            // Dizajn dorada (17. avgust 2026, korisnička žalba "izgleda nabacano") - trake su
+            // ranije bile samo tekstualni naslov + red kartica direktno na pozadini, bez ikakve
+            // vizuelne granice između sekcija. Svaka traka je sad u ElevatedCard-u - ISTI obrazac
+            // koji već koriste Profile (SettingsSection, FriendCard) i Library ekrani ("elevacija
+            // preko svetline površine, ne senki", videti MOVIELENS_DESIGN_PLAN.md 1.2/1.3) - Home
+            // je bio jedini ekran koji taj obrazac nije koristio. "Popularno" ostaje van kartice
+            // (plain lista, kao Library watchlist/history) jer je to glavni, dugačak, beskonačno-
+            // skrolujući sadržaj, ne kratka traka za pregled - razdvojen je debljom linijom
+            // (HorizontalDivider) umesto kartice da se ne pravi jedna ogromna kartica koja raste
+            // unedogled.
             if (uiState.personalizedMovies.isNotEmpty()) {
                 item {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    SectionHeader(
-                        title = stringResource(R.string.home_section_personalized),
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                    LazyRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(uiState.personalizedMovies, key = { it.tmdbId }) { movie ->
-                            PersonalizedMovieCard(movie = movie, onClick = { onNavigateToDetail(movie.tmdbId) })
+                    Spacer(modifier = Modifier.height(20.dp))
+                    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            SectionHeader(
+                                title = stringResource(R.string.home_section_personalized),
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(uiState.personalizedMovies, key = { it.tmdbId }) { movie ->
+                                    PersonalizedMovieCard(movie = movie, onClick = { onNavigateToDetail(movie.tmdbId) })
+                                }
+                            }
                         }
                     }
                 }
@@ -165,17 +195,21 @@ fun HomeScreen(
 
             if (uiState.nowInCinemas.isNotEmpty()) {
                 item {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    SectionHeader(
-                        title = stringResource(R.string.home_section_now_in_cinemas),
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                    LazyRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(uiState.nowInCinemas, key = { it.tmdbId }) { movie ->
-                            NowInCinemasCard(movie = movie, onClick = { onNavigateToDetail(movie.tmdbId) })
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            SectionHeader(
+                                title = stringResource(R.string.home_section_now_in_cinemas),
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(uiState.nowInCinemas, key = { it.tmdbId }) { movie ->
+                                    NowInCinemasCard(movie = movie, onClick = { onNavigateToDetail(movie.tmdbId) })
+                                }
+                            }
                         }
                     }
                 }
@@ -183,24 +217,30 @@ fun HomeScreen(
 
             if (uiState.watchlistPreview.isNotEmpty()) {
                 item {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    SectionHeader(
-                        title = stringResource(R.string.home_section_continue_watching),
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                    LazyRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(uiState.watchlistPreview, key = { it.tmdbId }) { item ->
-                            WatchlistPreviewCard(item = item, onClick = { onNavigateToDetail(item.tmdbId) })
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            SectionHeader(
+                                title = stringResource(R.string.home_section_continue_watching),
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(uiState.watchlistPreview, key = { it.tmdbId }) { item ->
+                                    WatchlistPreviewCard(item = item, onClick = { onNavigateToDetail(item.tmdbId) })
+                                }
+                            }
                         }
                     }
                 }
             }
 
             item {
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(28.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(20.dp))
                 SectionHeader(
                     title = stringResource(R.string.home_section_popular),
                     modifier = Modifier.padding(vertical = 8.dp)

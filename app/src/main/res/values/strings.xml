@@ -34,6 +34,8 @@
     <string name="home_section_now_in_cinemas">U bioskopima sada</string>
     <string name="home_section_continue_watching">Nastavi da gledaš</string>
     <string name="home_section_popular">Popularni filmovi</string>
+    <!-- Dorada 17. avgust 2026 - FAB za pretragu zamenjen "nazad na vrh" dugmetom -->
+    <string name="home_scroll_to_top_content_description">Nazad na vrh</string>
 
     <!-- Faza 5 redizajna - MovieDetailScreen -->
     <string name="movie_detail_top_bar_title">Film detalji</string>
@@ -94,6 +96,8 @@
     <!-- Faza 7 redizajna - LibraryScreen -->
     <string name="library_top_bar_title">Biblioteka</string>
     <string name="library_sign_in_required">Uloguj se da vidiš svoju biblioteku</string>
+    <!-- Dorada 17. avgust 2026 - deljeni SignInRequiredState prikaz (videti i profile_sign_in_required_*) -->
+    <string name="library_sign_in_required_message">Prati svoju listu za gledanje i istoriju odgledanih filmova.</string>
     <string name="library_tab_watchlist">Watchlist</string>
     <string name="library_tab_history">Istorija</string>
     <string name="library_watchlist_priority">Prioritet: %1$d</string>
@@ -110,6 +114,9 @@
     <string name="profile_backend_button">Backend</string>
     <string name="profile_sign_out">Odjavi se</string>
     <string name="profile_sign_in">Prijavi se</string>
+    <!-- Dorada 17. avgust 2026 (korisnička žalba: prazan/nefunkcionalan profil umesto jasnog poziva na prijavu) -->
+    <string name="profile_sign_in_required_title">Prijavi se da vidiš svoj profil</string>
+    <string name="profile_sign_in_required_message">Prati svoje ocene, listu za gledanje i prijatelje na jednom mestu.</string>
     <string name="profile_stat_watched">Gledano</string>
     <string name="profile_stat_rated">Ocenjeno</string>
     <string name="profile_stat_friends">Prijatelji</string>

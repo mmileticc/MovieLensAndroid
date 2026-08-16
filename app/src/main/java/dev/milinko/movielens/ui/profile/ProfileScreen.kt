@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -53,7 +54,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,6 +83,7 @@ import dev.milinko.movielens.ui.components.MovieListRow
 import dev.milinko.movielens.ui.components.RemoteAvatarImage
 import dev.milinko.movielens.ui.components.SectionHeader
 import dev.milinko.movielens.ui.components.SettingsDialog
+import dev.milinko.movielens.ui.components.SignInRequiredState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -99,8 +100,6 @@ fun ProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val sessionUser by viewModel.sessionUser.collectAsState()
-    // quick backend editor visible in header for test flows
-    val showBackendDialogGlobal = rememberSaveable { mutableStateOf(false) }
     // Potvrda pre nego što se prijatelj stvarno ukloni - nema pravog "undo" jer bi ponovno
     // dodavanje zahtevalo da druga strana opet prihvati zahtev (nije simetrično kao watched-undo).
     var friendPendingRemoval by remember { mutableStateOf<FriendInfo?>(null) }
@@ -134,9 +133,16 @@ fun ProfileScreen(
             val authUiState by authViewModel.uiState.collectAsState()
             val isSignedIn = authUiState is AuthUiState.SignedIn || authViewModel.isAlreadySignedIn()
 
+            // Bug fix (17. avgust 2026): dodat statusBarsPadding (videti identičan komentar u
+            // LibraryScreen.kt) + uklonjeno duplirano "Backend" dugme koje je otvaralo isti
+            // SettingsDialog kao kartica "Backend URL" na Podešavanja tabu (SettingsSection
+            // ispod) - dve odvojene tačke ulaza za istu funkciju je nepotrebno zauzimalo top bar
+            // i vizuelno zatrpavalo prostor pored Odjavi se/Prijavi se dugmeta. Uređivanje
+            // backend URL-a i dalje postoji, samo na jednom mestu (u tabu).
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -146,10 +152,6 @@ fun ProfileScreen(
                     style = MaterialTheme.typography.headlineSmall
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // quick access to backend editor in top bar
-                    TextButton(onClick = { showBackendDialogGlobal.value = true }) {
-                        Text(stringResource(R.string.profile_backend_button))
-                    }
                     if (isSignedIn) {
                         TextButton(
                             onClick = {
@@ -195,61 +197,59 @@ fun ProfileScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // Faza 7 dorada #3 (korisnička žalba: gornja polovina - avatar header i "Tvoj ukus" -
-            // je bila fiksna iznad tab reda, previše prostora oduzima i ne može da se sakrije
-            // skrolom, a i sadržaj otvorenog "Prikaži još žanrova" je bio odsečen jer je živeo u
-            // ovom ne-skrolujućem Column-u). Header + taste profile su premešteni kao prvi item-i
-            // u LazyColumn svake tab stranice (SettingsTabContent/FriendsTabContent) - sad se
-            // skroluju zajedno sa ostatkom sadržaja i mogu da se sakriju, a expandable sekcija je
-            // deo prave skrolujuće liste. Samo tab red ostaje fiksno prikačen iznad pagera.
-            SecondaryTabRow(
-                selectedTabIndex = pagerState.currentPage,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Tab(
-                    selected = pagerState.currentPage == 0,
-                    onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                    text = { Text(stringResource(R.string.profile_tab_settings)) }
+            if (sessionUser == null) {
+                // Bugfix (17. avgust 2026, korisnička žalba: neulogovan korisnik je ovde ranije
+                // video poluprazan/"pokvaren" EditableProfileHeader - bez username-a, bez
+                // avatara, ništa se ne može ni sačuvati bez tokena, izgledalo je kao neki
+                // generički nefunkcionalan korisnik umesto jasne poruke). Isti deljeni
+                // SignInRequiredState prikaz kao Library kad tab zahteva prijavu - ne navigira
+                // automatski, samo jasno kaže šta fali i nudi dugme.
+                SignInRequiredState(
+                    title = stringResource(R.string.profile_sign_in_required_title),
+                    message = stringResource(R.string.profile_sign_in_required_message),
+                    buttonText = stringResource(R.string.profile_sign_in),
+                    onSignInClick = onNavigateToSignIn
                 )
-                Tab(
-                    selected = pagerState.currentPage == 1,
-                    onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
-                    text = { Text(stringResource(R.string.profile_tab_friends)) }
-                )
-            }
-
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.weight(1f)
-            ) { page ->
-                when (page) {
-                    0 -> SettingsTabContent(uiState, sessionUser, viewModel, onSignOut)
-                    1 -> FriendsTabContent(
-                        uiState = uiState,
-                        sessionUser = sessionUser,
-                        viewModel = viewModel,
-                        onNavigateToFriendProfile = onNavigateToFriendProfile,
-                        onRemoveFriend = { friendPendingRemoval = it }
+            } else {
+                // Faza 7 dorada #3 (korisnička žalba: gornja polovina - avatar header i "Tvoj ukus" -
+                // je bila fiksna iznad tab reda, previše prostora oduzima i ne može da se sakrije
+                // skrolom, a i sadržaj otvorenog "Prikaži još žanrova" je bio odsečen jer je živeo u
+                // ovom ne-skrolujućem Column-u). Header + taste profile su premešteni kao prvi item-i
+                // u LazyColumn svake tab stranice (SettingsTabContent/FriendsTabContent) - sad se
+                // skroluju zajedno sa ostatkom sadržaja i mogu da se sakriju, a expandable sekcija je
+                // deo prave skrolujuće liste. Samo tab red ostaje fiksno prikačen iznad pagera.
+                SecondaryTabRow(
+                    selectedTabIndex = pagerState.currentPage,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Tab(
+                        selected = pagerState.currentPage == 0,
+                        onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                        text = { Text(stringResource(R.string.profile_tab_settings)) }
+                    )
+                    Tab(
+                        selected = pagerState.currentPage == 1,
+                        onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                        text = { Text(stringResource(R.string.profile_tab_friends)) }
                     )
                 }
-            }
-        }
 
-        // Backend dialog - renderovan izvan Column-a
-        if (showBackendDialogGlobal.value) {
-            val savedRoutes by viewModel.savedRoutes.collectAsState()
-            val baseUrl by viewModel.baseUrl.collectAsState()
-            SettingsDialog(
-                currentUrl = baseUrl,
-                savedRoutes = savedRoutes,
-                onDismiss = { showBackendDialogGlobal.value = false },
-                onSave = {
-                    viewModel.updateBaseUrl(it)
-                    showBackendDialogGlobal.value = false
-                },
-                onAddRoute = { viewModel.addSavedRoute(it) },
-                onDeleteRoute = { viewModel.removeSavedRoute(it) }
-            )
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.weight(1f)
+                ) { page ->
+                    when (page) {
+                        0 -> SettingsTabContent(uiState, sessionUser, viewModel, onSignOut)
+                        1 -> FriendsTabContent(
+                            uiState = uiState,
+                            sessionUser = sessionUser,
+                            viewModel = viewModel,
+                            onNavigateToFriendProfile = onNavigateToFriendProfile,
+                            onRemoveFriend = { friendPendingRemoval = it }
+                        )
+                    }
+                }
+            }
         }
 
         friendPendingRemoval?.let { friend ->
