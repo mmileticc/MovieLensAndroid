@@ -304,9 +304,12 @@ private fun SettingsTabContent(
             }
         }
         item {
-            if (uiState.userSettings != null) {
-                SettingsSection(uiState.userSettings!!, viewModel, onSignOut)
-            }
+            // Faza 2 bugfix (16. avgust 2026) - ranije ovaj ceo odeljak (uklj. "Verzija" i "Backend
+            // URL" kartice, ne samo "Tamna tema") NIKAD nije bio vidljiv, jer je bio uslovljen sa
+            // uiState.userSettings != null, a taj backend poziv nikad nije uspevao (backend nema
+            // /settings rutu). "Tamna tema" je sad čisto lokalno podešavanje pa uslov više nije
+            // potreban - odeljak se uvek prikazuje.
+            SettingsSection(viewModel, onSignOut)
         }
         item {
             Spacer(modifier = Modifier.height(16.dp))
@@ -784,7 +787,6 @@ private fun EditableProfileHeader(
 
 @Composable
 private fun SettingsSection(
-    settings: dev.milinko.movielens.data.remote.user.UserSettings,
     viewModel: ProfileViewModel,
     onSignOut: () -> Unit = {}
 ) {
@@ -802,7 +804,10 @@ private fun SettingsSection(
         // Faza "settings cleanup" (16. avgust 2026, korisnička žalba) - "Obaveštenja" i "Modus
         // štednje podataka" su bili prikazani ali potpuno neožičeni (onCheckedChange = TODO,
         // switch se vizuelno pomeri ali ništa se ne dešava) - uklonjeni dok stvarno ne zažive.
-        // "Tamna tema" ostaje - postaje stvarno funkcionalna u sledećoj fazi (light tema).
+        // "Tamna tema" je sad STVARNO funkcionalna (Faza 2) - čita/piše lokalno preko
+        // ThemePreferences (viewModel.isDarkMode), ne preko backend /settings rute koja nikad
+        // nije postojala.
+        val isDarkMode by viewModel.isDarkMode.collectAsState()
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
@@ -812,7 +817,7 @@ private fun SettingsSection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(stringResource(R.string.profile_dark_mode))
-                Switch(checked = settings.darkMode, onCheckedChange = { viewModel.toggleDarkMode() })
+                Switch(checked = isDarkMode, onCheckedChange = { viewModel.toggleDarkMode() })
             }
         }
 

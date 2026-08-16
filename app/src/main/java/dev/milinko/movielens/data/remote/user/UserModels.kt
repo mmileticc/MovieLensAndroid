@@ -30,19 +30,9 @@ data class UserStats(
     val friendCount: Int = 0
 )
 
-// User Settings
-data class UserSettings(
-    @SerializedName("user_id")
-    val userId: String,
-    @SerializedName("dark_mode")
-    val darkMode: Boolean = true,
-    @SerializedName("notifications")
-    val notifications: Boolean = true,
-    @SerializedName("data_saver_mode")
-    val dataSaverMode: Boolean = false,
-    @SerializedName("language")
-    val language: String = "sr"
-)
+// Napomena: UserSettings/postavke sa backenda su uklonjene (16. avgust 2026, Faza 2) - backend
+// nikad nije imao /settings rutu (potvrđeno pretragom), pa je svaki GET/PUT poziv na nju uvek
+// padao. "Tamna tema" je sad čisto lokalno podešavanje (videti data/pref/ThemePreferences.kt).
 
 // Friends
 data class FriendInfo(

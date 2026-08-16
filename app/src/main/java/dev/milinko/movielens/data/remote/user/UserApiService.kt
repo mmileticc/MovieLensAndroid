@@ -40,18 +40,6 @@ interface UserApiService {
         @Body profile: UserProfile
     ): Response<UserProfile>
 
-    // Settings
-    @GET("api/users/{userId}/settings")
-    suspend fun getUserSettings(
-        @Path("userId") userId: String
-    ): Response<UserSettings>
-
-    @PUT("api/users/{userId}/settings")
-    suspend fun updateUserSettings(
-        @Path("userId") userId: String,
-        @Body settings: UserSettings
-    ): Response<UserSettings>
-
     // Watchlist
     @GET("api/users/{userId}/watchlist")
     suspend fun getWatchlist(

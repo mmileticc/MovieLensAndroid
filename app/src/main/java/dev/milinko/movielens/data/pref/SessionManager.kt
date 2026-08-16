@@ -36,6 +36,21 @@ class SessionManager @Inject constructor(
         }
     }
 
+    /**
+     * Osvežava SAMO keširano ime/avatar (npr. posle uspešnog čuvanja profila ili svežeg
+     * GET /profile odgovora) - bez diranja tokena/firebase uid-a. `saveSession()` se poziva samo
+     * pri loginu, pa je keš avatara/username-a inače zauvek "zamrznut" na trenutak logina - ako
+     * korisnik posle promeni avatar/ime, header koji čita SessionManager (kao trenutni fallback dok
+     * se puni profil sa mreže ne učita) i dalje prikazuje STARU sliku dok se ponovo ne uloguje.
+     * Ovo se poziva svaki put kad stigne svež podatak sa backenda da keš ne zaostaje.
+     */
+    fun updateCachedIdentity(username: String?, avatarUrl: String?) {
+        prefs.edit {
+            putString(KEY_USERNAME, username)
+                .putString(KEY_AVATAR_URL, avatarUrl)
+        }
+    }
+
     fun getAppToken(): String? = prefs.getString(KEY_APP_TOKEN, null)
     fun getUserId(): String? = prefs.getString(KEY_USER_ID, null)
     fun getFirebaseUid(): String? = prefs.getString(KEY_FIREBASE_UID, null)

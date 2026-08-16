@@ -13,7 +13,6 @@ import dev.milinko.movielens.data.remote.user.UpdateHistoryBody
 import dev.milinko.movielens.data.remote.user.UserApiService
 import dev.milinko.movielens.data.remote.user.UserProfile
 import dev.milinko.movielens.data.remote.user.UserSearchResult
-import dev.milinko.movielens.data.remote.user.UserSettings
 import dev.milinko.movielens.data.remote.user.FriendInfo
 import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.data.remote.user.MovieSuggestion
@@ -30,9 +29,6 @@ import javax.inject.Singleton
 interface UserRepository {
     suspend fun getUserProfile(userId: String): Result<UserProfile>
     suspend fun updateUserProfile(userId: String, profile: UserProfile): Result<UserProfile>
-
-    suspend fun getUserSettings(userId: String): Result<UserSettings>
-    suspend fun updateUserSettings(userId: String, settings: UserSettings): Result<UserSettings>
 
     // Offline-first: čita se odmah iz Room keša (instant, radi i bez interneta), getWatchlist
     // ispod ostaje "osveži sa mreže" - poziva se u pozadini, upisuje u isti keš, Flow automatski
@@ -162,24 +158,6 @@ class UserRepositoryImpl @Inject constructor(
             // golog HTTP koda (jedini poziv u repo-u gde je poruka greške stvarno actionable za
             // korisnika, za razliku od ostalih mrežnih poziva ovde).
             throw Exception(response.parseErrorMessage("Ažuriranje profila nije uspelo (${response.code()})"))
-        }
-    }
-
-    override suspend fun getUserSettings(userId: String): Result<UserSettings> = safeApiCall {
-        val response = userApiService.getUserSettings(userId)
-        if (response.isSuccessful) {
-            response.body() ?: throw Exception("Empty response")
-        } else {
-            throw Exception("Get settings failed: ${response.code()}")
-        }
-    }
-
-    override suspend fun updateUserSettings(userId: String, settings: UserSettings): Result<UserSettings> = safeApiCall {
-        val response = userApiService.updateUserSettings(userId, settings)
-        if (response.isSuccessful) {
-            response.body() ?: throw Exception("Empty response")
-        } else {
-            throw Exception("Update settings failed: ${response.code()}")
         }
     }
 

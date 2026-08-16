@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.milinko.movielens.data.pref.SessionManager
+import dev.milinko.movielens.data.pref.ThemePreferences
 import dev.milinko.movielens.data.pref.UrlStorage
 import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.data.remote.user.FriendInfo
@@ -11,7 +12,6 @@ import dev.milinko.movielens.data.remote.user.GenreAffinity
 import dev.milinko.movielens.data.remote.user.PendingRequest
 import dev.milinko.movielens.data.remote.user.UserProfile
 import dev.milinko.movielens.data.remote.user.UserSearchResult
-import dev.milinko.movielens.data.remote.user.UserSettings
 import dev.milinko.movielens.data.repository.UserRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -27,7 +27,6 @@ import javax.inject.Inject
 
 data class ProfileUiState(
     val userProfile: UserProfile? = null,
-    val userSettings: UserSettings? = null,
     val friends: List<FriendInfo> = emptyList(),
     val friendActivity: List<FriendActivity> = emptyList(),
     val pendingRequests: List<PendingRequest> = emptyList(),
@@ -60,11 +59,16 @@ data class SessionUserInfo(
 class ProfileViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val urlStorage: UrlStorage,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val themePreferences: ThemePreferences
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
+
+    // Faza 2 (light tema) - lokalno podešavanje, nezavisno od backend-a (koji nikad nije imao
+    // /settings rutu, videti ThemePreferences.kt), pa Settings sekcija sad uvek može da ga prikaže.
+    val isDarkMode: StateFlow<Boolean> = themePreferences.isDarkMode
 
     private val _sessionUser = MutableStateFlow(readSessionUser())
     val sessionUser: StateFlow<SessionUserInfo?> = _sessionUser.asStateFlow()
@@ -256,6 +260,14 @@ class ProfileViewModel @Inject constructor(
             userRepository.updateUserProfile(userId, body)
                 .onSuccess { updated ->
                     _uiState.value = _uiState.value.copy(isSavingProfile = false, userProfile = updated)
+                    // Bugfix (16. avgust 2026, korisnička žalba: pogrešna/stara slika na svom
+                    // profilu dok se sveži podatak ne učita) - SessionManager keš (avatarUrl,
+                    // username) se ranije upisivao SAMO pri loginu i nikad posle nije osvežavan,
+                    // pa je EditableProfileHeader-ov fallback (dok fullProfile još nije stigao sa
+                    // mreže) prikazivao trajno zastarelu sliku. Sad se keš odmah osveži posle
+                    // uspešnog čuvanja, pa je fallback tačan i pri sledećem otvaranju ekrana.
+                    sessionManager.updateCachedIdentity(updated.username, updated.avatar)
+                    refreshSessionUser()
                     _events.emit(ProfileUiEvent.ShowMessage("Profil je sačuvan."))
                 }
                 .onFailure { e ->
@@ -331,25 +343,31 @@ class ProfileViewModel @Inject constructor(
 
             try {
                 // Svih pet poziva su nezavisna - paralelno umesto sekvencijalno, inače se vreme
-                // čekanja sabira (5x round-trip umesto 1x).
+                // čekanja sabira (5x round-trip umesto 1x). (Ranije je ovde bio i šesti poziv,
+                // getUserSettings - uklonjen jer backend nikad nije imao /settings rutu, pa je
+                // svaki poziv garantovano padao; tema je sad čisto lokalna, videti ThemePreferences.)
                 val profileDeferred = async { userRepository.getUserProfile(userId) }
-                val settingsDeferred = async { userRepository.getUserSettings(userId) }
                 val friendsDeferred = async { userRepository.getFriends(userId) }
                 val activityDeferred = async { userRepository.getFriendActivity(userId) }
                 val pendingDeferred = async { userRepository.getPendingFriendRequests(userId) }
                 val tasteProfileDeferred = async { userRepository.getTasteProfile(userId) }
 
                 val profileResult = profileDeferred.await()
-                val settingsResult = settingsDeferred.await()
                 val friendsResult = friendsDeferred.await()
                 val activityResult = activityDeferred.await()
                 val pendingResult = pendingDeferred.await()
                 val tasteProfileResult = tasteProfileDeferred.await()
 
+                // Isti bugfix kao u updateProfile() - svaki svež profil sa mreže osvežava i
+                // SessionManager keš, da se već postojeće zastarele sesije (npr. avatar promenjen
+                // pre nego što je ovaj fix postojao) same isprave čim se profil jednom uspešno učita.
+                profileResult.getOrNull()?.let { fresh ->
+                    sessionManager.updateCachedIdentity(fresh.username, fresh.avatar)
+                }
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     userProfile = profileResult.getOrNull() ?: _uiState.value.userProfile,
-                    userSettings = settingsResult.getOrNull() ?: _uiState.value.userSettings,
                     friends = friendsResult.getOrNull() ?: _uiState.value.friends,
                     friendActivity = activityResult.getOrNull() ?: _uiState.value.friendActivity,
                     pendingRequests = pendingResult.getOrNull() ?: _uiState.value.pendingRequests,
@@ -363,24 +381,7 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    fun updateSettings(userId: String, settings: UserSettings) {
-        viewModelScope.launch {
-            userRepository.updateUserSettings(userId, settings)
-                .onSuccess {
-                    _uiState.value = _uiState.value.copy(userSettings = it)
-                }
-                .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(error = e.message ?: "Greška pri ažuriranju postavki")
-                }
-        }
-    }
-
     fun toggleDarkMode() {
-        val userId = sessionManager.getUserId() ?: return
-        val currentSettings = _uiState.value.userSettings
-        if (currentSettings != null) {
-            val updated = currentSettings.copy(darkMode = !currentSettings.darkMode)
-            updateSettings(userId, updated)
-        }
+        themePreferences.toggleDarkMode()
     }
 }

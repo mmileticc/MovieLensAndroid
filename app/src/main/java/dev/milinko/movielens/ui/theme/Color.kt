@@ -32,6 +32,18 @@ val MlTextMuted = Color(0xFF6B6B6B)
 // Status
 val MlSuccess = Color(0xFF3DDC84)
 
+// --- Light tema (Faza 2, MOVIELENS_DESIGN_PLAN.md) - iste akcentne boje kao tamna (brend
+// identitet ostaje prepoznatljiv), samo se pozadine/tekst/linije okreću na svetlu varijantu.
+val MlLightBackground = Color(0xFFF7F7F7)
+val MlLightSurfaceElevated1 = Color(0xFFFFFFFF)
+val MlLightSurfaceElevated2 = Color(0xFFEFEFEF)
+
+val MlLightBorder = Color(0x1F000000) // ~12% crno
+
+val MlLightTextPrimary = Color(0xFF1A1A1A)
+val MlLightTextSecondary = Color(0xFF595959)
+val MlLightTextMuted = Color(0xFF8C8C8C)
+
 // --- Stari template ostaje ovde neiskorišćen (dead code, namerno NE brišemo po projektnoj
 // konvenciji "nikad ne brišemo fajlove/kod bez razloga") - ali ništa iz Theme.kt više ne
 // referencira ove vrednosti posle redizajna.
