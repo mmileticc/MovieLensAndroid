@@ -8,6 +8,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dev.milinko.movielens.data.local.AppDatabase
+import dev.milinko.movielens.data.local.GenericCacheDao
 import dev.milinko.movielens.data.local.HistoryDao
 import dev.milinko.movielens.data.local.WatchlistDao
 import javax.inject.Singleton
@@ -33,4 +34,7 @@ object DatabaseModule {
 
     @Provides
     fun provideHistoryDao(db: AppDatabase): HistoryDao = db.historyDao()
+
+    @Provides
+    fun provideGenericCacheDao(db: AppDatabase): GenericCacheDao = db.genericCacheDao()
 }

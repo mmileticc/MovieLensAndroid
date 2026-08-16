@@ -10,6 +10,7 @@ import dev.milinko.movielens.data.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -39,6 +40,13 @@ class FriendProfileViewModel @Inject constructor(
         val myUserId = sessionManager.getUserId() ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+
+            // Faza C (16. avgust 2026) - instant prikaz iz Room keša (radi i offline) dok mreža
+            // osvežava u pozadini, isti obrazac kao ProfileViewModel/MovieDetailViewModel.
+            userRepository.observeCachedFriendProfile(myUserId, friendId).first()?.let { cached ->
+                _uiState.value = _uiState.value.copy(profile = cached)
+            }
+
             userRepository.getFriendProfile(myUserId, friendId)
                 .onSuccess { profile ->
                     _uiState.value = _uiState.value.copy(isLoading = false, profile = profile)

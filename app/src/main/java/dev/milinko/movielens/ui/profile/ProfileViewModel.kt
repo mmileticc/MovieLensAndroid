@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -340,6 +341,20 @@ class ProfileViewModel @Inject constructor(
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+
+            // Faza C (16. avgust 2026, korisnički zahtev "da deluje momentalno pa se pozadinski
+            // sa backom to uradi... i offline stvari") - profil/prijatelji/pending zahtevi/feed
+            // aktivnosti/taste profil su ranije uvek čekali mrežni round-trip pre prvog prikaza.
+            // Sad se prvo čita Room keš (instant, radi i offline) - mrežni pozivi ispod i dalje idu
+            // u pozadini radi osvežavanja/potvrde, `_uiState` se prepisuje svežijim podatkom kad
+            // stigne.
+            _uiState.value = _uiState.value.copy(
+                userProfile = userRepository.observeCachedUserProfile(userId).first() ?: _uiState.value.userProfile,
+                friends = userRepository.observeCachedFriends(userId).first().ifEmpty { _uiState.value.friends },
+                friendActivity = userRepository.observeCachedFriendActivity(userId).first().ifEmpty { _uiState.value.friendActivity },
+                pendingRequests = userRepository.observeCachedPendingRequests(userId).first().ifEmpty { _uiState.value.pendingRequests },
+                tasteProfile = userRepository.observeCachedTasteProfile(userId).first().ifEmpty { _uiState.value.tasteProfile }
+            )
 
             try {
                 // Svih pet poziva su nezavisna - paralelno umesto sekvencijalno, inače se vreme

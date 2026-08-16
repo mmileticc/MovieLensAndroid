@@ -13,6 +13,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -52,11 +53,34 @@ class MovieDetailViewModel @Inject constructor(
             // tražimo je ovde, to radi UI preko sistemskog dijaloga). Ako je nema, showtimes
             // dolaze nesortirani po udaljenosti, ne prazni - to je samo "ukras", ne blokira ništa.
             val location = locationHelper.getLastKnownLocation()
+            val userId = sessionManager.getUserId()
+
+            // Faza C (16. avgust 2026, korisnički zahtev "da deluje momentalno pa se pozadinski
+            // sa backom to uradi") - watchlist/istorija se već keširaju u Room-u (isti keš koji
+            // Library ekran koristi), ovaj ekran ga ranije nije čitao - svaki put je čekao mrežni
+            // round-trip da bi prikazao sopstvenu ocenu/komentar/watchlist status, uvek počinjao od
+            // "nema ocene" pa "skočio" na pravu vrednost kad mreža odgovori. Sad se prvo čita
+            // Room keš (instant, radi i offline), mrežni pozivi ispod i dalje idu u pozadini radi
+            // osvežavanja/potvrde - `onSuccess` blokovi ispod će po potrebi prepisati ovu vrednost
+            // svežijom.
+            if (userId != null) {
+                val cachedHistoryItem = userRepository.observeHistory(userId).first().firstOrNull { it.tmdbId == tmdbId }
+                if (cachedHistoryItem != null) {
+                    _uiState.value = _uiState.value.copy(
+                        isWatched = true,
+                        userRating = cachedHistoryItem.userRating,
+                        userReview = cachedHistoryItem.review
+                    )
+                }
+                val isCachedInWatchlist = userRepository.observeWatchlist(userId).first().any { it.tmdbId == tmdbId }
+                if (isCachedInWatchlist) {
+                    _uiState.value = _uiState.value.copy(isInWatchlist = true)
+                }
+            }
 
             // Detalji filma, watchlist status i istorija (odgledano/ocena) su nezavisni pozivi -
             // paralelno umesto sekvencijalno da ne čekamo tri round-trip-a zaredom.
             val detailDeferred = async { movieRepository.getMovieDetail(tmdbId, location?.latitude, location?.longitude) }
-            val userId = sessionManager.getUserId()
             val watchlistDeferred = userId?.let { async { userRepository.getWatchlist(it) } }
             val historyDeferred = userId?.let { async { userRepository.getHistory(it) } }
             val friendsWatchedDeferred = userId?.let { async { movieRepository.getFriendsWhoWatched(tmdbId) } }

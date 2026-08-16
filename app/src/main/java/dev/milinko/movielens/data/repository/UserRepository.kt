@@ -1,5 +1,7 @@
 package dev.milinko.movielens.data.repository
 
+import dev.milinko.movielens.data.local.GenericCacheDao
+import dev.milinko.movielens.data.local.GenericCacheEntity
 import dev.milinko.movielens.data.local.HistoryDao
 import dev.milinko.movielens.data.local.HistoryEntity
 import dev.milinko.movielens.data.local.WatchlistDao
@@ -20,6 +22,7 @@ import dev.milinko.movielens.data.remote.movie.WatchlistItem
 import dev.milinko.movielens.data.remote.movie.HistoryItem
 import dev.milinko.movielens.util.safeApiCall
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import retrofit2.Response
@@ -29,6 +32,19 @@ import javax.inject.Singleton
 interface UserRepository {
     suspend fun getUserProfile(userId: String): Result<UserProfile>
     suspend fun updateUserProfile(userId: String, profile: UserProfile): Result<UserProfile>
+
+    // Faza C (16. avgust 2026, korisnički zahtev "da deluje momentalno pa se pozadinski sa
+    // backom to uradi... i offline stvari") - isti obrazac kao observeWatchlist/observeHistory
+    // ispod, sad i za profil/prijatelje/pending zahteve/feed aktivnosti/taste profil/profil
+    // prijatelja. `observeCached*` SAMO čita iz Room-a (nikad ne zove mrežu) - ViewModel ga koristi
+    // za trenutni prikaz dok redovan `getXxx()` poziv ispod (nepromenjen) i dalje ide na mrežu u
+    // pozadini i piše sveže podatke nazad u isti keš.
+    fun observeCachedUserProfile(userId: String): Flow<UserProfile?>
+    fun observeCachedFriends(userId: String): Flow<List<FriendInfo>>
+    fun observeCachedPendingRequests(userId: String): Flow<List<PendingRequest>>
+    fun observeCachedFriendActivity(userId: String): Flow<List<FriendActivity>>
+    fun observeCachedTasteProfile(userId: String): Flow<List<GenreAffinity>>
+    fun observeCachedFriendProfile(userId: String, friendId: String): Flow<FriendProfileResponse?>
 
     // Offline-first: čita se odmah iz Room keša (instant, radi i bez interneta), getWatchlist
     // ispod ostaje "osveži sa mreže" - poziva se u pozadini, upisuje u isti keš, Flow automatski
@@ -130,19 +146,73 @@ private fun HistoryItem.toEntity(userId: String) = HistoryEntity(
 class UserRepositoryImpl @Inject constructor(
     private val userApiService: UserApiService,
     private val watchlistDao: WatchlistDao,
-    private val historyDao: HistoryDao
+    private val historyDao: HistoryDao,
+    private val genericCacheDao: GenericCacheDao
 ) : UserRepository {
 
     // Memorijski keš za movienight predloge (userId:friendId -> lista) - popunjava se preko
     // prefetchMovieNightSuggestions kad se otvori profil prijatelja, čita se u
     // getMovieNightSuggestions da MovieNightScreen ne mora da čeka mrežu ako je već prefetch-ovano.
-    // ConcurrentHashMap jer prefetch i stvaran poziv mogu teoretski da se preklope.
+    // ConcurrentHashMap jer prefetch i stvaran poziv mogu teoretski da se preklope. Faza C dodaje
+    // Room ISPOD ovoga kao drugi nivo (memorija se prazni na svaki restart procesa, Room ostaje).
     private val movieNightCache = java.util.concurrent.ConcurrentHashMap<String, List<MovieSuggestion>>()
+
+    // Faza C - deljena Gson instanca za GenericCache (de)serijalizaciju (parseErrorMessage ispod
+    // pravi sopstvenu Gson() instancu za sasvim drugu svrhu - namerno odvojeno, ne deli se).
+    private val cacheGson = Gson()
+
+    private fun profileCacheKey(userId: String) = "profile:$userId"
+    private fun friendsCacheKey(userId: String) = "friends:$userId"
+    private fun pendingCacheKey(userId: String) = "pending:$userId"
+    private fun activityCacheKey(userId: String) = "activity:$userId"
+    private fun tasteCacheKey(userId: String) = "taste:$userId"
+    private fun friendProfileCacheKey(userId: String, friendId: String) = "friendprofile:$userId:$friendId"
+    private fun movieNightCacheKey(userId: String, friendId: String, page: Int) = "movienight:$userId:$friendId:$page"
+
+    override fun observeCachedUserProfile(userId: String): Flow<UserProfile?> =
+        genericCacheDao.observe(profileCacheKey(userId)).map { entity ->
+            entity?.jsonPayload?.let { json -> runCatching { cacheGson.fromJson(json, UserProfile::class.java) }.getOrNull() }
+        }
+
+    override fun observeCachedFriends(userId: String): Flow<List<FriendInfo>> =
+        genericCacheDao.observe(friendsCacheKey(userId)).map { entity ->
+            entity?.jsonPayload?.let { json ->
+                runCatching { cacheGson.fromJson<List<FriendInfo>>(json, object : TypeToken<List<FriendInfo>>() {}.type) }.getOrNull()
+            } ?: emptyList()
+        }
+
+    override fun observeCachedPendingRequests(userId: String): Flow<List<PendingRequest>> =
+        genericCacheDao.observe(pendingCacheKey(userId)).map { entity ->
+            entity?.jsonPayload?.let { json ->
+                runCatching { cacheGson.fromJson<List<PendingRequest>>(json, object : TypeToken<List<PendingRequest>>() {}.type) }.getOrNull()
+            } ?: emptyList()
+        }
+
+    override fun observeCachedFriendActivity(userId: String): Flow<List<FriendActivity>> =
+        genericCacheDao.observe(activityCacheKey(userId)).map { entity ->
+            entity?.jsonPayload?.let { json ->
+                runCatching { cacheGson.fromJson<List<FriendActivity>>(json, object : TypeToken<List<FriendActivity>>() {}.type) }.getOrNull()
+            } ?: emptyList()
+        }
+
+    override fun observeCachedTasteProfile(userId: String): Flow<List<GenreAffinity>> =
+        genericCacheDao.observe(tasteCacheKey(userId)).map { entity ->
+            entity?.jsonPayload?.let { json ->
+                runCatching { cacheGson.fromJson<List<GenreAffinity>>(json, object : TypeToken<List<GenreAffinity>>() {}.type) }.getOrNull()
+            } ?: emptyList()
+        }
+
+    override fun observeCachedFriendProfile(userId: String, friendId: String): Flow<FriendProfileResponse?> =
+        genericCacheDao.observe(friendProfileCacheKey(userId, friendId)).map { entity ->
+            entity?.jsonPayload?.let { json -> runCatching { cacheGson.fromJson(json, FriendProfileResponse::class.java) }.getOrNull() }
+        }
 
     override suspend fun getUserProfile(userId: String): Result<UserProfile> = safeApiCall {
         val response = userApiService.getUserProfile(userId)
         if (response.isSuccessful) {
-            response.body() ?: throw Exception("Empty response")
+            val profile = response.body() ?: throw Exception("Empty response")
+            genericCacheDao.put(GenericCacheEntity(profileCacheKey(userId), cacheGson.toJson(profile)))
+            profile
         } else {
             throw Exception("Get profile failed: ${response.code()}")
         }
@@ -151,7 +221,11 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun updateUserProfile(userId: String, profile: UserProfile): Result<UserProfile> = safeApiCall {
         val response = userApiService.updateUserProfile(userId, profile)
         if (response.isSuccessful) {
-            response.body() ?: throw Exception("Empty response")
+            val updated = response.body() ?: throw Exception("Empty response")
+            // Faza C - i ovde upisujemo u keš (ne samo GET), da observeCachedUserProfile odmah
+            // odražava izmenu, bez čekanja na sledeći loadProfile() network refresh.
+            genericCacheDao.put(GenericCacheEntity(profileCacheKey(userId), cacheGson.toJson(updated)))
+            updated
         } else {
             // Backend vraća konkretnu poruku (npr. "Korisničko ime je već zauzeto") u JSON telu
             // greške ({"error": "..."}) - izvlačimo je da UI može da prikaže nešto korisnije od
@@ -256,7 +330,9 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun getPendingFriendRequests(userId: String): Result<List<PendingRequest>> = safeApiCall {
         val response = userApiService.getPendingFriendRequests(userId)
         if (response.isSuccessful) {
-            response.body()?.requests ?: emptyList()
+            val requests = response.body()?.requests ?: emptyList()
+            genericCacheDao.put(GenericCacheEntity(pendingCacheKey(userId), cacheGson.toJson(requests)))
+            requests
         } else {
             throw Exception("Get pending requests failed: ${response.code()}")
         }
@@ -265,7 +341,9 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun getFriends(userId: String): Result<List<FriendInfo>> = safeApiCall {
         val response = userApiService.getFriends(userId)
         if (response.isSuccessful) {
-            response.body()?.friends ?: emptyList()
+            val friends = response.body()?.friends ?: emptyList()
+            genericCacheDao.put(GenericCacheEntity(friendsCacheKey(userId), cacheGson.toJson(friends)))
+            friends
         } else {
             throw Exception("Get friends failed: ${response.code()}")
         }
@@ -302,7 +380,9 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun getFriendProfile(userId: String, friendId: String): Result<FriendProfileResponse> = safeApiCall {
         val response = userApiService.getFriendProfile(userId, friendId)
         if (response.isSuccessful) {
-            response.body() ?: throw Exception("Empty response")
+            val profile = response.body() ?: throw Exception("Empty response")
+            genericCacheDao.put(GenericCacheEntity(friendProfileCacheKey(userId, friendId), cacheGson.toJson(profile)))
+            profile
         } else {
             throw Exception("Get friend profile failed: ${response.code()}")
         }
@@ -311,7 +391,9 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun getTasteProfile(userId: String): Result<List<GenreAffinity>> = safeApiCall {
         val response = userApiService.getTasteProfile(userId)
         if (response.isSuccessful) {
-            response.body()?.genres ?: emptyList()
+            val genres = response.body()?.genres ?: emptyList()
+            genericCacheDao.put(GenericCacheEntity(tasteCacheKey(userId), cacheGson.toJson(genres)))
+            genres
         } else {
             throw Exception("Get taste profile failed: ${response.code()}")
         }
@@ -320,7 +402,9 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun getFriendActivity(userId: String): Result<List<FriendActivity>> = safeApiCall {
         val response = userApiService.getFriendActivity(userId)
         if (response.isSuccessful) {
-            response.body()?.activities ?: emptyList()
+            val activities = response.body()?.activities ?: emptyList()
+            genericCacheDao.put(GenericCacheEntity(activityCacheKey(userId), cacheGson.toJson(activities)))
+            activities
         } else {
             throw Exception("Get activity failed: ${response.code()}")
         }
@@ -332,11 +416,25 @@ class UserRepositoryImpl @Inject constructor(
         val cacheKey = "$userId:$friendId:$page"
         movieNightCache[cacheKey]?.let { return Result.success(it) }
 
+        // Faza C - drugi nivo keša u Room-u (memorija se prazni na svaki restart procesa/app-a,
+        // Room ostaje) - ako postoji, ubaci i nazad u memoriju da sledeći poziti u istoj sesiji
+        // budu instant bez ponovnog Room čitanja.
+        genericCacheDao.get(movieNightCacheKey(userId, friendId, page))?.jsonPayload?.let { json ->
+            val cached = runCatching {
+                cacheGson.fromJson<List<MovieSuggestion>>(json, object : TypeToken<List<MovieSuggestion>>() {}.type)
+            }.getOrNull()
+            if (cached != null) {
+                movieNightCache[cacheKey] = cached
+                return Result.success(cached)
+            }
+        }
+
         return safeApiCall {
             val response = userApiService.getMovieNightSuggestions(userId, friendId, page)
             if (response.isSuccessful) {
                 val suggestions = response.body()?.suggestions ?: emptyList()
                 movieNightCache[cacheKey] = suggestions
+                genericCacheDao.put(GenericCacheEntity(movieNightCacheKey(userId, friendId, page), cacheGson.toJson(suggestions)))
                 suggestions
             } else {
                 throw Exception("Get suggestions failed: ${response.code()}")
