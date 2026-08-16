@@ -158,6 +158,8 @@
     <string name="profile_saving">Čuvanje…</string>
     <string name="profile_change_avatar">Promeni profilnu sliku</string>
     <string name="profile_avatar_pick_error">Nije uspelo učitavanje slike. Probaj ponovo.</string>
+    <!-- Faza 7 dorada #4 - spojen read-only/edit prikaz profila (EditableProfileHeader) -->
+    <string name="profile_cancel_edit">Otkaži</string>
 
     <!-- Faza 7 redizajna - MovieNightScreen -->
     <string name="movie_night_top_bar_title">Predlozi za zajedničko gledanje</string>

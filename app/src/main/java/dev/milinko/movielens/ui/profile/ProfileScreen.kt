@@ -1,5 +1,6 @@
 package dev.milinko.movielens.ui.profile
 
+import android.annotation.SuppressLint
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -181,7 +182,8 @@ fun ProfileScreen(
         }
     ) { paddingValues ->
         // Svajp između tabova (pored klika na naslov kartice) - HorizontalPager za sadržaj ispod
-        // tab reda, dok header (avatar, taste profile) i sam tab red ostaju fiksni iznad. Tab
+        // tab reda; sam tab red ostaje fiksan iznad pagera, dok header (avatar, taste profile)
+        // sad živi unutar svake tab stranice i skroluje se s njom (Faza 7 dorada #3). Tab
         // indikator boja: videti napomenu u LibraryScreen.kt - nasleđuje colorScheme.primary
         // od Faze 1, bez potrebe za custom indicator kodom.
         val pagerState = rememberPagerState(pageCount = { 2 })
@@ -193,20 +195,13 @@ fun ProfileScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            val fullProfile = uiState.userProfile
-            if (fullProfile != null) {
-                // Backend profil (sa statistikom) kad GET /api/users/{id} bude dostupan.
-                ProfileHeader(fullProfile)
-            } else if (sessionUser != null) {
-                // Dok taj endpoint ne postoji, prikazujemo bar ono što već imamo lokalno
-                // iz Firebase/backend auth exchange-a (ime, email, avatar) — bez čekanja mreže.
-                SessionIdentityHeader(sessionUser!!)
-            }
-
-            if (uiState.tasteProfile.isNotEmpty()) {
-                TasteProfileSection(uiState.tasteProfile)
-            }
-
+            // Faza 7 dorada #3 (korisnička žalba: gornja polovina - avatar header i "Tvoj ukus" -
+            // je bila fiksna iznad tab reda, previše prostora oduzima i ne može da se sakrije
+            // skrolom, a i sadržaj otvorenog "Prikaži još žanrova" je bio odsečen jer je živeo u
+            // ovom ne-skrolujućem Column-u). Header + taste profile su premešteni kao prvi item-i
+            // u LazyColumn svake tab stranice (SettingsTabContent/FriendsTabContent) - sad se
+            // skroluju zajedno sa ostatkom sadržaja i mogu da se sakriju, a expandable sekcija je
+            // deo prave skrolujuće liste. Samo tab red ostaje fiksno prikačen iznad pagera.
             SecondaryTabRow(
                 selectedTabIndex = pagerState.currentPage,
                 modifier = Modifier.fillMaxWidth()
@@ -231,6 +226,7 @@ fun ProfileScreen(
                     0 -> SettingsTabContent(uiState, sessionUser, viewModel, onSignOut)
                     1 -> FriendsTabContent(
                         uiState = uiState,
+                        sessionUser = sessionUser,
                         viewModel = viewModel,
                         onNavigateToFriendProfile = onNavigateToFriendProfile,
                         onRemoveFriend = { friendPendingRemoval = it }
@@ -289,13 +285,23 @@ private fun SettingsTabContent(
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
-            // Faza 7 dorada (korisnička žalba: "u podešavanjima nema ništa") - uređivanje profila
-            // je sad glavni sadržaj ovog taba, iznad ostalih postavki.
-            EditProfileSection(
+            // Faza 7 dorada #4 (korisnička žalba: podaci profila su bili ispisani dvaput - jednom
+            // u read-only header-u, pa odmah ispod opet u "Uredi profil" formi sa istim poljima) -
+            // spojeno u JEDAN prikaz koji olovka-ikonica prebacuje između read-only i edit stanja
+            // (isti obrazac kao u većini appova), umesto stalno vidljive duplirane forme. Zamenjuje
+            // raniji par ProfileHeader/SessionIdentityHeader + EditProfileSection na ovom tabu -
+            // Prijatelji tab i dalje koristi plain ProfileHeader/SessionIdentityHeader (bez edit
+            // afinosti, videti FriendsTabContent).
+            EditableProfileHeader(
                 uiState = uiState,
                 sessionUser = sessionUser,
                 onSave = { username, bio, avatar -> viewModel.updateProfile(username, bio, avatar) }
             )
+        }
+        if (uiState.tasteProfile.isNotEmpty()) {
+            item {
+                TasteProfileSection(uiState.tasteProfile)
+            }
         }
         item {
             if (uiState.userSettings != null) {
@@ -312,11 +318,27 @@ private fun SettingsTabContent(
 @Composable
 private fun FriendsTabContent(
     uiState: ProfileUiState,
+    sessionUser: SessionUserInfo?,
     viewModel: ProfileViewModel,
     onNavigateToFriendProfile: (String) -> Unit,
     onRemoveFriend: (FriendInfo) -> Unit
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item {
+            // Faza 7 dorada #3 - isti header/taste profile kao na Podešavanja tabu, sad deo
+            // skrolujuće liste umesto fiksnog prostora iznad tab reda.
+            val fullProfile = uiState.userProfile
+            if (fullProfile != null) {
+                ProfileHeader(fullProfile)
+            } else if (sessionUser != null) {
+                SessionIdentityHeader(sessionUser)
+            }
+        }
+        if (uiState.tasteProfile.isNotEmpty()) {
+            item {
+                TasteProfileSection(uiState.tasteProfile)
+            }
+        }
         item {
             FriendSearchSection(
                 query = uiState.friendSearchQuery,
@@ -517,28 +539,46 @@ private fun StatItem(value: String, label: String) {
 }
 
 /**
- * Uređivanje profila (Faza 7 dorada) - korisničko ime (jedinstveno kao Instagram handle, videti
- * `UserDao.updateProfile` na backendu) i kratak "o meni" opis. `username`/`bio` polja se
- * inicijalizuju iz `uiState.userProfile` (ili session fallback-a dok se profil ne učita) i drže se
- * u lokalnom stanju dok korisnik kuca - `remember(uiState.userProfile?.userId)` ih resetuje samo
- * kad se prvi put učita profil drugog korisnika (u praksi: nikad, ovo je uvek sopstveni profil),
- * ne pri svakom osvežavanju posle uspešnog čuvanja.
+ * Header + uređivanje profila, spojeni u JEDAN prikaz (Faza 7 dorada #4 - korisnička žalba: gore
+ * je stajao read-only header sa slikom/username-om/bio-jem, pa odmah ispod ISTI podaci ponovo kao
+ * editabilna forma - redundantno). Olovka-ikonica prebacuje između read-only prikaza (isto što je
+ * ranije crtao `ProfileHeader`) i edit stanja (isto polja kao ranija `EditProfileSection`), isti
+ * obrazac kao "tap to edit" u većini appova - umesto dve stalno vidljive kopije istih podataka.
+ *
+ * Default `username` (kad korisnik nikad nije sam postavio ime) se sad provlači kroz
+ * `sanitizeUsername` PRE nego što uđe u tekstualno polje - korisnička žalba: default je bio sirovo
+ * Google ime ("Miloš Miletić", razmak + dijakritika), pa je čuvanje BILO KOJE izmene (čak i kad
+ * korisnik menja samo sliku ili bio, ne dodiruje username polje) padalo na backend regex proveru.
+ * Sanitizacija je idempotentna za već validne username-e, pa ne dira ništa što korisnik sam postavi.
+ *
+ * `username`/`bio`/`pickedAvatarDataUri` se drže u lokalnom stanju sa `isEditing` kao delom ključa
+ * (`remember(fullProfile?.userId, isEditing)`) - svaki ulazak u edit mod kreće od SVEŽIH vrednosti
+ * iz `uiState`, što automatski odbacuje neposlate izmene kad korisnik pritisne "Otkaži" (izlazak pa
+ * ponovni ulazak u edit mod re-inicijalizuje state, ne pamti prethodni draft).
  */
+@SuppressLint("LocalContextGetResourceValueCall")
 @Composable
-private fun EditProfileSection(
+private fun EditableProfileHeader(
     uiState: ProfileUiState,
     sessionUser: SessionUserInfo?,
     onSave: (username: String, bio: String?, newAvatarDataUri: String?) -> Unit
 ) {
-    val initialUsername = uiState.userProfile?.username ?: sessionUser?.username ?: ""
-    val initialBio = uiState.userProfile?.bio ?: ""
-    val initialAvatar = uiState.userProfile?.avatar ?: sessionUser?.avatarUrl
-    var username by remember(uiState.userProfile?.userId) { mutableStateOf(initialUsername) }
-    var bio by remember(uiState.userProfile?.userId) { mutableStateOf(initialBio) }
+    val fullProfile = uiState.userProfile
+    val rawDefaultUsername = fullProfile?.username ?: sessionUser?.username ?: ""
+    val initialUsername = remember(rawDefaultUsername) {
+        dev.milinko.movielens.util.sanitizeUsername(rawDefaultUsername)
+    }
+    val initialBio = fullProfile?.bio ?: ""
+    val initialAvatar = fullProfile?.avatar ?: sessionUser?.avatarUrl
+    val displayEmail = fullProfile?.email ?: sessionUser?.email
+
+    var isEditing by remember { mutableStateOf(false) }
+    var username by remember(fullProfile?.userId, isEditing) { mutableStateOf(initialUsername) }
+    var bio by remember(fullProfile?.userId, isEditing) { mutableStateOf(initialBio) }
 
     // Slika izabrana OVOG puta (data URI, već kompresovana) - null dok korisnik ne izabere novu
     // sliku, u kom slučaju se šalje trenutna (initialAvatar) nepromenjena (videti ViewModel.updateProfile).
-    var pickedAvatarDataUri by remember(uiState.userProfile?.userId) { mutableStateOf<String?>(null) }
+    var pickedAvatarDataUri by remember(fullProfile?.userId, isEditing) { mutableStateOf<String?>(null) }
     var isCompressingAvatar by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -563,114 +603,182 @@ private fun EditProfileSection(
         }
     )
 
+    // Vrati se u read-only prikaz čim se čuvanje uspešno završi (bez greške) - korisnik ne mora
+    // sam da zatvara edit mod posle uspešnog Sačuvaj klika.
+    var wasSaving by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState.isSavingProfile) {
+        if (wasSaving && !uiState.isSavingProfile && uiState.editProfileError == null) {
+            isEditing = false
+        }
+        wasSaving = uiState.isSavingProfile
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = stringResource(R.string.profile_edit_section_title),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .padding(bottom = 16.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(88.dp)
-                    .clip(CircleShape)
-                    .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                    .clickable(enabled = !isCompressingAvatar) {
-                        photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    }
-            ) {
-                val previewAvatar = pickedAvatarDataUri ?: initialAvatar
-                if (isCompressingAvatar) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(modifier = Modifier.size(28.dp))
-                    }
-                } else if (!previewAvatar.isNullOrBlank()) {
-                    RemoteAvatarImage(
-                        url = previewAvatar,
-                        contentDescription = stringResource(R.string.profile_edit_section_title),
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize().clip(CircleShape)
-                    )
-                } else {
-                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.primary) {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize().padding(18.dp),
-                            tint = MaterialTheme.colorScheme.onPrimary
+        if (isEditing) {
+            Box(modifier = Modifier.padding(bottom = 16.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(88.dp)
+                        .clip(CircleShape)
+                        .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                        .clickable(enabled = !isCompressingAvatar) {
+                            photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        }
+                ) {
+                    val previewAvatar = pickedAvatarDataUri ?: initialAvatar
+                    if (isCompressingAvatar) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                        }
+                    } else if (!previewAvatar.isNullOrBlank()) {
+                        RemoteAvatarImage(
+                            url = previewAvatar,
+                            contentDescription = stringResource(R.string.profile_edit_section_title),
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize().clip(CircleShape)
                         )
+                    } else {
+                        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.primary) {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize().padding(18.dp),
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
                     }
                 }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.secondary)
+                        .border(2.dp, MaterialTheme.colorScheme.background, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = stringResource(R.string.profile_change_avatar),
+                        tint = MaterialTheme.colorScheme.onSecondary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
             }
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.secondary)
-                    .border(2.dp, MaterialTheme.colorScheme.background, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.Edit,
-                    contentDescription = stringResource(R.string.profile_change_avatar),
-                    tint = MaterialTheme.colorScheme.onSecondary,
-                    modifier = Modifier.size(14.dp)
+
+            OutlinedTextField(
+                value = username,
+                onValueChange = { username = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.profile_username_label)) },
+                supportingText = { Text(stringResource(R.string.profile_username_helper)) },
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = bio,
+                onValueChange = { if (it.length <= 160) bio = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.profile_bio_label)) },
+                supportingText = { Text(stringResource(R.string.profile_bio_helper, bio.length)) },
+                minLines = 2,
+                maxLines = 4
+            )
+
+            if (uiState.editProfileError != null) {
+                Text(
+                    text = uiState.editProfileError,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AppButton(
+                    text = stringResource(R.string.profile_cancel_edit),
+                    onClick = { isEditing = false },
+                    variant = AppButtonVariant.Secondary,
+                    modifier = Modifier.weight(1f)
+                )
+                AppButton(
+                    text = stringResource(
+                        if (uiState.isSavingProfile) R.string.profile_saving else R.string.profile_save_changes
+                    ),
+                    onClick = { onSave(username.trim(), bio.trim().ifBlank { null }, pickedAvatarDataUri) },
+                    enabled = !uiState.isSavingProfile && !isCompressingAvatar && username.isNotBlank(),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        } else {
+            BorderedAvatar(avatarUrl = initialAvatar, fallbackLabel = initialUsername)
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = fullProfile?.username?.takeIf { it.isNotBlank() }
+                        ?: initialUsername.ifBlank { null }
+                        ?: stringResource(R.string.profile_default_username),
+                    style = MaterialTheme.typography.titleLarge
+                )
+                IconButton(onClick = { isEditing = true }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = stringResource(R.string.profile_edit_section_title),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            displayEmail?.takeIf { it.isNotBlank() }?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (!initialBio.isNullOrBlank()) {
+                Text(
+                    text = initialBio,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp, start = 24.dp, end = 24.dp)
+                )
+            }
+
+            if (fullProfile != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    StatItem("${fullProfile.stats.moviesWatched}", stringResource(R.string.profile_stat_watched))
+                    StatItem("${fullProfile.stats.moviesRated}", stringResource(R.string.profile_stat_rated))
+                    StatItem("${fullProfile.stats.friendCount}", stringResource(R.string.profile_stat_friends))
+                }
+                if (fullProfile.favoriteGenres.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = stringResource(R.string.profile_favorite_genres, fullProfile.favoriteGenres.joinToString(", ")),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
 
-        OutlinedTextField(
-            value = username,
-            onValueChange = { username = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(stringResource(R.string.profile_username_label)) },
-            supportingText = { Text(stringResource(R.string.profile_username_helper)) },
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = bio,
-            onValueChange = { if (it.length <= 160) bio = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(stringResource(R.string.profile_bio_label)) },
-            supportingText = { Text(stringResource(R.string.profile_bio_helper, bio.length)) },
-            minLines = 2,
-            maxLines = 4
-        )
-
-        if (uiState.editProfileError != null) {
-            Text(
-                text = uiState.editProfileError,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        AppButton(
-            text = stringResource(
-                if (uiState.isSavingProfile) R.string.profile_saving else R.string.profile_save_changes
-            ),
-            onClick = { onSave(username.trim(), bio.trim().ifBlank { null }, pickedAvatarDataUri) },
-            enabled = !uiState.isSavingProfile && !isCompressingAvatar && username.isNotBlank(),
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        HorizontalDivider(modifier = Modifier.padding(top = 20.dp))
+        HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
     }
 }
 
