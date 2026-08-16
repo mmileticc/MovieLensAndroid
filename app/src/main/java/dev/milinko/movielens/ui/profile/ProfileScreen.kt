@@ -969,9 +969,31 @@ private fun FriendCard(
  * isti sklopivi obrazac kao showtimes na Movie Detail-u i sekundarni pogoci na Search-u, u
  * originalnom vertikalnom stilu (žanr + ocena + traka po redu) kad se razvije.
  */
+// Videti komentar u TasteProfileSection ispod - "kazna po neizvesnosti" konstanta, veće = agresivnije
+// kažnjava žanrove sa malo filmova (podesivo ako se ponašanje pokaže presurovo/preblago u praksi).
+private const val TASTE_CONFIDENCE_PENALTY_Z = 1.5
+
 @Composable
 private fun TasteProfileSection(genres: List<GenreAffinity>) {
-    val sorted = remember(genres) { genres.sortedByDescending { it.averageRating } }
+    // Bugfix (16. avgust 2026, korisnički zahtev - "Western 10 a to je sporedna odlika jednog filma
+    // koji je najmanje western"), dorada #2 - korisnik je konkretnim primerom pokazao da prvi pokušaj
+    // - Bayesian shrinkage ka globalnom proseku - NIJE bio dovoljan: npr. Fantasy(10.0, 1 film) je i
+    // dalje bio iznad Action(9.5, 4 filma), jer shrinkage-ka-proseku matematički NE MOŽE da obrne
+    // redosled dva žanra čiji sirovi proseci padaju sa suprotnih strana globalnog proseka - žanr
+    // iznad proseka se povlači naniže ka proseku ali nikad ne padne ISPOD njega samo zbog malog
+    // uzorka, pa žanr ispod proseka (čak i sa mnogo filmova) ne može da ga prestigne.
+    //
+    // Zato sad umesto "povuci ka proseku" koristimo "kazni po neizvesnosti" - oduzimamo
+    // CONFIDENCE_PENALTY_Z / sqrt(movieCount) direktno od ocene (isti duh kao Wilson/lower-confidence-
+    // bound rangiranje - Reddit/Rotten Tomatoes stil). Kazna ne zavisi od drugih žanrova (nema
+    // "proseka" u igri), pa žanr sa 1 filmom uvek dobija veliku kaznu (kod z=1.5, n=1 -> -1.5) dok
+    // žanr sa 4-6 filmova dobija mnogo manju (n=4 -> -0.75, n=6 -> -0.61) - dovoljno da Action(9.5,4)
+    // i Adventure(9.2,6) prestignu Fantasy(10.0,1) u ovom konkretnom primeru.
+    val sorted = remember(genres) {
+        genres.sortedByDescending { affinity ->
+            affinity.averageRating - TASTE_CONFIDENCE_PENALTY_Z / kotlin.math.sqrt(affinity.movieCount.toDouble())
+        }
+    }
     val remaining = sorted.drop(3)
     var expanded by remember { mutableStateOf(false) }
 
