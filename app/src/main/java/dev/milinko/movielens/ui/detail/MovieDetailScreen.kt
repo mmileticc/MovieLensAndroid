@@ -200,7 +200,10 @@ fun MovieDetailScreen(
                     style = MaterialTheme.typography.titleMedium
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(uiState.error!!)
+                // Faza B bugfix - uiState.error!! je nepotreban non-null assertion (uslov iznad
+                // `else if (uiState.error != null)` ga već garantuje, ali `?:` je jeftinije i
+                // otpornije na buduće refaktorisanje ovog if-lanca).
+                Text(uiState.error ?: stringResource(R.string.error_generic_title))
                 Spacer(modifier = Modifier.height(16.dp))
                 AppButton(
                     text = stringResource(R.string.movie_detail_retry),
@@ -208,6 +211,11 @@ fun MovieDetailScreen(
                 )
             }
         } else if (uiState.movieDetail != null) {
+            // Faza B bugfix (16. avgust 2026) - ranije `uiState.movieDetail!!` ponovljeno 9+ puta
+            // (svaki `item{}` blok posebno) - jedan `!!` OVDE (odmah posle već proverenog uslova
+            // gore) i dalje se koristi `movie` svuda ispod, umesto da svaki nested blok sam ponavlja
+            // istu proveru/pretpostavku.
+            val movie = uiState.movieDetail!!
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -221,7 +229,6 @@ fun MovieDetailScreen(
                 // i štedi vertikalni prostor. Ocena/dugmad/RatingStars/prijatelji ostaju ispod hero-a
                 // kao običan sadržaj (doc eksplicitno pominje samo naslov/godina/trajanje na slici).
                 item {
-                    val movie = uiState.movieDetail!!
                     Box(modifier = Modifier.fillMaxWidth().height(340.dp)) {
                         if (movie.posterPath != null) {
                             AsyncImage(
@@ -288,7 +295,6 @@ fun MovieDetailScreen(
                 }
 
                 item {
-                    val movie = uiState.movieDetail!!
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically
@@ -403,7 +409,6 @@ fun MovieDetailScreen(
                 }
 
                 item {
-                    val movie = uiState.movieDetail!!
                     if (movie.genres.isNotEmpty()) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             SectionHeader(
@@ -422,9 +427,9 @@ fun MovieDetailScreen(
                     }
                 }
 
-                if (uiState.movieDetail!!.showtimes.isNotEmpty()) {
+                if (movie.showtimes.isNotEmpty()) {
                     item {
-                        val showtimes = uiState.movieDetail!!.showtimes
+                        val showtimes = movie.showtimes
                         // Dorada posle Faze 6 feedback-a: lista bioskopa je bila ravna i nepregledna
                         // kad ih ima dosta - isti obrazac sažimanja kao sekundarni pogoci na Search
                         // ekranu (prvih ALWAYS_VISIBLE_SHOWTIMES uvek vidljivo, ostatak iza
@@ -477,7 +482,6 @@ fun MovieDetailScreen(
                 }
 
                 item {
-                    val movie = uiState.movieDetail!!
                     Column(modifier = Modifier.padding(16.dp)) {
                         SectionHeader(
                             title = stringResource(R.string.movie_detail_overview_header),
@@ -487,7 +491,7 @@ fun MovieDetailScreen(
                     }
                 }
 
-                if (uiState.movieDetail!!.cast.isNotEmpty()) {
+                if (movie.cast.isNotEmpty()) {
                     item {
                         SectionHeader(
                             title = stringResource(R.string.movie_detail_cast_header),
@@ -498,7 +502,7 @@ fun MovieDetailScreen(
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                             contentPadding = PaddingValues(horizontal = 16.dp)
                         ) {
-                            items(uiState.movieDetail!!.cast.take(6)) { actor ->
+                            items(movie.cast.take(6)) { actor ->
                                 CastAvatarCard(actor = actor)
                             }
                         }
@@ -510,9 +514,9 @@ fun MovieDetailScreen(
                 }
             }
 
-            if (showFullPoster && uiState.movieDetail!!.posterPath != null) {
+            if (showFullPoster && movie.posterPath != null) {
                 FullScreenPosterDialog(
-                    imageUrl = tmdbPosterUrl(uiState.movieDetail!!.posterPath) ?: "",
+                    imageUrl = tmdbPosterUrl(movie.posterPath) ?: "",
                     onDismiss = { showFullPoster = false }
                 )
             }

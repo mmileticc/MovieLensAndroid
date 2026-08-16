@@ -162,9 +162,11 @@ fun SearchScreen(
             // Scaffold ima samo jedan bottomBar slot - ceo klaster se diže zajedno iznad tastature,
             // ne samo input bar (manja, prihvatljiva razlika od "samo input bar" iz dokumenta).
             Column(modifier = Modifier.imePadding()) {
-                if (uiState.selectedImageUri != null) {
+                // Faza B bugfix - `?.let` umesto `if (!= null) { ...!! }`, isti efekat bez
+                // non-null assertion-a.
+                uiState.selectedImageUri?.let { imageUri ->
                     SelectedImagePreviewRow(
-                        imageUri = uiState.selectedImageUri!!,
+                        imageUri = imageUri,
                         isAnalyzing = uiState.isAnalyzingImage,
                         onRemove = { viewModel.onImageSelected(null) }
                     )
@@ -263,7 +265,9 @@ fun SearchScreen(
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(uiState.error!!, style = MaterialTheme.typography.bodyMedium)
+                            // Faza B bugfix - `?:` umesto `!!` (isti razlog kao MovieDetailScreen -
+                            // ovo je unutar `item {}` lambde, van dometa spoljašnjeg smart-cast-a).
+                            Text(uiState.error ?: stringResource(R.string.error_generic_title), style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))

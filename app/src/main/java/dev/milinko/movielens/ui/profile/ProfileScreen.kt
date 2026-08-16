@@ -1204,9 +1204,13 @@ private fun PendingRequestCard(request: PendingRequest, onAccept: () -> Unit, on
  */
 @Composable
 private fun FriendActivityRow(activity: FriendActivity) {
-    val isRated = activity.action == "rated" && activity.metadata.rating != null
-    val metaText = if (isRated) {
-        stringResource(R.string.profile_activity_row_rated, activity.friendName, activity.metadata.rating!!.toInt())
+    // Faza B bugfix (16. avgust 2026) - ranije `rating!!` teoretski bezbedno (uslov `isRated`
+    // proverava != null gore), ali oslanja se na to da dva mesta (uslov i upotreba) OSTANU
+    // sinhronizovana - lako pući ako se logika ikad refaktoriše nezavisno. Sad je `rating` jedna
+    // promenljiva koja i JESTE null-provera, nema odvojenog `!!`.
+    val rating = activity.metadata.rating?.takeIf { activity.action == "rated" }
+    val metaText = if (rating != null) {
+        stringResource(R.string.profile_activity_row_rated, activity.friendName, rating.toInt())
     } else {
         stringResource(R.string.profile_activity_row_watched, activity.friendName)
     }
