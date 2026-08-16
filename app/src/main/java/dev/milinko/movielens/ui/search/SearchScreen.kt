@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -433,9 +434,13 @@ private fun SearchInputBar(
         TextField(
             value = query,
             onValueChange = onQueryChange,
+            // Bag korisnik prijavio: fiksna .height(48.dp) je bila premala za M3 TextField-ov
+            // podrazumevani unutrašnji padding, pa je donji deo teksta (repovi slova g/j/p/y) bio
+            // odsečen. heightIn(min=) umesto height() - polje raste do svoje prirodne, neisečene
+            // visine ako zatreba, umesto da se nasilno stisne.
             modifier = Modifier
                 .weight(1f)
-                .height(48.dp),
+                .heightIn(min = 48.dp),
             placeholder = {
                 Text(stringResource(R.string.search_input_placeholder), style = MaterialTheme.typography.bodyMedium)
             },

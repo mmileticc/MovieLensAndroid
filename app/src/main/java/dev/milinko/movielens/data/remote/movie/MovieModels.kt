@@ -117,6 +117,9 @@ data class HistoryItem(
     val posterPath: String? = null,
     @SerializedName("user_rating")
     val userRating: Double,
+    // Kratak tekstualni komentar uz ocenu (opcion) - videti backend HistoryItemDto.review.
+    @SerializedName("review")
+    val review: String? = null,
     @SerializedName("watched_at")
     val watchedAt: Long,
     @SerializedName("duration")

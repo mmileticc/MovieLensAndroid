@@ -119,6 +119,8 @@ data class FriendProfileMovie(
     val posterPath: String? = null,
     @SerializedName("rating")
     val rating: Int? = null,
+    @SerializedName("review")
+    val review: String? = null,
     @SerializedName("watched_at")
     val watchedAt: Long = 0L
 )
@@ -161,7 +163,9 @@ data class FriendWatched(
     @SerializedName("friend_name")
     val friendName: String,
     @SerializedName("rating")
-    val rating: Int? = null
+    val rating: Int? = null,
+    @SerializedName("review")
+    val review: String? = null
 )
 
 data class FriendsWatchedResponse(
@@ -195,6 +199,8 @@ data class FriendActivity(
 data class ActivityMetadata(
     @SerializedName("rating")
     val rating: Double? = null,
+    @SerializedName("review")
+    val review: String? = null,
     @SerializedName("watched_at")
     val watchedAt: Long? = null
 )

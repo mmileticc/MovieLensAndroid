@@ -203,7 +203,10 @@ private fun WatchedMovieRow(movie: FriendProfileMovie, onClick: () -> Unit) {
         title = movie.title,
         posterPath = movie.posterPath,
         ratingText = movie.rating?.let { "$it/10" },
-        description = if (movie.rating == null) stringResource(R.string.friend_profile_no_rating) else null,
+        // Komentar prijatelja (ako postoji) ima prednost nad "bez ocene" napomenom - korisnička
+        // žalba: komentari se nisu prikazivali nigde, ni na profilu prijatelja.
+        description = movie.review?.takeIf { it.isNotBlank() }
+            ?: if (movie.rating == null) stringResource(R.string.friend_profile_no_rating) else null,
         onClick = onClick,
         modifier = Modifier.padding(horizontal = 16.dp)
     )

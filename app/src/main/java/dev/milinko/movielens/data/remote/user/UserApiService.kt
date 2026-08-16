@@ -21,8 +21,11 @@ import retrofit2.http.Body
 // Map<String, Int>/Map<String, String> na drugim rutama slučajno rade jer generic signature za te
 // value tipove ne dobija problematičan wildcard. Umesto da se oslanjamo na tu slučajnost, sve nove
 // body tipove pišemo kao prave data klase.
-data class AddToHistoryBody(val tmdbId: Int, val rating: Double? = null, val duration: Int? = null)
-data class UpdateHistoryBody(val rating: Double)
+data class AddToHistoryBody(val tmdbId: Int, val rating: Double? = null, val review: String? = null, val duration: Int? = null)
+// rating/review = null znače "ne diraj postojeću vrednost" (npr. izmena samo ocene bez dodira na
+// komentar, ili izmena samo komentara bez dodira na ocenu) - videti napomenu u backend
+// UserActionsRepository.markWatched.
+data class UpdateHistoryBody(val rating: Double? = null, val review: String? = null)
 
 interface UserApiService {
     // Profile

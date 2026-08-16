@@ -799,6 +799,10 @@ private fun SettingsSection(
             modifier = Modifier.padding(bottom = 12.dp)
         )
 
+        // Faza "settings cleanup" (16. avgust 2026, korisnička žalba) - "Obaveštenja" i "Modus
+        // štednje podataka" su bili prikazani ali potpuno neožičeni (onCheckedChange = TODO,
+        // switch se vizuelno pomeri ali ništa se ne dešava) - uklonjeni dok stvarno ne zažive.
+        // "Tamna tema" ostaje - postaje stvarno funkcionalna u sledećoj fazi (light tema).
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
@@ -809,36 +813,6 @@ private fun SettingsSection(
             ) {
                 Text(stringResource(R.string.profile_dark_mode))
                 Switch(checked = settings.darkMode, onCheckedChange = { viewModel.toggleDarkMode() })
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(stringResource(R.string.profile_notifications))
-                Switch(checked = settings.notifications, onCheckedChange = { /* TODO */ })
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(stringResource(R.string.profile_data_saver))
-                Switch(checked = settings.dataSaverMode, onCheckedChange = { /* TODO */ })
             }
         }
 
@@ -1226,7 +1200,7 @@ private fun PendingRequestCard(request: PendingRequest, onAccept: () -> Unit, on
 @Composable
 private fun FriendActivityRow(activity: FriendActivity) {
     val isRated = activity.action == "rated" && activity.metadata.rating != null
-    val description = if (isRated) {
+    val metaText = if (isRated) {
         stringResource(R.string.profile_activity_row_rated, activity.friendName, activity.metadata.rating!!.toInt())
     } else {
         stringResource(R.string.profile_activity_row_watched, activity.friendName)
@@ -1235,7 +1209,10 @@ private fun FriendActivityRow(activity: FriendActivity) {
     MovieListRow(
         title = activity.movieTitle,
         posterPath = activity.posterPath,
-        description = description,
+        metaText = metaText,
+        // Komentar prijatelja (16. avgust 2026, korisnička žalba: komentari se nisu prikazivali ni
+        // na feed-u aktivnosti) - ispod "ko/šta" reda, ako postoji.
+        description = activity.metadata.review?.takeIf { it.isNotBlank() },
         modifier = Modifier.padding(horizontal = 16.dp)
     )
 }

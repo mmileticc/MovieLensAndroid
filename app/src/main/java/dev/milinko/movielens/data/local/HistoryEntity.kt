@@ -10,6 +10,8 @@ data class HistoryEntity(
     val title: String,
     val posterPath: String?,
     val userRating: Double,
+    // Kratak tekstualni komentar uz ocenu (opcion) - videti HistoryItem.review.
+    val review: String? = null,
     val watchedAt: Long,
     val duration: Int = 0
 )

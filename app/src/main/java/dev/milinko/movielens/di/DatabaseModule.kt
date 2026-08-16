@@ -20,10 +20,11 @@ object DatabaseModule {
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
         return Room.databaseBuilder(context, AppDatabase::class.java, "movielens.db")
-            // Nema migracija za sad (version 1, prva verzija ove baze) - keš tabele, bezbedno je
-            // da se u budućnosti pri promeni šeme prosto obrišu i ponovo napune sa servera umesto
-            // pisanja Migration klasa, ali destructive fallback ovde namerno NIJE uključen dok
-            // stvarno ne zatreba (da izmena šeme ne obriše korisnicima keš bez razloga).
+            // Destructive fallback uključen od v2 (16. avgust 2026, HistoryEntity.review kolona) -
+            // ovo su čiste keš tabele koje se uvek ponovo pune sa servera (getHistory/getWatchlist
+            // pri sledećem otvaranju ekrana), pa je brisanje pri promeni šeme bezbedno i jednostavnije
+            // od pisanja Migration klasa za podatke koji ionako nisu izvor istine.
+            .fallbackToDestructiveMigration()
             .build()
     }
 

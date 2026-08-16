@@ -23,6 +23,8 @@ data class MovieDetailUiState(
     val isWatched: Boolean = false,
     // 0.0 = odgledano bez ocene (isti dogovor kao na backendu - videti UserActionsRouting.kt)
     val userRating: Double = 0.0,
+    // Kratak tekstualni komentar uz ocenu (opcion) - videti HistoryItem.review.
+    val userReview: String? = null,
     // Prijatelji koji su odgledali ovaj film (i njihova ocena, ako postoji). Tiho prazno ako
     // korisnik nije ulogovan ili poziv padne - nije kritična funkcionalnost, ne blokira ekran.
     val friendsWatched: List<FriendWatched> = emptyList(),
@@ -85,7 +87,7 @@ class MovieDetailViewModel @Inject constructor(
             historyDeferred?.await()?.onSuccess { items ->
                 val item = items.firstOrNull { it.tmdbId == tmdbId }
                 if (item != null) {
-                    _uiState.value = _uiState.value.copy(isWatched = true, userRating = item.userRating)
+                    _uiState.value = _uiState.value.copy(isWatched = true, userRating = item.userRating, userReview = item.review)
                 }
             }
             friendsWatchedDeferred?.await()?.onSuccess { friends ->
@@ -104,9 +106,11 @@ class MovieDetailViewModel @Inject constructor(
 
         val wasWatched = _uiState.value.isWatched
         val previousRating = _uiState.value.userRating
+        val previousReview = _uiState.value.userReview
         _uiState.value = _uiState.value.copy(
             isWatched = !wasWatched,
             userRating = if (wasWatched) 0.0 else previousRating,
+            userReview = if (wasWatched) null else previousReview,
             historyError = null
         )
 
@@ -120,6 +124,7 @@ class MovieDetailViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isWatched = wasWatched,
                     userRating = previousRating,
+                    userReview = previousReview,
                     historyError = e.message ?: "Greška pri ažuriranju statusa odgledano"
                 )
             }
@@ -128,31 +133,73 @@ class MovieDetailViewModel @Inject constructor(
     }
 
     /**
-     * Postavlja/menja ocenu (1-10) - automatski označava film kao odgledan ako već nije. true ako
-     * je zahtev pokrenut, false ako korisnik nije ulogovan.
+     * Postavlja/menja ocenu (1-10) i opcioni kratak tekstualni komentar - automatski označava film
+     * kao odgledan ako već nije. `review = null` znači "ne diraj postojeći komentar" (npr. brza
+     * izmena samo zvezdica bez otvaranja polja za komentar) - prazan string ("") eksplicitno briše
+     * postojeći komentar (korisnik je namerno ispraznio polje), videti napomenu u backend
+     * UserActionsRepository.markWatched. true ako je zahtev pokrenut, false ako korisnik nije ulogovan.
      */
-    fun rateMovie(tmdbId: Int, rating: Int): Boolean {
+    fun rateMovie(tmdbId: Int, rating: Int, review: String? = null): Boolean {
         val userId = sessionManager.getUserId() ?: return false
 
         val previousRating = _uiState.value.userRating
+        val previousReview = _uiState.value.userReview
         val wasWatched = _uiState.value.isWatched
         _uiState.value = _uiState.value.copy(
             userRating = rating.toDouble(),
+            userReview = if (review != null) review.ifBlank { null } else previousReview,
             isWatched = true,
             historyError = null
         )
 
         viewModelScope.launch {
             val result = if (wasWatched) {
-                userRepository.updateHistoryItem(userId, tmdbId, rating.toDouble())
+                userRepository.updateHistoryItem(userId, tmdbId, rating.toDouble(), review)
             } else {
-                userRepository.addToHistory(userId, tmdbId, rating = rating.toDouble())
+                userRepository.addToHistory(userId, tmdbId, rating = rating.toDouble(), review = review)
             }
             result.onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     userRating = previousRating,
+                    userReview = previousReview,
                     isWatched = wasWatched,
                     historyError = e.message ?: "Greška pri ažuriranju ocene"
+                )
+            }
+        }
+        return true
+    }
+
+    /**
+     * Čuva SAMO komentar, bez dodira na ocenu (npr. korisnik je film označio kao odgledan preko
+     * `toggleWatched` bez zvezdica, i sad želi da ostavi utisak u tekstu). Šalje postojeću ocenu
+     * (ako postoji) nepromenjenu - ne postoji poseban UI put za "obriši ocenu, ostani odgledano".
+     * true ako je zahtev pokrenut, false ako korisnik nije ulogovan.
+     */
+    fun saveReview(tmdbId: Int, review: String): Boolean {
+        val userId = sessionManager.getUserId() ?: return false
+
+        val trimmedReview = review.trim().ifBlank { null }
+        val previousReview = _uiState.value.userReview
+        val wasWatched = _uiState.value.isWatched
+        val currentRating = _uiState.value.userRating.takeIf { it > 0 }
+        _uiState.value = _uiState.value.copy(
+            userReview = trimmedReview,
+            isWatched = true,
+            historyError = null
+        )
+
+        viewModelScope.launch {
+            val result = if (wasWatched) {
+                userRepository.updateHistoryItem(userId, tmdbId, currentRating, review.trim())
+            } else {
+                userRepository.addToHistory(userId, tmdbId, rating = currentRating, review = review.trim())
+            }
+            result.onFailure { e ->
+                _uiState.value = _uiState.value.copy(
+                    userReview = previousReview,
+                    isWatched = wasWatched,
+                    historyError = e.message ?: "Greška pri čuvanju komentara"
                 )
             }
         }

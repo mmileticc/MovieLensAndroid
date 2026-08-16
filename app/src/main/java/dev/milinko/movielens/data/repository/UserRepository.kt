@@ -47,8 +47,11 @@ interface UserRepository {
     suspend fun getHistory(userId: String): Result<List<HistoryItem>>
     // rating/duration su opcioni - "označeno kao odgledano bez ocene" šalje oba kao null (ne kao
     // 0.0, koji bi backend zaokružio na ocenu 1 - videti Double?.toRatingIntOrNull() na backendu).
-    suspend fun addToHistory(userId: String, tmdbId: Int, rating: Double? = null, duration: Int? = null): Result<HistoryItem>
-    suspend fun updateHistoryItem(userId: String, tmdbId: Int, rating: Double): Result<HistoryItem>
+    // review - kratak tekstualni komentar uz ocenu (opcion, nezavisan od rating-a).
+    suspend fun addToHistory(userId: String, tmdbId: Int, rating: Double? = null, review: String? = null, duration: Int? = null): Result<HistoryItem>
+    // rating/review = null znače "ne diraj postojeću vrednost" (npr. izmena samo komentara bez
+    // dodira na ocenu, ili obrnuto) - videti napomenu u backend UserActionsRepository.markWatched.
+    suspend fun updateHistoryItem(userId: String, tmdbId: Int, rating: Double?, review: String? = null): Result<HistoryItem>
     // "Undo" za slučajno "označi kao odgledano" - briše i ocenu (isti red na backendu).
     suspend fun removeFromHistory(userId: String, tmdbId: Int): Result<Unit>
 
@@ -111,6 +114,7 @@ private fun HistoryEntity.toDomain() = HistoryItem(
     title = title,
     posterPath = posterPath,
     userRating = userRating,
+    review = review,
     watchedAt = watchedAt,
     duration = duration
 )
@@ -121,6 +125,7 @@ private fun HistoryItem.toEntity(userId: String) = HistoryEntity(
     title = title,
     posterPath = posterPath,
     userRating = userRating,
+    review = review,
     watchedAt = watchedAt,
     duration = duration
 )
@@ -228,10 +233,10 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun addToHistory(userId: String, tmdbId: Int, rating: Double?, duration: Int?): Result<HistoryItem> = safeApiCall {
+    override suspend fun addToHistory(userId: String, tmdbId: Int, rating: Double?, review: String?, duration: Int?): Result<HistoryItem> = safeApiCall {
         // rating/duration null se serijalizuju kao JSON null (Gson) - backend AddToHistoryRequest
         // ima podrazumevanu vrednost null za oba, pa je to ekvivalentno izostavljanju polja.
-        val response = userApiService.addToHistory(userId, AddToHistoryBody(tmdbId, rating, duration))
+        val response = userApiService.addToHistory(userId, AddToHistoryBody(tmdbId, rating, review, duration))
         if (response.isSuccessful) {
             val item = response.body() ?: throw Exception("Empty response")
             historyDao.insert(item.toEntity(userId))
@@ -241,8 +246,8 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun updateHistoryItem(userId: String, tmdbId: Int, rating: Double): Result<HistoryItem> = safeApiCall {
-        val response = userApiService.updateHistoryItem(userId, tmdbId, UpdateHistoryBody(rating))
+    override suspend fun updateHistoryItem(userId: String, tmdbId: Int, rating: Double?, review: String?): Result<HistoryItem> = safeApiCall {
+        val response = userApiService.updateHistoryItem(userId, tmdbId, UpdateHistoryBody(rating, review))
         if (response.isSuccessful) {
             val item = response.body() ?: throw Exception("Empty response")
             historyDao.insert(item.toEntity(userId))

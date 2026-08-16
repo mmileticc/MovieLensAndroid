@@ -256,6 +256,9 @@ private fun HistoryItemRow(
             title = item.title,
             posterPath = item.posterPath,
             ratingText = "${String.format("%.1f", item.userRating)}/10",
+            // Kratak pregled komentara (ako postoji) - puna izmena/pisanje komentara ide preko
+            // Movie Detail ekrana (MovieDetailViewModel.saveReview), ovde samo prikaz.
+            description = item.review?.takeIf { it.isNotBlank() },
             onClick = onMovieClick,
             trailing = {
                 // Odvojen tap-target od MovieListRow-ovog glavnog onClick-a (koji vodi na Movie

@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,6 +41,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -60,6 +62,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -150,7 +153,26 @@ fun MovieDetailScreen(
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
-                Spacer(modifier = Modifier.width(48.dp))
+                // Share dugme (16. avgust 2026) - deli naslov + TMDB link preko standardnog Android
+                // Share Intent-a. Onemogućeno dok se detalji filma ne učitaju (treba nam naslov).
+                val movieForShare = uiState.movieDetail
+                IconButton(
+                    onClick = {
+                        val shareText = context.getString(
+                            R.string.movie_detail_share_text,
+                            movieForShare?.title.orEmpty(),
+                            "https://www.themoviedb.org/movie/$tmdbId"
+                        )
+                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, shareText)
+                        }
+                        context.startActivity(Intent.createChooser(sendIntent, null))
+                    },
+                    enabled = movieForShare != null
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = stringResource(R.string.movie_detail_share_content_description))
+                }
             }
         }
     ) { paddingValues ->
@@ -335,6 +357,40 @@ fun MovieDetailScreen(
                                 }
                             }
                         )
+
+                        // Kratak tekstualni komentar uz ocenu (16. avgust 2026, korisnički predlog) -
+                        // lokalno stanje resetuje se kad se učita/promeni sačuvani komentar
+                        // (remember(uiState.userReview)), "Sačuvaj" se pojavljuje samo dok ima
+                        // nesačuvanih izmena da ne zatrpava ekran stalno vidljivim dugmetom.
+                        Spacer(modifier = Modifier.height(12.dp))
+                        var reviewText by remember(uiState.userReview) { mutableStateOf(uiState.userReview ?: "") }
+                        val focusManager = LocalFocusManager.current
+                        OutlinedTextField(
+                            value = reviewText,
+                            onValueChange = { if (it.length <= 1000) reviewText = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text(stringResource(R.string.movie_detail_review_label)) },
+                            minLines = 2,
+                            maxLines = 4
+                        )
+                        if (reviewText.trim() != (uiState.userReview ?: "")) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            AppButton(
+                                text = stringResource(R.string.movie_detail_save_review),
+                                variant = AppButtonVariant.Secondary,
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = {
+                                    // Bag korisnik prijavio: bez ovoga polje ostaje vizuelno "fokusirano"
+                                    // (kursor/obrub aktivan) posle Sačuvaj-a, kao da se i dalje kuca.
+                                    focusManager.clearFocus()
+                                    val startedRequest = viewModel.saveReview(tmdbId, reviewText)
+                                    if (!startedRequest) {
+                                        Toast.makeText(context, context.getString(R.string.movie_detail_rate_signin_toast), Toast.LENGTH_SHORT).show()
+                                        onRequireSignIn()
+                                    }
+                                }
+                            )
+                        }
 
                         if (uiState.friendsWatched.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(16.dp))
@@ -601,30 +657,41 @@ private fun FriendsWatchedBadge(friends: List<FriendWatched>, onFriendClick: (St
             )
             Spacer(modifier = Modifier.height(6.dp))
             friends.forEach { friend ->
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onFriendClick(friend.friendId) }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(vertical = 4.dp)
                 ) {
-                    Text(
-                        text = friend.friendName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (friend.rating != null) {
-                        Icon(
-                            Icons.Default.Star,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.secondary
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "${friend.rating}/10",
+                            text = friend.friendName,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (friend.rating != null) {
+                            Icon(
+                                Icons.Default.Star,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "${friend.rating}/10",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    // Komentar prijatelja (16. avgust 2026, korisnička žalba: komentari se nisu
+                    // prikazivali nigde) - kratak utisak ispod imena/ocene, ako postoji.
+                    if (!friend.review.isNullOrBlank()) {
+                        Text(
+                            text = friend.review,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp)
                         )
                     }
                 }

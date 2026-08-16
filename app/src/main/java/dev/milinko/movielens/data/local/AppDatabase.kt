@@ -10,7 +10,10 @@ import androidx.room.RoomDatabase
  */
 @Database(
     entities = [WatchlistEntity::class, HistoryEntity::class],
-    version = 1,
+    // v2 (16. avgust 2026) - HistoryEntity dobio review kolonu (komentar uz ocenu). Nema Migration
+    // klase jer je ovo čist keš (uvek se ponovo puni sa servera) - videti fallbackToDestructiveMigration
+    // u DatabaseModule.kt.
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

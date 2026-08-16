@@ -59,6 +59,11 @@
     <string name="movie_detail_friends_watched_one">1 prijatelj je gledao ovaj film</string>
     <string name="movie_detail_friends_watched_many">%1$d prijatelja su gledala ovaj film</string>
     <string name="movie_detail_runtime_minutes">%1$d min</string>
+    <!-- Faza "komentar/share" (16. avgust 2026) -->
+    <string name="movie_detail_review_label">Tvoj komentar (opciono)</string>
+    <string name="movie_detail_save_review">Sačuvaj komentar</string>
+    <string name="movie_detail_share_content_description">Podeli</string>
+    <string name="movie_detail_share_text">Gledam \"%1$s\" na MovieLens - probaj i ti!\n%2$s</string>
 
     <!-- Faza 6 redizajna - SearchScreen -->
     <string name="search_top_bar_title">Pretraži filmove</string>
@@ -118,8 +123,6 @@
     <string name="profile_taste_hide_genres">Sakrij ostale žanrove</string>
     <string name="profile_settings_app_section">Postavke aplikacije</string>
     <string name="profile_dark_mode">Tamna tema</string>
-    <string name="profile_notifications">Obaveštenja</string>
-    <string name="profile_data_saver">Modus štednje podataka</string>
     <string name="profile_about_section">O aplikaciji</string>
     <string name="profile_version_label">Verzija</string>
     <string name="profile_backend_url_label">Backend URL</string>
