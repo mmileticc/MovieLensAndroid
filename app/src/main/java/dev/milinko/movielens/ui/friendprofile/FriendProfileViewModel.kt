@@ -46,7 +46,7 @@ class FriendProfileViewModel @Inject constructor(
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = e.message ?: "Greška pri učitavanju profila"
+                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri učitavanju profila")
                     )
                 }
         }

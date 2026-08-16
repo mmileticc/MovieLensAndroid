@@ -82,7 +82,7 @@ class SearchViewModel @Inject constructor(
             .onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     isSearching = false,
-                    error = e.message ?: "Greška pri pretrazi"
+                    error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri pretrazi")
                 )
             }
     }
@@ -111,7 +111,7 @@ class SearchViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isAnalyzingImage = false,
-                    error = e.message ?: "Greška pri analizi slike"
+                    error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri analizi slike")
                 )
             }
         }

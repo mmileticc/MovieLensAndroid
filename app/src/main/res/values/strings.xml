@@ -76,7 +76,7 @@
     <string name="search_image_analyzing">Analiziram sliku…</string>
     <string name="search_image_remove_content_description">Ukloni sliku</string>
     <string name="search_submit_content_description">Pretraži</string>
-    <string name="search_camera_error">Greška pri otvaranju kamere: %1$s</string>
+    <string name="search_camera_error">Nije moguće otvoriti kameru. Pokušaj ponovo.</string>
     <string name="search_signin_required_toast">Za skeniranje slike moraš prvo da se uloguješ.</string>
     <string name="search_empty_state_title">Pronađi svoj sledeći film</string>
     <string name="search_empty_state_message">Ukucaj naslov ili pretraži pomoću slike.</string>

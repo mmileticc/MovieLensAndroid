@@ -139,8 +139,11 @@ fun SearchScreen(
             cameraImageUri = uri
             cameraLauncher.launch(uri)
         } catch (e: Exception) {
+            // Bugfix (16. avgust 2026) - ranije se sirova poruka izuzetka (e.message) ubacivala
+            // direktno u Toast (npr. FileProvider/IO greške), sad fiksna razumljiva poruka bez
+            // tehničkog teksta - detalj ostaje samo u Logcat-u za debug.
             Log.e("SearchScreen", "Error opening camera", e)
-            Toast.makeText(context, context.getString(R.string.search_camera_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+            Toast.makeText(context, context.getString(R.string.search_camera_error), Toast.LENGTH_LONG).show()
         }
     }
 

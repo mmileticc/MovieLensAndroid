@@ -8,6 +8,7 @@ import dev.milinko.movielens.data.pref.SessionManager
 import dev.milinko.movielens.data.remote.AuthApi
 import dev.milinko.movielens.data.remote.AuthFirebaseRequest
 import dev.milinko.movielens.data.remote.UserDto
+import dev.milinko.movielens.util.friendlyMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -57,7 +58,11 @@ class AuthViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.value = AuthUiState.Error(e.message ?: "Nepoznata greška")
+                // Faza A bugfix (16. avgust 2026) - exchangeFirebaseToken NIJE umotan u
+                // Response<T>, pa Retrofit ovde direktno baca IOException (nema konekcije/timeout)
+                // ili HttpException (5xx sa backenda) - bez friendlyMessage() korisnik bi na Sign
+                // In ekranu video sirov tehnički tekst poput "timeout" umesto razumljive poruke.
+                _uiState.value = AuthUiState.Error(friendlyMessage(e, "Prijava nije uspela. Pokušaj ponovo."))
             }
         }
     }

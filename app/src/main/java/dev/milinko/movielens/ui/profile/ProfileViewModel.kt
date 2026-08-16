@@ -155,7 +155,7 @@ class ProfileViewModel @Inject constructor(
             userRepository.removeFriend(userId, targetUserId).onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     friendSearchResults = previousResults,
-                    friendActionError = e.message ?: "Greška pri otkazivanju zahteva"
+                    friendActionError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri otkazivanju zahteva")
                 )
             }
         }
@@ -172,7 +172,7 @@ class ProfileViewModel @Inject constructor(
             userRepository.addFriend(userId, targetUserId).onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     friendSearchResults = previousResults,
-                    friendActionError = e.message ?: "Greška pri slanju zahteva za prijateljstvo"
+                    friendActionError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri slanju zahteva za prijateljstvo")
                 )
             }
         }
@@ -193,7 +193,7 @@ class ProfileViewModel @Inject constructor(
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         pendingRequests = previousPending,
-                        friendActionError = e.message ?: "Greška pri prihvatanju zahteva"
+                        friendActionError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri prihvatanju zahteva")
                     )
                 }
         }
@@ -207,7 +207,7 @@ class ProfileViewModel @Inject constructor(
             userRepository.rejectFriendRequest(userId, requesterId).onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     pendingRequests = previousPending,
-                    friendActionError = e.message ?: "Greška pri odbijanju zahteva"
+                    friendActionError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri odbijanju zahteva")
                 )
             }
         }
@@ -221,7 +221,7 @@ class ProfileViewModel @Inject constructor(
             userRepository.removeFriend(userId, friendId).onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     friends = previousFriends,
-                    friendActionError = e.message ?: "Greška pri uklanjanju prijatelja"
+                    friendActionError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri uklanjanju prijatelja")
                 )
             }
         }
@@ -273,7 +273,7 @@ class ProfileViewModel @Inject constructor(
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         isSavingProfile = false,
-                        editProfileError = e.message ?: "Greška pri čuvanju profila"
+                        editProfileError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri čuvanju profila")
                     )
                 }
         }
@@ -376,7 +376,7 @@ class ProfileViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: "Greška pri učitavanju profila")
+                _uiState.value = _uiState.value.copy(isLoading = false, error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri učitavanju profila"))
             }
         }
     }

@@ -54,7 +54,7 @@ class MovieNightViewModel @Inject constructor(
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = e.message ?: "Greška pri učitavanju predloga"
+                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri učitavanju predloga")
                     )
                 }
         }
@@ -75,7 +75,7 @@ class MovieNightViewModel @Inject constructor(
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         isRefreshing = false,
-                        error = e.message ?: "Greška pri osvežavanju predloga"
+                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri osvežavanju predloga")
                     )
                 }
         }

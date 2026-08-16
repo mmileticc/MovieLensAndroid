@@ -130,7 +130,7 @@ class LibraryViewModel @Inject constructor(
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         history = previousHistory,
-                        error = e.message ?: "Greška pri ažuriranju ocene"
+                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri ažuriranju ocene")
                     )
                 }
         }
@@ -147,7 +147,7 @@ class LibraryViewModel @Inject constructor(
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         watchlist = previousWatchlist,
-                        error = e.message ?: "Greška pri uklanjanju iz watchlist-e"
+                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri uklanjanju iz watchlist-e")
                     )
                 }
         }

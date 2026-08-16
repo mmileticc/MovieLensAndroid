@@ -71,7 +71,7 @@ class MovieDetailViewModel @Inject constructor(
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = e.message ?: "Greška pri učitavanju filma"
+                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri učitavanju filma")
                     )
                 }
 
@@ -125,7 +125,7 @@ class MovieDetailViewModel @Inject constructor(
                     isWatched = wasWatched,
                     userRating = previousRating,
                     userReview = previousReview,
-                    historyError = e.message ?: "Greška pri ažuriranju statusa odgledano"
+                    historyError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri ažuriranju statusa odgledano")
                 )
             }
         }
@@ -163,7 +163,7 @@ class MovieDetailViewModel @Inject constructor(
                     userRating = previousRating,
                     userReview = previousReview,
                     isWatched = wasWatched,
-                    historyError = e.message ?: "Greška pri ažuriranju ocene"
+                    historyError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri ažuriranju ocene")
                 )
             }
         }
@@ -199,7 +199,7 @@ class MovieDetailViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     userReview = previousReview,
                     isWatched = wasWatched,
-                    historyError = e.message ?: "Greška pri čuvanju komentara"
+                    historyError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri čuvanju komentara")
                 )
             }
         }
@@ -226,7 +226,7 @@ class MovieDetailViewModel @Inject constructor(
             result.onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     isInWatchlist = wasInWatchlist,
-                    watchlistError = e.message ?: "Greška pri ažuriranju watchlist-e"
+                    watchlistError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri ažuriranju watchlist-e")
                 )
             }
         }
