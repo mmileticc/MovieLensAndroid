@@ -152,6 +152,9 @@ fun MovieLensNavHost(
                 },
                 onNavigateToFriendProfile = { friendId: String ->
                     navController.navigate(Screen.FriendProfile.createRoute(friendId))
+                },
+                onNavigateToDetail = { tmdbId: Int ->
+                    navController.navigate(Screen.MovieDetail.createRoute(tmdbId))
                 }
             )
         }

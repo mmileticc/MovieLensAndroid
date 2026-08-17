@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.milinko.movielens.data.pref.RecentSearchesStore
+import dev.milinko.movielens.data.pref.SessionManager
 import dev.milinko.movielens.data.remote.movie.MovieSearchResult
 import dev.milinko.movielens.data.repository.MovieRepository
 import dev.milinko.movielens.data.repository.VisionRepository
@@ -33,16 +34,26 @@ data class SearchUiState(
 class SearchViewModel @Inject constructor(
     private val movieRepository: MovieRepository,
     private val visionRepository: VisionRepository,
-    private val recentSearchesStore: RecentSearchesStore
+    private val recentSearchesStore: RecentSearchesStore,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
+    // Dorada (17. avgust 2026, korisničko pitanje "je l keš vezan za telefon a ne za nalog") -
+    // istorija MORA biti po nalogu (videti opširno obrazloženje u RecentSearchesStore.kt), ne
+    // deljena za sve naloge na istom telefonu. Scope se čita JEDNOM ovde - dovoljno, jer
+    // NavGraph.onSignOut čisti ceo back stack (popUpTo(0){inclusive=true}) pa se posle promene
+    // naloga ionako pravi NOVA instanca ovog ViewModel-a kad se korisnik vrati na Search. "guest"
+    // bucket za neulogovanog korisnika - tekstualna pretraga radi i bez prijave.
+    private val recentSearchesScopeId = sessionManager.getUserId() ?: "guest"
+
     // Dorada (17. avgust 2026, korisnička žalba "prazno dok se ne krene sa pretragom") - odvojeno
     // od SearchUiState (isti obrazac kao sessionUser/baseUrl u ProfileViewModel) jer ne zavisi ni
     // od jednog mrežnog poziva, samo lokalno čita/piše SharedPreferences.
-    val recentSearches: StateFlow<List<String>> = recentSearchesStore.recentQueries
+    private val _recentSearches = MutableStateFlow(recentSearchesStore.getQueries(recentSearchesScopeId))
+    val recentSearches: StateFlow<List<String>> = _recentSearches.asStateFlow()
 
     // Debounce posao za pretragu dok korisnik kuca - svaki novi karakter otkazuje prethodni.
     private var searchJob: Job? = null
@@ -76,7 +87,7 @@ class SearchViewModel @Inject constructor(
         val query = _uiState.value.searchQuery.trim()
         if (query.isEmpty()) return
 
-        recentSearchesStore.addQuery(query)
+        _recentSearches.value = recentSearchesStore.addQuery(recentSearchesScopeId, query)
         searchJob?.cancel()
         searchJob = viewModelScope.launch { performSearch(query) }
     }
@@ -84,13 +95,13 @@ class SearchViewModel @Inject constructor(
     /** Ponovo pokreće pretragu za upit iz istorije (tap na chip) - preskače debounce, kao Enter. */
     fun selectRecentQuery(query: String) {
         _uiState.value = _uiState.value.copy(searchQuery = query)
-        recentSearchesStore.addQuery(query)
+        _recentSearches.value = recentSearchesStore.addQuery(recentSearchesScopeId, query)
         searchJob?.cancel()
         searchJob = viewModelScope.launch { performSearch(query) }
     }
 
     fun removeRecentQuery(query: String) {
-        recentSearchesStore.removeQuery(query)
+        _recentSearches.value = recentSearchesStore.removeQuery(recentSearchesScopeId, query)
     }
 
     /**
@@ -105,7 +116,7 @@ class SearchViewModel @Inject constructor(
     fun recordCurrentQueryInHistory() {
         val query = _uiState.value.searchQuery.trim()
         if (query.isNotEmpty()) {
-            recentSearchesStore.addQuery(query)
+            _recentSearches.value = recentSearchesStore.addQuery(recentSearchesScopeId, query)
         }
     }
 

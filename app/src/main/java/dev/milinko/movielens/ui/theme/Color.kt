@@ -4,9 +4,10 @@ import androidx.compose.ui.graphics.Color
 
 /**
  * Dizajn sistem (Faza 6 redizajna, videti MOVIELENS_DESIGN_PLAN.md u korenu Diplomski foldera) -
- * tamna, filmska (Netflix-inspirisana) paleta. App je NAMERNO uvek taman (nema light temu, nema
- * dynamicColor) - to je deo brend identiteta, ne korisnička podešavanja. Vrednosti ovde su
- * source-of-truth, Theme.kt ih samo mapira u Material3 ColorScheme sloteve.
+ * tamna, filmska (Netflix-inspirisana) paleta kao podrazumevana. Faza 2 je dodala i pravu light
+ * temu (ispod) - nema dynamicColor (namerno, brend identitet ostaje isti bez obzira na
+ * korisnikovu pozadinu na Android 12+). Vrednosti ovde su source-of-truth, Theme.kt ih samo
+ * mapira u Material3 ColorScheme sloteve.
  */
 
 // Pozadine (od najtamnije ka najsvetlijoj - "elevation" preko svetline boje, ne senki, jer se
@@ -33,16 +34,22 @@ val MlTextMuted = Color(0xFF6B6B6B)
 val MlSuccess = Color(0xFF3DDC84)
 
 // --- Light tema (Faza 2, MOVIELENS_DESIGN_PLAN.md) - iste akcentne boje kao tamna (brend
-// identitet ostaje prepoznatljiv), samo se pozadine/tekst/linije okreću na svetlu varijantu.
-val MlLightBackground = Color(0xFFF7F7F7)
-val MlLightSurfaceElevated1 = Color(0xFFFFFFFF)
-val MlLightSurfaceElevated2 = Color(0xFFEFEFEF)
+// identitet ostaje prepoznatljiv, crvena/zlatna se ne diraju), ali neutrali VIŠE NISU čist
+// sivo/beli Android podrazumevani ton (dorada 17. avgust 2026, korisnička žalba "difoltna
+// bolnička android bela") - topao, blago krem/pergament ton umesto hladnog sivog, u istom duhu
+// kao postojeći `MlAccentGold` (kino/premium karakter se oseti i u light temi, ne samo u tamnoj).
+// Relativni odnos svetline ostaje isti kao pre (background=bazna svetla podloga, surfaceElevated1
+// je NAJSVETLIJI ton - beličaste kartice "iskaču" sa podloge, surfaceElevated2 tamniji od
+// background-a - "utonula" polja poput input okvira) - menja se samo TON, ne hijerarhija.
+val MlLightBackground = Color(0xFFF5EFE4)
+val MlLightSurfaceElevated1 = Color(0xFFFFFCF6)
+val MlLightSurfaceElevated2 = Color(0xFFEAE0CE)
 
-val MlLightBorder = Color(0x1F000000) // ~12% crno
+val MlLightBorder = Color(0x263A2A1C) // ~15% toplo tamno smeđa (umesto čisto crne)
 
-val MlLightTextPrimary = Color(0xFF1A1A1A)
-val MlLightTextSecondary = Color(0xFF595959)
-val MlLightTextMuted = Color(0xFF8C8C8C)
+val MlLightTextPrimary = Color(0xFF2C231A)
+val MlLightTextSecondary = Color(0xFF6B5B47)
+val MlLightTextMuted = Color(0xFF9C8B72)
 
 // --- Stari template ostaje ovde neiskorišćen (dead code, namerno NE brišemo po projektnoj
 // konvenciji "nikad ne brišemo fajlove/kod bez razloga") - ali ništa iz Theme.kt više ne

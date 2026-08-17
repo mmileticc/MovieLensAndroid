@@ -96,7 +96,8 @@ fun ProfileScreen(
     onNavigateToLibrary: () -> Unit,
     onSignOut: () -> Unit = {},
     onNavigateToSignIn: () -> Unit = {},
-    onNavigateToFriendProfile: (String) -> Unit = {}
+    onNavigateToFriendProfile: (String) -> Unit = {},
+    onNavigateToDetail: (Int) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val sessionUser by viewModel.sessionUser.collectAsState()
@@ -245,6 +246,7 @@ fun ProfileScreen(
                             sessionUser = sessionUser,
                             viewModel = viewModel,
                             onNavigateToFriendProfile = onNavigateToFriendProfile,
+                            onNavigateToDetail = onNavigateToDetail,
                             onRemoveFriend = { friendPendingRemoval = it }
                         )
                     }
@@ -324,6 +326,7 @@ private fun FriendsTabContent(
     sessionUser: SessionUserInfo?,
     viewModel: ProfileViewModel,
     onNavigateToFriendProfile: (String) -> Unit,
+    onNavigateToDetail: (Int) -> Unit,
     onRemoveFriend: (FriendInfo) -> Unit
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -417,7 +420,7 @@ private fun FriendsTabContent(
                 )
             }
             items(uiState.friendActivity, key = { it.activityId }) { activity ->
-                FriendActivityRow(activity)
+                FriendActivityRow(activity, onClick = { onNavigateToDetail(activity.tmdbId) })
             }
         }
 
@@ -1225,7 +1228,7 @@ private fun PendingRequestCard(request: PendingRequest, onAccept: () -> Unit, on
  * imao iz JOIN-a na `movies`, samo nije bio prosleđen kroz DTO).
  */
 @Composable
-private fun FriendActivityRow(activity: FriendActivity) {
+private fun FriendActivityRow(activity: FriendActivity, onClick: () -> Unit) {
     // Faza B bugfix (16. avgust 2026) - ranije `rating!!` teoretski bezbedno (uslov `isRated`
     // proverava != null gore), ali oslanja se na to da dva mesta (uslov i upotreba) OSTANU
     // sinhronizovana - lako pući ako se logika ikad refaktoriše nezavisno. Sad je `rating` jedna
@@ -1237,6 +1240,9 @@ private fun FriendActivityRow(activity: FriendActivity) {
         stringResource(R.string.profile_activity_row_watched, activity.friendName)
     }
 
+    // Dorada (17. avgust 2026, korisnička žalba "nek i to na klik vodi na taj film") - red je već
+    // imao poster preko MovieListRow, samo nije prosleđivan onClick (parametar koji MovieListRow
+    // već podržava, isti obrazac kao Friend Profile "odgledano" lista).
     MovieListRow(
         title = activity.movieTitle,
         posterPath = activity.posterPath,
@@ -1244,6 +1250,7 @@ private fun FriendActivityRow(activity: FriendActivity) {
         // Komentar prijatelja (16. avgust 2026, korisnička žalba: komentari se nisu prikazivali ni
         // na feed-u aktivnosti) - ispod "ko/šta" reda, ako postoji.
         description = activity.metadata.review?.takeIf { it.isNotBlank() },
+        onClick = onClick,
         modifier = Modifier.padding(horizontal = 16.dp)
     )
 }
