@@ -8,7 +8,15 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +43,8 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -56,6 +66,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -96,6 +107,7 @@ fun SearchScreen(
     onRequireSignIn: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val recentSearches by viewModel.recentSearches.collectAsState()
     val authViewModel: AuthViewModel = hiltViewModel()
     val context = LocalContext.current
     var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -249,7 +261,14 @@ fun SearchScreen(
                     VisionResultSection(
                         response = response,
                         onClear = { viewModel.clearResults() },
-                        onNavigateToDetail = onNavigateToDetail
+                        // Dorada #2 (17. avgust 2026) - istorija se sad upisuje samo kad korisnik
+                        // stvarno klikne na rezultat (ne na svako kucanje), videti
+                        // SearchViewModel.recordCurrentQueryInHistory za obrazloženje. No-op ako je
+                        // tekstualni upit prazan (npr. čista pretraga slikom).
+                        onNavigateToDetail = { tmdbId ->
+                            viewModel.recordCurrentQueryInHistory()
+                            onNavigateToDetail(tmdbId)
+                        }
                     )
                     Spacer(modifier = Modifier.height(20.dp))
                 }
@@ -290,12 +309,19 @@ fun SearchScreen(
                         metaText = movie.releaseDate?.take(4),
                         description = movie.overview,
                         ratingText = "${String.format(LocalLocale.current.platformLocale, "%.1f", movie.voteAverage)}/10",
-                        onClick = { onNavigateToDetail(movie.tmdbId) }
+                        onClick = {
+                            viewModel.recordCurrentQueryInHistory()
+                            onNavigateToDetail(movie.tmdbId)
+                        }
                     )
                 }
             } else if (uiState.visionResult == null && uiState.error == null && uiState.searchQuery.isBlank()) {
                 item {
-                    SearchEmptyState()
+                    SearchEmptyState(
+                        recentSearches = recentSearches,
+                        onRecentQueryClick = { viewModel.selectRecentQuery(it) },
+                        onRecentQueryRemove = { viewModel.removeRecentQuery(it) }
+                    )
                 }
             }
 
@@ -307,18 +333,92 @@ fun SearchScreen(
 }
 
 /**
- * Prazno stanje pre prve pretrage - dokument (2.3) pominje da OVDE MOŽE da stoji "Nedavne
- * pretrage"/trending predlozi, ali to zahteva novi backend/state (SearchUiState nema takvo polje) -
- * van obima čisto vizuelnog redizajna. Umesto praznog ekrana, prijateljska poruka.
+ * Prazno stanje pre prve pretrage. Dorada (17. avgust 2026, korisnička žalba "prazno dok se ne
+ * krene sa pretragom") - ranije je ovde stajala samo prijateljska poruka (dokument 2.3 je pominjao
+ * "nedavne pretrage" kao ideju, odloženo tada jer SearchUiState nije imao to polje - sad ima, videti
+ * SearchViewModel.recentSearches/RecentSearchesStore). Istorija pretraga se prikazuje kao tap-nazad
+ * chip-ovi (isti obrazac kao Google/YouTube "nedavne pretrage") iznad postojeće poruke - ako istorije
+ * nema (prvi ikad ulazak) prikazuje se identično kao pre ove dorade.
  */
 @Composable
-private fun SearchEmptyState() {
+private fun SearchEmptyState(
+    recentSearches: List<String>,
+    onRecentQueryClick: (String) -> Unit,
+    onRecentQueryRemove: (String) -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 48.dp),
+            .padding(top = if (recentSearches.isEmpty()) 48.dp else 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        if (recentSearches.isNotEmpty()) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = stringResource(R.string.search_recent_title),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 10.dp)
+                )
+                // FlowRow bi bio idealan ovde, ali projekat ga još ne koristi nigde - obična
+                // Column od Row-ova (2 po redu) je dovoljno dobra za najviše 8 stavki
+                // (RecentSearchesStore.MAX_ITEMS), bez uvođenja novog layout obrasca samo za ovo.
+                recentSearches.chunked(2).forEach { rowQueries ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowQueries.forEach { query ->
+                            RecentSearchChip(
+                                query = query,
+                                onClick = { onRecentQueryClick(query) },
+                                onRemove = { onRecentQueryRemove(query) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (rowQueries.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+
+        // Dorada (17. avgust 2026, korisnička žalba "ekran deluje delimično prazan") - animirana
+        // ikonica-bedž iznad poruke, isti vizuelni obrazac kao logo krug na Sign In ekranu
+        // (`accentPrimary` na 13% providnosti + tanka ivica), samo ovde "diše" (blag puls skale) -
+        // ista `rememberInfiniteTransition` tehnika koja već postoji u MovieNightScreen.kt za
+        // rotaciju "Osveži predloge" ikonice, ovde primenjena na skalu umesto rotaciju.
+        val infiniteTransition = rememberInfiniteTransition(label = "search_empty_pulse")
+        val scale by infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.08f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "search_empty_pulse_scale"
+        )
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .scale(scale)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.13f), CircleShape)
+                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.27f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Movie,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(34.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
         Text(
             text = stringResource(R.string.search_empty_state_title),
             style = MaterialTheme.typography.titleMedium,
@@ -330,6 +430,50 @@ private fun SearchEmptyState() {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+/** Jedan "nedavna pretraga" chip - klik ponovo pokreće tu pretragu, X uklanja iz istorije. Isti
+ * vizuelni jezik kao GenreChip (surfaceVariant + outline border), samo klikabilan i sa X. */
+@Composable
+private fun RecentSearchChip(
+    query: String,
+    onClick: () -> Unit,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), MaterialTheme.shapes.small)
+            .clickable(onClick = onClick)
+            .padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.History,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = query,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
+        )
+        IconButton(onClick = onRemove, modifier = Modifier.size(24.dp)) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = stringResource(R.string.search_recent_remove_content_description),
+                modifier = Modifier.size(12.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

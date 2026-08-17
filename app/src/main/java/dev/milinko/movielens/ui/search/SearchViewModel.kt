@@ -3,6 +3,7 @@ package dev.milinko.movielens.ui.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.milinko.movielens.data.pref.RecentSearchesStore
 import dev.milinko.movielens.data.remote.movie.MovieSearchResult
 import dev.milinko.movielens.data.repository.MovieRepository
 import dev.milinko.movielens.data.repository.VisionRepository
@@ -31,11 +32,17 @@ data class SearchUiState(
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val movieRepository: MovieRepository,
-    private val visionRepository: VisionRepository
+    private val visionRepository: VisionRepository,
+    private val recentSearchesStore: RecentSearchesStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
+
+    // Dorada (17. avgust 2026, korisnička žalba "prazno dok se ne krene sa pretragom") - odvojeno
+    // od SearchUiState (isti obrazac kao sessionUser/baseUrl u ProfileViewModel) jer ne zavisi ni
+    // od jednog mrežnog poziva, samo lokalno čita/piše SharedPreferences.
+    val recentSearches: StateFlow<List<String>> = recentSearchesStore.recentQueries
 
     // Debounce posao za pretragu dok korisnik kuca - svaki novi karakter otkazuje prethodni.
     private var searchJob: Job? = null
@@ -61,13 +68,45 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    /** Trenutna pretraga na Enter/IME search akciju - preskače debounce, traži odmah. */
+    /**
+     * Trenutna pretraga na Enter/IME search akciju - preskače debounce, traži odmah. Namerno
+     * upisuje u istoriju (eksplicitna, namerna akcija - videti napomenu na [recordCurrentQueryInHistory]).
+     */
     fun searchMovies() {
         val query = _uiState.value.searchQuery.trim()
         if (query.isEmpty()) return
 
+        recentSearchesStore.addQuery(query)
         searchJob?.cancel()
         searchJob = viewModelScope.launch { performSearch(query) }
+    }
+
+    /** Ponovo pokreće pretragu za upit iz istorije (tap na chip) - preskače debounce, kao Enter. */
+    fun selectRecentQuery(query: String) {
+        _uiState.value = _uiState.value.copy(searchQuery = query)
+        recentSearchesStore.addQuery(query)
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch { performSearch(query) }
+    }
+
+    fun removeRecentQuery(query: String) {
+        recentSearchesStore.removeQuery(query)
+    }
+
+    /**
+     * Dorada #2 (17. avgust 2026, korisnička žalba "i uz debounce prečesto čuva") - prvi pokušaj
+     * (upis na SVAKI performSearch, uklj. debounced "live" pretragu dok korisnik kuca) se pokazao
+     * prečest - svaka pauza u kucanju duža od 300ms je već upisivala upit, čak i ako korisnik samo
+     * pregleda rezultate uživo i ništa ne otvori. Vraćeno na eksplicitne akcije (searchMovies/
+     * selectRecentQuery iznad), plus OVA funkcija - poziva je SearchScreen kad korisnik stvarno
+     * klikne na neki rezultat (poster/red) i ode na Movie Detail, jasan signal da je pretraga
+     * "uspela" i vredi je zapamtiti. Ne-op ako je upit prazan (npr. čist vision/slika pretraga).
+     */
+    fun recordCurrentQueryInHistory() {
+        val query = _uiState.value.searchQuery.trim()
+        if (query.isNotEmpty()) {
+            recentSearchesStore.addQuery(query)
+        }
     }
 
     private suspend fun performSearch(query: String) {

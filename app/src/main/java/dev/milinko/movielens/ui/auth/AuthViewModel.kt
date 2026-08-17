@@ -8,6 +8,7 @@ import dev.milinko.movielens.data.pref.SessionManager
 import dev.milinko.movielens.data.remote.AuthApi
 import dev.milinko.movielens.data.remote.AuthFirebaseRequest
 import dev.milinko.movielens.data.remote.UserDto
+import dev.milinko.movielens.data.repository.MovieRepository
 import dev.milinko.movielens.util.friendlyMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,11 +20,37 @@ import javax.inject.Inject
 class AuthViewModel @Inject constructor(
     private val authRepo: AuthRepository,
     private val authApi: AuthApi,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val movieRepository: MovieRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val uiState: StateFlow<AuthUiState> = _uiState
+
+    // UI dorada (17. avgust 2026, korisnička žalba "sign in deluje prazno") - poster kolaž
+    // pozadina na Sign In ekranu. Namerno POTPUNO odvojeno od uiState/prijave - ovo je čisto
+    // dekorativno, javna /trending ruta (ne treba token, ista ruta koju Home koristi za "Popularno").
+    // Ako poziv padne (offline, hladan start backenda) lista ostaje prazna i ekran se prikazuje
+    // identično kao pre ove dorade (plain gradijent) - nema error banner-a, nema retry dugmeta, ne
+    // sme da utiče na sam tok prijave.
+    //
+    // NAMERNO nije u init{} - AuthViewModel se ponovo koristi i u ProfileScreen.kt (top bar
+    // isSignedIn provera preko hiltViewModel()), pa bi init{} tamo pokretao nepotreban mrežni
+    // poziv za podatak koji se nigde na Profile ekranu ne koristi. loadBackgroundPostersIfNeeded()
+    // poziva samo SignInScreen (LaunchedEffect), a isLoadingPosters flag sprečava duple pozive.
+    private val _backgroundPosters = MutableStateFlow<List<String>>(emptyList())
+    val backgroundPosters: StateFlow<List<String>> = _backgroundPosters
+    private var didLoadBackgroundPosters = false
+
+    fun loadBackgroundPostersIfNeeded() {
+        if (didLoadBackgroundPosters) return
+        didLoadBackgroundPosters = true
+        viewModelScope.launch {
+            movieRepository.getTrendingMovies(page = 1).onSuccess { movies ->
+                _backgroundPosters.value = movies.mapNotNull { it.posterPath }
+            }
+        }
+    }
 
     /** Called right after Google Sign-In returns a Google ID token. */
     fun finishGoogleSignIn(googleIdToken: String) {

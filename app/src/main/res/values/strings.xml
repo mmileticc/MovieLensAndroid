@@ -32,7 +32,7 @@
     <string name="home_header_subtitle">Skeni, pretraži i pronađi filmove</string>
     <string name="home_section_personalized">Predloženo za tebe</string>
     <string name="home_section_now_in_cinemas">U bioskopima sada</string>
-    <string name="home_section_continue_watching">Nastavi da gledaš</string>
+    <string name="home_section_continue_watching">Sačuvani za gledanje</string>
     <string name="home_section_popular">Popularni filmovi</string>
     <!-- Dorada 17. avgust 2026 - FAB za pretragu zamenjen "nazad na vrh" dugmetom -->
     <string name="home_scroll_to_top_content_description">Nazad na vrh</string>
@@ -82,6 +82,9 @@
     <string name="search_signin_required_toast">Za skeniranje slike moraš prvo da se uloguješ.</string>
     <string name="search_empty_state_title">Pronađi svoj sledeći film</string>
     <string name="search_empty_state_message">Ukucaj naslov ili pretraži pomoću slike.</string>
+    <!-- Dorada 17. avgust 2026 - istorija pretraga (RecentSearchesStore) -->
+    <string name="search_recent_title">Nedavne pretrage</string>
+    <string name="search_recent_remove_content_description">Ukloni iz istorije</string>
     <string name="search_vision_result_title">Rezultat analize</string>
     <string name="search_vision_not_movie_like">Slika ne liči na film ili poster.</string>
     <string name="search_vision_success_message">Pronašli smo moguća podudaranja za tvoju sliku.</string>

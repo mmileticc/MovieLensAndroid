@@ -16,8 +16,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -25,10 +27,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import dev.milinko.movielens.R
+import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 
 // ⚠️  Replace this with your actual Web Client ID from Firebase Console →
 //     Project Settings → Your apps → Web client (auto created by Google Service) → Client ID
@@ -45,6 +49,7 @@ fun SignInScreen(
     viewModel: AuthViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val backgroundPosters by viewModel.backgroundPosters.collectAsState()
     val context = LocalContext.current
 
     // Navigate when signed in
@@ -52,6 +57,13 @@ fun SignInScreen(
         if (uiState is AuthUiState.SignedIn) {
             onSignedIn()
         }
+    }
+
+    // UI dorada (17. avgust 2026) - vidi napomenu u AuthViewModel.kt: poster kolaž pozadina,
+    // učitava se samo ovde (ne u init{}) da se izbegne nepotreban poziv kad se AuthViewModel
+    // reuse-uje u ProfileScreen top baru za isSignedIn proveru.
+    LaunchedEffect(Unit) {
+        viewModel.loadBackgroundPostersIfNeeded()
     }
 
     BackHandler(onBack = onDismiss)
@@ -88,22 +100,54 @@ fun SignInScreen(
     // Faza 4 redizajna: gradijent je ranije bio inline ljubičasto-crn (#070710/#0F0F1A/#0B0B12),
     // van teme i van naše palete. Sad ide iz centralizovanih tokena (background -> surfaceElevated1)
     // - i dalje suptilan vertikalni gradijent (koncept se zadržava, videti MOVIELENS_DESIGN_PLAN.md
-    // 2.1), samo bez tuđe boje. Pozadinski poster-collage je i dalje otvoreno pitanje (plan 6),
-    // nije dodat u ovoj fazi.
+    // 2.1), samo bez tuđe boje.
+    //
+    // UI dorada (17. avgust 2026, korisnička žalba "sign in deluje prazno") - zatvoreno "otvoreno
+    // pitanje" iz plana 6: dodat poster kolaž ispod gradijenta. Grid se puni pravim trenutno
+    // popularnim filmovima (`AuthViewModel.backgroundPosters`, ista javna /trending ruta kao Home) -
+    // ako poziv ne uspe (offline/hladan start backenda) lista ostaje prazna i ekran izgleda
+    // IDENTIČNO kao pre ove dorade (čist gradijent), bez ikakvog error stanja - ovo je čisto
+    // dekorativno.
+    //
+    // Ispravka (17. avgust 2026, korisnik prijavio "ne vidim promenu") - prva verzija je imala
+    // grešku u računu providnosti: gornji/donji kraj vertikalnog gradijenta su bili POTPUNO
+    // neprovidni (`colorScheme.background` bez alpha), a čak i sredina je bila providna samo 12%
+    // (`surface.copy(alpha=0.88f)`) - preko kolaža koji je i sam bio na svega 18% providnosti. Neto
+    // efekat: kolaž praktično nevidljiv. Zamenjeno radijalnim vinjet-om (providno na ivicama, gde i
+    // onako nema teksta osim blede terms poruke, neprovidno u centru gde sede logo/naslov/dugme) i
+    // podignuta providnost postera na 40% - sad stvarno vidljivo, a centar ekrana (gde je čitljivost
+    // najbitnija) ostaje čist.
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.background
-                    )
-                )
-            ),
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
+        if (backgroundPosters.isNotEmpty()) {
+            PosterCollageBackground(
+                posterPaths = backgroundPosters,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .alpha(0.40f)
+            )
+        }
+
+        // Radijalni vinjet: neproviran u centru (gde sede logo/naslov/dugme - čitljivost prioritet),
+        // providan na ivicama (gde se kolaž treba VIDETI). Kad kolaža nema, ovo je i dalje solidno
+        // oslonjeno na opaque `.background(colorScheme.background)` ispod (spoljašnji Box).
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.background,
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.35f)
+                        )
+                    )
+                )
+        )
+
         // Vidljivo dugme za zatvaranje - ne oslanjamo se samo na sistemsko "nazad" jer korisnici
         // ne moraju znati da će ono raditi ovde (posle odjave back stack je bio prazan i pre ove
         // izmene bi "nazad" ugasio celu aplikaciju).
@@ -238,6 +282,38 @@ fun SignInScreen(
                 style = MaterialTheme.typography.labelSmall,
                 textAlign = TextAlign.Center
             )
+        }
+    }
+}
+
+/**
+ * Statična mreža poster kartica (3 kolone) koja popunjava ceo ekran, ciklično ponavljajući
+ * dostupne postere ako ih ima manje od broja ćelija - namerno NE lazy/skrolujuća (ovo je
+ * dekoracija u pozadini, ne interaktivna lista), veličina liste je uvek mala (jedna TMDB stranica,
+ * ~20 filmova) pa je obična ugnježdena Column/Row kompozicija sasvim dovoljna.
+ */
+@Composable
+private fun PosterCollageBackground(
+    posterPaths: List<String>,
+    modifier: Modifier = Modifier
+) {
+    val columns = 3
+    val rows = 6
+    Column(modifier = modifier) {
+        repeat(rows) { rowIndex ->
+            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                repeat(columns) { columnIndex ->
+                    val posterPath = posterPaths[(rowIndex * columns + columnIndex) % posterPaths.size]
+                    AsyncImage(
+                        model = tmdbPosterUrl(posterPath, "w342"),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    )
+                }
+            }
         }
     }
 }
