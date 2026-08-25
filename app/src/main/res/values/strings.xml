@@ -1,5 +1,10 @@
 <resources>
-    <string name="app_name">MovieLens</string>
+    <!-- Rebrending (25. avgust 2026) - "Movienee" = movie + matinee, videti MOVIELENS_DESIGN_PLAN.md
+         za obrazloženje. Interni Kotlin paket (dev.milinko.movielens), Theme.MovieLens stil i
+         MovieLensTheme composable NAMERNO nisu dirani - to je interna identifikacija koda, ne
+         korisnički vidljiv brend, a preimenovanje paketa je mnogo rizičniji refaktor van obima
+         ovog zahteva (menja se svaki fajl u projektu). -->
+    <string name="app_name">Movienee</string>
 
     <!-- Faza 6 redizajna - deljene komponente (ui/components). Konvencija od ove faze nadalje:
          sav novi/dodirnut tekst ide u ovaj fajl, radi buduće višejezičnosti (videti
@@ -31,7 +36,7 @@
 
     <!-- Faza 4 redizajna - HomeScreen -->
     <string name="home_fab_search_content_description">Pretraga</string>
-    <string name="home_header_subtitle">Skeni, pretraži i pronađi filmove</string>
+    <string name="home_header_subtitle">Skeniraj, pretraži i pronađi filmove</string>
     <string name="home_section_personalized">Predloženo za tebe</string>
     <string name="home_section_now_in_cinemas">U bioskopima sada</string>
     <string name="home_section_continue_watching">Sačuvani za gledanje</string>
@@ -67,7 +72,7 @@
     <string name="movie_detail_review_label">Tvoj komentar (opciono)</string>
     <string name="movie_detail_save_review">Sačuvaj komentar</string>
     <string name="movie_detail_share_content_description">Podeli</string>
-    <string name="movie_detail_share_text">Gledam \"%1$s\" na MovieLens - probaj i ti!\n%2$s</string>
+    <string name="movie_detail_share_text">Gledam \"%1$s\" na Movienee - probaj i ti!\n%2$s</string>
 
     <!-- Faza 6 redizajna - SearchScreen -->
     <string name="search_top_bar_title">Pretraži filmove</string>

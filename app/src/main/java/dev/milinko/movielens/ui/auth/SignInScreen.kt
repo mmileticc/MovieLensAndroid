@@ -5,13 +5,13 @@ import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -34,6 +35,8 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import dev.milinko.movielens.R
 import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
+import dev.milinko.movielens.ui.components.MovieneeNameOrigin
+import dev.milinko.movielens.ui.components.MovieneeWordmark
 import dev.milinko.movielens.ui.components.SettingsDialog
 
 // ⚠️  Replace this with your actual Web Client ID from Firebase Console →
@@ -210,7 +213,10 @@ fun SignInScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Logo / Icon
+            // Logo (rebrending 25. avgust 2026) - stvaran Movienee znak (crvena filmska traka/dva
+            // profila) umesto generičke Icons.Default.Movie ikonice, videti
+            // drawable-nodpi/ic_movienee_mark.png. Krug pozadina/ivica nedirnuti (isti tretman kao
+            // pre).
             Box(
                 modifier = Modifier
                     .size(96.dp)
@@ -218,11 +224,10 @@ fun SignInScreen(
                     .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.27f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Movie,
+                Image(
+                    painter = painterResource(R.drawable.ic_movienee_mark),
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(56.dp)
                 )
             }
 
@@ -231,11 +236,10 @@ fun SignInScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    color = MaterialTheme.colorScheme.onBackground,
-                    style = MaterialTheme.typography.displayMedium
-                )
+                MovieneeWordmark(style = MaterialTheme.typography.displayMedium)
+                // Sitno objašnjenje odakle ime dolazi (movie + matinee), isto kao mala napomena
+                // ispod wordmark-a u originalnom logu - odvojeno od funkcionalnog taglina ispod.
+                MovieneeNameOrigin()
                 Text(
                     text = stringResource(R.string.sign_in_tagline),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

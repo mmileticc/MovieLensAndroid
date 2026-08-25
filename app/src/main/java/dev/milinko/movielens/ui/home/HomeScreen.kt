@@ -52,6 +52,7 @@ import dev.milinko.movielens.ui.components.AppBottomNavigationBar
 import dev.milinko.movielens.ui.components.BottomNavTab
 import dev.milinko.movielens.ui.components.MovieListRow
 import dev.milinko.movielens.ui.components.MoviePosterCard
+import dev.milinko.movielens.ui.components.MovieneeWordmark
 import dev.milinko.movielens.ui.components.SectionHeader
 import kotlinx.coroutines.launch
 // ...existing code...
@@ -305,11 +306,10 @@ private fun HomeHeader() {
     // MOVIELENS_DESIGN_PLAN.md 2.2: "manji i tanji ... pomera fokus na sadržaj"). Sad koristi
     // `titleLarge` (20sp SemiBold) iz teme, akcentna boja se zadržava radi prepoznatljivosti brenda.
     Column {
-        Text(
-            text = stringResource(R.string.app_name),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary
-        )
+        // Rebrending (25. avgust 2026) - dvobojni "movie‑nee" wordmark umesto jednobojnog app_name
+        // teksta (isti akcentni token kao pre, samo sad "movie" deo ostaje u tekst boji a "nee" nosi
+        // akcent - videti MovieneeWordmark.kt).
+        MovieneeWordmark(style = MaterialTheme.typography.titleLarge)
         Text(
             text = stringResource(R.string.home_header_subtitle),
             style = MaterialTheme.typography.bodyMedium,
