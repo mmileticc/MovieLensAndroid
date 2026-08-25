@@ -225,6 +225,12 @@ data class SuggestionScores(
 
 data class MovieNightResponse(
     @SerializedName("suggestions")
-    val suggestions: List<MovieSuggestion> = emptyList()
+    val suggestions: List<MovieSuggestion> = emptyList(),
+    // Dorada (25. avgust 2026, korisnička žalba "za neke prijatelje se predlozi ponavljaju posle
+    // 3-4 ekrana") - da li backend ima još TMDB discover stranica za ovaj par žanrova NAKON ove
+    // koja je upravo vraćena. Videti MovieNightViewModel.refreshSuggestions - ranije se umesto
+    // ovoga koristio izmišljen fiksan broj stranica (5), pogrešan za većinu parova žanrova.
+    @SerializedName("has_more")
+    val hasMore: Boolean = false
 )
 

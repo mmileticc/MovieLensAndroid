@@ -15,6 +15,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,8 +33,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -44,7 +48,6 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -58,10 +61,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +76,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -96,6 +102,7 @@ import dev.milinko.movielens.ui.components.PremiumBadge
 import dev.milinko.movielens.ui.components.SectionHeader
 import java.io.File
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 @Composable
 fun SearchScreen(
@@ -227,14 +234,34 @@ fun SearchScreen(
             }
         }
     ) { paddingValues ->
-        LazyColumn(
+        // Dorada (25. avgust 2026, korisnički zahtev "moze da se predje sa pretrage svih filmova na
+        // samo bioskopske na svajp") - HorizontalPager ispod (isti obrazac kao Library/Profile
+        // tabovi) nosi 2 stranice, svajp menja stranicu KAO I klik na SearchModeToggle - obe akcije
+        // moraju da drže i pager i pravi ViewModel state (uiState.isCinemaMode) u sinhronizaciji, jer
+        // mod nije čisto vizuelan (menja debounce ponašanje, gasi pretragu slikom, itd. - videti
+        // SearchViewModel). Dvosmerna sinhronizacija ispod je bezbedna od petlje: setCinemaMode ima
+        // rani return kad je vrednost već ista, a animateScrollToPage je no-op kad je pager već na
+        // ciljnoj stranici.
+        val pagerState = rememberPagerState(pageCount = { 2 })
+        val pagerScope = rememberCoroutineScope()
+
+        LaunchedEffect(pagerState.currentPage) {
+            viewModel.setCinemaMode(pagerState.currentPage == 1)
+        }
+        LaunchedEffect(uiState.isCinemaMode) {
+            val targetPage = if (uiState.isCinemaMode) 1 else 0
+            if (pagerState.currentPage != targetPage) {
+                pagerState.animateScrollToPage(targetPage)
+            }
+        }
+
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            item {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -256,11 +283,15 @@ fun SearchScreen(
                 // repertoaru bioskopa (videti MOVIELENS_DESIGN_PLAN.md Faza D za obrazloženje obima).
                 SearchModeToggle(
                     isCinemaMode = uiState.isCinemaMode,
-                    onModeChange = { viewModel.setCinemaMode(it) }
+                    onModeChange = { target ->
+                        viewModel.setCinemaMode(target)
+                        pagerScope.launch { pagerState.animateScrollToPage(if (target) 1 else 0) }
+                    }
                 )
-                // Faza D dorada (korisnički zahtev "da bih pogledao razliku u radu") - prekidač za
-                // embedding provajder, vidljiv SAMO u "U bioskopima" modu (nema smisla van semantičke
-                // pretrage). Isti vizuelni jezik kao SearchModeToggle iznad, samo manji/sekundaran.
+                // Faza D dorada (korisnički zahtev "da bih pogledao razliku u radu", pa naknadno "da
+                // ne bude isto veliko kao ova gore podela") - prekidač za embedding provajder,
+                // vidljiv SAMO u "U bioskopima" modu (nema smisla van semantičke pretrage). Namerno
+                // sitniji/sekundaran u odnosu na SearchModeToggle iznad - videti EmbeddingEngineToggle.
                 if (uiState.isCinemaMode) {
                     Spacer(modifier = Modifier.height(8.dp))
                     EmbeddingEngineToggle(
@@ -269,38 +300,8 @@ fun SearchScreen(
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-            }
 
-            // Faza 6 dorada (korisnikov feedback): rezultat pretrage slikom se VIŠE NE gasi kad
-            // korisnik počne da kuca tekstualnu pretragu - ranije je ceo tekstualni rezultat/prazno
-            // stanje bio uslovljen sa `visionResult == null`, što je sakrivalo tekstualne rezultate
-            // čim bi vision kartica postojala, iako ViewModel stanje (`SearchUiState`) uopšte ne
-            // briše `visionResult` kad se kuca - ovo je bio čisto UI bag u uslovu ispod, ne u
-            // ViewModel-u. Sad obe sekcije mogu da postoje istovremeno, naslagane. Vision pretraga
-            // slikom postoji samo u tekstualnom modu (Faza D "U bioskopima" mod je čisto tekstualni
-            // upit, bez slike).
-            if (!uiState.isCinemaMode) {
-                uiState.visionResult?.let { response ->
-                    item {
-                        VisionResultSection(
-                            response = response,
-                            onClear = { viewModel.clearResults() },
-                            // Dorada #2 (17. avgust 2026) - istorija se sad upisuje samo kad korisnik
-                            // stvarno klikne na rezultat (ne na svako kucanje), videti
-                            // SearchViewModel.recordCurrentQueryInHistory za obrazloženje. No-op ako je
-                            // tekstualni upit prazan (npr. čista pretraga slikom).
-                            onNavigateToDetail = { tmdbId ->
-                                viewModel.recordCurrentQueryInHistory()
-                                onNavigateToDetail(tmdbId)
-                            }
-                        )
-                        Spacer(modifier = Modifier.height(20.dp))
-                    }
-                }
-            }
-
-            if (uiState.error != null) {
-                item {
+                if (uiState.error != null) {
                     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
@@ -309,8 +310,7 @@ fun SearchScreen(
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            // Faza B bugfix - `?:` umesto `!!` (isti razlog kao MovieDetailScreen -
-                            // ovo je unutar `item {}` lambde, van dometa spoljašnjeg smart-cast-a).
+                            // Faza B bugfix - `?:` umesto `!!` (isti razlog kao MovieDetailScreen).
                             Text(uiState.error ?: stringResource(R.string.error_generic_title), style = MaterialTheme.typography.bodyMedium)
                         }
                     }
@@ -318,76 +318,159 @@ fun SearchScreen(
                 }
             }
 
-            if (uiState.isCinemaMode) {
-                // Faza D - semantička pretraga: bez istorije (namerno, videti MOVIELENS_DESIGN_PLAN.md
-                // Faza D), bez vision sekcije, drugačiji izvor podataka (NowInCinemasMovie).
-                if (uiState.cinemaResults.isNotEmpty()) {
-                    items(uiState.cinemaResults, key = { it.tmdbId }) { movie ->
-                        MovieListRow(
-                            title = movie.title,
-                            posterPath = movie.posterPath,
-                            metaText = movie.cinemas.joinToString(", "),
-                            ratingText = "${String.format(LocalLocale.current.platformLocale, "%.1f", movie.voteAverage)}/10",
-                            onClick = { onNavigateToDetail(movie.tmdbId) }
-                        )
-                    }
-                } else if (uiState.error == null && uiState.searchQuery.isBlank()) {
-                    item {
-                        SearchEmptyState(
-                            title = stringResource(R.string.search_cinemas_empty_title),
-                            message = stringResource(R.string.search_cinemas_empty_message),
-                            recentSearches = emptyList(),
-                            onRecentQueryClick = {},
-                            onRecentQueryRemove = {}
-                        )
-                    }
-                } else if (uiState.error == null && !uiState.isSearchingCinemas) {
-                    item {
-                        Text(
-                            text = stringResource(R.string.search_cinemas_no_results),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 24.dp)
-                        )
-                    }
-                }
-            } else if (uiState.searchResults.isNotEmpty()) {
-                if (uiState.visionResult != null) {
-                    // Mala odvojena naslovna linija samo kad su OBA rezultata istovremeno na
-                    // ekranu, da bude jasno da je ovo sad druga, nezavisna lista.
-                    item {
-                        SectionHeader(title = stringResource(R.string.search_text_results_header))
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-                }
-                items(uiState.searchResults, key = { it.tmdbId }) { movie ->
-                    MovieListRow(
-                        title = movie.title,
-                        posterPath = movie.posterPath,
-                        metaText = movie.releaseDate?.take(4),
-                        description = movie.overview,
-                        ratingText = "${String.format(LocalLocale.current.platformLocale, "%.1f", movie.voteAverage)}/10",
-                        onClick = {
-                            viewModel.recordCurrentQueryInHistory()
-                            onNavigateToDetail(movie.tmdbId)
-                        }
-                    )
-                }
-            } else if (uiState.visionResult == null && uiState.error == null && uiState.searchQuery.isBlank()) {
-                item {
-                    SearchEmptyState(
-                        title = stringResource(R.string.search_empty_state_title),
-                        message = stringResource(R.string.search_empty_state_message),
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) { page ->
+                if (page == 0) {
+                    TextSearchResultsPage(
+                        uiState = uiState,
                         recentSearches = recentSearches,
                         onRecentQueryClick = { viewModel.selectRecentQuery(it) },
-                        onRecentQueryRemove = { viewModel.removeRecentQuery(it) }
+                        onRecentQueryRemove = { viewModel.removeRecentQuery(it) },
+                        onNavigateToDetail = onNavigateToDetail,
+                        onClearVision = { viewModel.clearResults() },
+                        onRecordHistory = { viewModel.recordCurrentQueryInHistory() }
+                    )
+                } else {
+                    CinemaResultsPage(
+                        uiState = uiState,
+                        onNavigateToDetail = onNavigateToDetail
                     )
                 }
             }
+        }
+    }
+}
 
+/**
+ * Stranica 0 pagera (25. avgust 2026 dorada, videti napomenu u [SearchScreen]) - obična tekstualna
+ * pretraga (ceo TMDB katalog) + vision rezultat, isti sadržaj koji je ranije bio direktno u glavnom
+ * LazyColumn-u pod `!uiState.isCinemaMode` granom - sad je to sama ova stranica, grananje po modu
+ * više nije potrebno unutra jer stranica sama IMPLICIRA mod.
+ */
+@Composable
+private fun TextSearchResultsPage(
+    uiState: SearchUiState,
+    recentSearches: List<String>,
+    onRecentQueryClick: (String) -> Unit,
+    onRecentQueryRemove: (String) -> Unit,
+    onNavigateToDetail: (Int) -> Unit,
+    onClearVision: () -> Unit,
+    onRecordHistory: () -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+    ) {
+        // Faza 6 dorada (korisnikov feedback): rezultat pretrage slikom se ne gasi kad korisnik
+        // počne da kuca tekstualnu pretragu - obe sekcije mogu da postoje istovremeno, naslagane.
+        uiState.visionResult?.let { response ->
             item {
-                Spacer(modifier = Modifier.height(16.dp))
+                VisionResultSection(
+                    response = response,
+                    onClear = onClearVision,
+                    // Dorada #2 (17. avgust 2026) - istorija se upisuje samo kad korisnik stvarno
+                    // klikne na rezultat (ne na svako kucanje).
+                    onNavigateToDetail = { tmdbId ->
+                        onRecordHistory()
+                        onNavigateToDetail(tmdbId)
+                    }
+                )
+                Spacer(modifier = Modifier.height(20.dp))
             }
+        }
+
+        if (uiState.searchResults.isNotEmpty()) {
+            if (uiState.visionResult != null) {
+                // Mala odvojena naslovna linija samo kad su OBA rezultata istovremeno na ekranu.
+                item {
+                    SectionHeader(title = stringResource(R.string.search_text_results_header))
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+            items(uiState.searchResults, key = { it.tmdbId }) { movie ->
+                MovieListRow(
+                    title = movie.title,
+                    posterPath = movie.posterPath,
+                    metaText = movie.releaseDate?.take(4),
+                    description = movie.overview,
+                    ratingText = "${String.format(LocalLocale.current.platformLocale, "%.1f", movie.voteAverage)}/10",
+                    onClick = {
+                        onRecordHistory()
+                        onNavigateToDetail(movie.tmdbId)
+                    }
+                )
+            }
+        } else if (uiState.visionResult == null && uiState.error == null && uiState.searchQuery.isBlank()) {
+            item {
+                SearchEmptyState(
+                    title = stringResource(R.string.search_empty_state_title),
+                    message = stringResource(R.string.search_empty_state_message),
+                    recentSearches = recentSearches,
+                    onRecentQueryClick = onRecentQueryClick,
+                    onRecentQueryRemove = onRecentQueryRemove
+                )
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+/**
+ * Stranica 1 pagera (25. avgust 2026 dorada) - semantička pretraga svedena na filmove trenutno na
+ * repertoaru (Faza D). Bez istorije (namerno, videti MOVIELENS_DESIGN_PLAN.md Faza D), bez vision
+ * sekcije, drugačiji izvor podataka (`NowInCinemasMovie`).
+ */
+@Composable
+private fun CinemaResultsPage(
+    uiState: SearchUiState,
+    onNavigateToDetail: (Int) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+    ) {
+        if (uiState.cinemaResults.isNotEmpty()) {
+            items(uiState.cinemaResults, key = { it.tmdbId }) { movie ->
+                MovieListRow(
+                    title = movie.title,
+                    posterPath = movie.posterPath,
+                    metaText = movie.cinemas.joinToString(", "),
+                    ratingText = "${String.format(LocalLocale.current.platformLocale, "%.1f", movie.voteAverage)}/10",
+                    onClick = { onNavigateToDetail(movie.tmdbId) }
+                )
+            }
+        } else if (uiState.error == null && uiState.searchQuery.isBlank()) {
+            item {
+                SearchEmptyState(
+                    title = stringResource(R.string.search_cinemas_empty_title),
+                    message = stringResource(R.string.search_cinemas_empty_message),
+                    recentSearches = emptyList(),
+                    onRecentQueryClick = {},
+                    onRecentQueryRemove = {}
+                )
+            }
+        } else if (uiState.error == null && !uiState.isSearchingCinemas) {
+            item {
+                Text(
+                    text = stringResource(R.string.search_cinemas_no_results),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 24.dp)
+                )
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
@@ -475,11 +558,12 @@ private fun SearchEmptyState(
                 .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.27f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Default.Movie,
+            // Rebrending (25. avgust 2026) - stvaran Movienee znak umesto generičke
+            // Icons.Default.Movie ikonice, isti tretman kao badž na Sign In ekranu.
+            Image(
+                painter = painterResource(R.drawable.ic_movienee_mark),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(34.dp)
+                modifier = Modifier.size(42.dp)
             )
         }
         Spacer(modifier = Modifier.height(16.dp))
@@ -532,30 +616,48 @@ private fun SearchModeToggle(isCinemaMode: Boolean, onModeChange: (Boolean) -> U
 
 /**
  * Faza D dorada (korisnički zahtev za poređenje Gemini vs. lokalni MiniLM embedding "da bih
- * pogledao razliku u radu") - manji prekidač istog vizuelnog jezika kao [SearchModeToggle], samo
- * sa `secondaryContainer` pozadinom da se vizuelno razlikuje kao "podešavanje" unutar "U
- * bioskopima" moda, ne kao ravnopravan treći mod pretrage.
+ * pogledao razliku u radu", pa naknadno "da ne bude isto veliko kao ova gore podela... manji
+ * togle") - NAMERNO sitnija/sekundarna varijanta [SearchModeSegment] jezika: `wrapContentWidth`
+ * umesto `fillMaxWidth` (ne razvlači se preko celog ekrana kao glavni mod toggle), manji tekst
+ * (`labelSmall`) i manji unutrašnji padding, `secondaryContainer` pozadina da vizuelno čita kao
+ * "podešavanje" unutar "U bioskopima" moda, ne kao ravnopravan treći mod pretrage.
  */
 @Composable
 private fun EmbeddingEngineToggle(useLocalEmbedding: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.large)
+            .wrapContentWidth(Alignment.Start)
+            .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.secondaryContainer)
-            .padding(4.dp)
+            .padding(2.dp)
     ) {
-        SearchModeSegment(
+        EmbeddingEngineSegment(
             text = stringResource(R.string.search_engine_gemini),
             selected = !useLocalEmbedding,
-            onClick = { onChange(false) },
-            modifier = Modifier.weight(1f)
+            onClick = { onChange(false) }
         )
-        SearchModeSegment(
+        EmbeddingEngineSegment(
             text = stringResource(R.string.search_engine_local),
             selected = useLocalEmbedding,
-            onClick = { onChange(true) },
-            modifier = Modifier.weight(1f)
+            onClick = { onChange(true) }
+        )
+    }
+}
+
+@Composable
+private fun EmbeddingEngineSegment(text: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

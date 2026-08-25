@@ -18,6 +18,7 @@ import dev.milinko.movielens.data.remote.user.UserSearchResult
 import dev.milinko.movielens.data.remote.user.FriendInfo
 import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.data.remote.user.MovieSuggestion
+import dev.milinko.movielens.data.remote.user.MovieNightResponse
 import dev.milinko.movielens.data.remote.movie.WatchlistItem
 import dev.milinko.movielens.data.remote.movie.HistoryItem
 import dev.milinko.movielens.util.safeApiCall
@@ -81,7 +82,10 @@ interface UserRepository {
 
     suspend fun getFriendActivity(userId: String): Result<List<FriendActivity>>
 
-    suspend fun getMovieNightSuggestions(userId: String, friendId: String, page: Int = 1): Result<List<MovieSuggestion>>
+    // Dorada (25. avgust 2026, korisnička žalba "za neke prijatelje se predlozi ponavljaju posle
+    // 3-4 ekrana") - vraća ceo MovieNightResponse (ne samo listu) da MovieNightViewModel dobije i
+    // `hasMore` (da li TMDB ima još stranica) umesto ranijeg izmišljenog fiksnog broja stranica.
+    suspend fun getMovieNightSuggestions(userId: String, friendId: String, page: Int = 1): Result<MovieNightResponse>
 
     /**
      * Učitava movienight-suggestions unapred (npr. čim se otvori profil prijatelja) i drži ih u
@@ -155,7 +159,9 @@ class UserRepositoryImpl @Inject constructor(
     // getMovieNightSuggestions da MovieNightScreen ne mora da čeka mrežu ako je već prefetch-ovano.
     // ConcurrentHashMap jer prefetch i stvaran poziv mogu teoretski da se preklope. Faza C dodaje
     // Room ISPOD ovoga kao drugi nivo (memorija se prazni na svaki restart procesa, Room ostaje).
-    private val movieNightCache = java.util.concurrent.ConcurrentHashMap<String, List<MovieSuggestion>>()
+    // Dorada (25. avgust 2026) - keš sad drži ceo MovieNightResponse (uklj. hasMore), ne samo
+    // listu predloga - videti obrazloženje na interfejsu iznad.
+    private val movieNightCache = java.util.concurrent.ConcurrentHashMap<String, MovieNightResponse>()
 
     // Faza C - deljena Gson instanca za GenericCache (de)serijalizaciju (parseErrorMessage ispod
     // pravi sopstvenu Gson() instancu za sasvim drugu svrhu - namerno odvojeno, ne deli se).
@@ -410,7 +416,7 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getMovieNightSuggestions(userId: String, friendId: String, page: Int): Result<List<MovieSuggestion>> {
+    override suspend fun getMovieNightSuggestions(userId: String, friendId: String, page: Int): Result<MovieNightResponse> {
         // page je deo ključa - "Osveži predloge" traži sledeću stranu pod drugim ključem, pa
         // prirodno zaobilazi keš (stvaran mrežni poziv) bez posebnog "forceRefresh" parametra.
         val cacheKey = "$userId:$friendId:$page"
@@ -421,7 +427,7 @@ class UserRepositoryImpl @Inject constructor(
         // budu instant bez ponovnog Room čitanja.
         genericCacheDao.get(movieNightCacheKey(userId, friendId, page))?.jsonPayload?.let { json ->
             val cached = runCatching {
-                cacheGson.fromJson<List<MovieSuggestion>>(json, object : TypeToken<List<MovieSuggestion>>() {}.type)
+                cacheGson.fromJson(json, MovieNightResponse::class.java)
             }.getOrNull()
             if (cached != null) {
                 movieNightCache[cacheKey] = cached
@@ -432,10 +438,10 @@ class UserRepositoryImpl @Inject constructor(
         return safeApiCall {
             val response = userApiService.getMovieNightSuggestions(userId, friendId, page)
             if (response.isSuccessful) {
-                val suggestions = response.body()?.suggestions ?: emptyList()
-                movieNightCache[cacheKey] = suggestions
-                genericCacheDao.put(GenericCacheEntity(movieNightCacheKey(userId, friendId, page), cacheGson.toJson(suggestions)))
-                suggestions
+                val body = response.body() ?: MovieNightResponse()
+                movieNightCache[cacheKey] = body
+                genericCacheDao.put(GenericCacheEntity(movieNightCacheKey(userId, friendId, page), cacheGson.toJson(body)))
+                body
             } else {
                 throw Exception("Get suggestions failed: ${response.code()}")
             }

@@ -34,22 +34,28 @@ class MovieNightViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(MovieNightUiState())
     val uiState: StateFlow<MovieNightUiState> = _uiState.asStateFlow()
 
-    // Prati koja je TMDB discover strana trenutno prikazana - "Osveži" rotira kroz 1..MAX_PAGE
-    // pa se vrati na početak, umesto da raste unedogled (posle par strana bi discover mogao
-    // da vrati prazan rezultat za uzak par žanrova).
+    // Prati koja je TMDB discover strana trenutno prikazana.
     private var currentPage = 1
 
-    private companion object {
-        const val MAX_PAGE = 5
-    }
+    // Bugfix (25. avgust 2026, korisnička žalba "za neke prijatelje se predlozi ponavljaju posle
+    // 3-4 ekrana, za druge nikad") - RANIJE je "Osveži" rotirao kroz IZMIŠLJEN fiksan broj strana
+    // (1..5) bez obzira na to koliko TMDB stvarno ima za dati par žanrova. Širok presek žanrova
+    // (npr. Action|Comedy) ima stotine stvarnih stranica - korisnik bi "ispao" iz fiksnog kruga od
+    // 5 mnogo pre nego što je TMDB zaista ostao bez filmova, i video iste predloge iznova. Uzak
+    // presek (npr. Documentary|War) možda ima manje od 5 stranica - fiksni broj bi tu čak i
+    // preterao. Sad prati STVARAN `hasMore` flag iz backend odgovora (koji zna pravi total_pages,
+    // videti MovieNightResponse/FriendsRouting.kt) - stranica raste dok god ima još, vraća se na
+    // početak tek kad TMDB zaista nema šta novo da ponudi.
+    private var hasMore = true
 
     fun loadSuggestions() {
         val userId = sessionManager.getUserId() ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             userRepository.getMovieNightSuggestions(userId, friendId, page = currentPage)
-                .onSuccess { suggestions ->
-                    _uiState.value = _uiState.value.copy(isLoading = false, suggestions = suggestions)
+                .onSuccess { result ->
+                    hasMore = result.hasMore
+                    _uiState.value = _uiState.value.copy(isLoading = false, suggestions = result.suggestions)
                 }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
@@ -60,17 +66,19 @@ class MovieNightViewModel @Inject constructor(
         }
     }
 
-    /** "Osveži predloge" - traži sledeću TMDB discover stranu (rotira 1..MAX_PAGE). */
+    /** "Osveži predloge" - traži sledeću TMDB discover stranu dok god ih ima (`hasMore`), inače
+     * se vraća na stranicu 1 (stvaran kraj raspoloživih predloga za ovaj par žanrova, ne izmišljen). */
     fun refreshSuggestions() {
         val userId = sessionManager.getUserId() ?: return
-        val nextPage = if (currentPage >= MAX_PAGE) 1 else currentPage + 1
+        val nextPage = if (hasMore) currentPage + 1 else 1
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isRefreshing = true, error = null)
             userRepository.getMovieNightSuggestions(userId, friendId, page = nextPage)
-                .onSuccess { suggestions ->
+                .onSuccess { result ->
                     currentPage = nextPage
-                    _uiState.value = _uiState.value.copy(isRefreshing = false, suggestions = suggestions)
+                    hasMore = result.hasMore
+                    _uiState.value = _uiState.value.copy(isRefreshing = false, suggestions = result.suggestions)
                 }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
