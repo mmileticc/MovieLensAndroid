@@ -186,9 +186,12 @@ fun SearchScreen(
                 SearchInputBar(
                     query = uiState.searchQuery,
                     onQueryChange = { viewModel.setSearchQuery(it) },
-                    isSearching = uiState.isSearching,
+                    // Faza D - spinner u polju treba da se pojavi i tokom semantičke pretrage, ne
+                    // samo tokom obične (odvojena polja u SearchUiState, videti SearchViewModel).
+                    isSearching = if (uiState.isCinemaMode) uiState.isSearchingCinemas else uiState.isSearching,
                     hasSelectedImage = uiState.selectedImageUri != null,
                     isAnalyzingImage = uiState.isAnalyzingImage,
+                    isCinemaMode = uiState.isCinemaMode,
                     onSubmit = {
                         if (uiState.selectedImageUri != null) {
                             requireScanAuthOrProceed { viewModel.detectImage() }
@@ -247,6 +250,24 @@ fun SearchScreen(
                         modifier = Modifier.weight(1f)
                     )
                 }
+                Spacer(modifier = Modifier.height(12.dp))
+                // Faza D (17. avgust 2026, predlog mentora Marka) - toggle između obične tekstualne
+                // pretrage (ceo TMDB katalog) i semantičke pretrage svedene na filmove trenutno na
+                // repertoaru bioskopa (videti MOVIELENS_DESIGN_PLAN.md Faza D za obrazloženje obima).
+                SearchModeToggle(
+                    isCinemaMode = uiState.isCinemaMode,
+                    onModeChange = { viewModel.setCinemaMode(it) }
+                )
+                // Faza D dorada (korisnički zahtev "da bih pogledao razliku u radu") - prekidač za
+                // embedding provajder, vidljiv SAMO u "U bioskopima" modu (nema smisla van semantičke
+                // pretrage). Isti vizuelni jezik kao SearchModeToggle iznad, samo manji/sekundaran.
+                if (uiState.isCinemaMode) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    EmbeddingEngineToggle(
+                        useLocalEmbedding = uiState.useLocalEmbedding,
+                        onChange = { viewModel.setUseLocalEmbedding(it) }
+                    )
+                }
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
@@ -255,22 +276,26 @@ fun SearchScreen(
             // stanje bio uslovljen sa `visionResult == null`, što je sakrivalo tekstualne rezultate
             // čim bi vision kartica postojala, iako ViewModel stanje (`SearchUiState`) uopšte ne
             // briše `visionResult` kad se kuca - ovo je bio čisto UI bag u uslovu ispod, ne u
-            // ViewModel-u. Sad obe sekcije mogu da postoje istovremeno, naslagane.
-            uiState.visionResult?.let { response ->
-                item {
-                    VisionResultSection(
-                        response = response,
-                        onClear = { viewModel.clearResults() },
-                        // Dorada #2 (17. avgust 2026) - istorija se sad upisuje samo kad korisnik
-                        // stvarno klikne na rezultat (ne na svako kucanje), videti
-                        // SearchViewModel.recordCurrentQueryInHistory za obrazloženje. No-op ako je
-                        // tekstualni upit prazan (npr. čista pretraga slikom).
-                        onNavigateToDetail = { tmdbId ->
-                            viewModel.recordCurrentQueryInHistory()
-                            onNavigateToDetail(tmdbId)
-                        }
-                    )
-                    Spacer(modifier = Modifier.height(20.dp))
+            // ViewModel-u. Sad obe sekcije mogu da postoje istovremeno, naslagane. Vision pretraga
+            // slikom postoji samo u tekstualnom modu (Faza D "U bioskopima" mod je čisto tekstualni
+            // upit, bez slike).
+            if (!uiState.isCinemaMode) {
+                uiState.visionResult?.let { response ->
+                    item {
+                        VisionResultSection(
+                            response = response,
+                            onClear = { viewModel.clearResults() },
+                            // Dorada #2 (17. avgust 2026) - istorija se sad upisuje samo kad korisnik
+                            // stvarno klikne na rezultat (ne na svako kucanje), videti
+                            // SearchViewModel.recordCurrentQueryInHistory za obrazloženje. No-op ako je
+                            // tekstualni upit prazan (npr. čista pretraga slikom).
+                            onNavigateToDetail = { tmdbId ->
+                                viewModel.recordCurrentQueryInHistory()
+                                onNavigateToDetail(tmdbId)
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(20.dp))
+                    }
                 }
             }
 
@@ -293,7 +318,40 @@ fun SearchScreen(
                 }
             }
 
-            if (uiState.searchResults.isNotEmpty()) {
+            if (uiState.isCinemaMode) {
+                // Faza D - semantička pretraga: bez istorije (namerno, videti MOVIELENS_DESIGN_PLAN.md
+                // Faza D), bez vision sekcije, drugačiji izvor podataka (NowInCinemasMovie).
+                if (uiState.cinemaResults.isNotEmpty()) {
+                    items(uiState.cinemaResults, key = { it.tmdbId }) { movie ->
+                        MovieListRow(
+                            title = movie.title,
+                            posterPath = movie.posterPath,
+                            metaText = movie.cinemas.joinToString(", "),
+                            ratingText = "${String.format(LocalLocale.current.platformLocale, "%.1f", movie.voteAverage)}/10",
+                            onClick = { onNavigateToDetail(movie.tmdbId) }
+                        )
+                    }
+                } else if (uiState.error == null && uiState.searchQuery.isBlank()) {
+                    item {
+                        SearchEmptyState(
+                            title = stringResource(R.string.search_cinemas_empty_title),
+                            message = stringResource(R.string.search_cinemas_empty_message),
+                            recentSearches = emptyList(),
+                            onRecentQueryClick = {},
+                            onRecentQueryRemove = {}
+                        )
+                    }
+                } else if (uiState.error == null && !uiState.isSearchingCinemas) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.search_cinemas_no_results),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 24.dp)
+                        )
+                    }
+                }
+            } else if (uiState.searchResults.isNotEmpty()) {
                 if (uiState.visionResult != null) {
                     // Mala odvojena naslovna linija samo kad su OBA rezultata istovremeno na
                     // ekranu, da bude jasno da je ovo sad druga, nezavisna lista.
@@ -318,6 +376,8 @@ fun SearchScreen(
             } else if (uiState.visionResult == null && uiState.error == null && uiState.searchQuery.isBlank()) {
                 item {
                     SearchEmptyState(
+                        title = stringResource(R.string.search_empty_state_title),
+                        message = stringResource(R.string.search_empty_state_message),
                         recentSearches = recentSearches,
                         onRecentQueryClick = { viewModel.selectRecentQuery(it) },
                         onRecentQueryRemove = { viewModel.removeRecentQuery(it) }
@@ -342,6 +402,11 @@ fun SearchScreen(
  */
 @Composable
 private fun SearchEmptyState(
+    // Faza D - title/message su sad parametri (ranije fiksni stringResource pozivi unutra) da isti
+    // sastav (chip-ovi istorije + animirana ikonica) može da se reciklira i za "U bioskopima" mod
+    // (koji nema istoriju - poziva se sa recentSearches = emptyList()).
+    title: String,
+    message: String,
     recentSearches: List<String>,
     onRecentQueryClick: (String) -> Unit,
     onRecentQueryRemove: (String) -> Unit
@@ -420,15 +485,95 @@ private fun SearchEmptyState(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = stringResource(R.string.search_empty_state_title),
+            text = title,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onBackground
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = stringResource(R.string.search_empty_state_message),
+            text = message,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * Faza D (17. avgust 2026, predlog mentora Marka) - segmentovani toggle "Sve filmove" / "U
+ * bioskopima". Nema gotove segmented-control komponente u projektu (samo `SecondaryTabRow` za
+ * Profile/Library tabove, koji vodi računa o zasebnim stranicama - ovde nema stranica, samo
+ * prekidač za jedan search bar), pa je napravljena minimalna verzija istim vizuelnim jezikom kao
+ * `GenreChip` (surfaceVariant pozadina + outline ivica), samo sa dva klikabilna segmenta i
+ * markiranim izabranim (primary pozadina/onPrimary tekst).
+ */
+@Composable
+private fun SearchModeToggle(isCinemaMode: Boolean, onModeChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(4.dp)
+    ) {
+        SearchModeSegment(
+            text = stringResource(R.string.search_mode_all),
+            selected = !isCinemaMode,
+            onClick = { onModeChange(false) },
+            modifier = Modifier.weight(1f)
+        )
+        SearchModeSegment(
+            text = stringResource(R.string.search_mode_cinemas),
+            selected = isCinemaMode,
+            onClick = { onModeChange(true) },
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+/**
+ * Faza D dorada (korisnički zahtev za poređenje Gemini vs. lokalni MiniLM embedding "da bih
+ * pogledao razliku u radu") - manji prekidač istog vizuelnog jezika kao [SearchModeToggle], samo
+ * sa `secondaryContainer` pozadinom da se vizuelno razlikuje kao "podešavanje" unutar "U
+ * bioskopima" moda, ne kao ravnopravan treći mod pretrage.
+ */
+@Composable
+private fun EmbeddingEngineToggle(useLocalEmbedding: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.secondaryContainer)
+            .padding(4.dp)
+    ) {
+        SearchModeSegment(
+            text = stringResource(R.string.search_engine_gemini),
+            selected = !useLocalEmbedding,
+            onClick = { onChange(false) },
+            modifier = Modifier.weight(1f)
+        )
+        SearchModeSegment(
+            text = stringResource(R.string.search_engine_local),
+            selected = useLocalEmbedding,
+            onClick = { onChange(true) },
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun SearchModeSegment(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.medium)
+            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -533,6 +678,7 @@ private fun SearchInputBar(
     isSearching: Boolean,
     hasSelectedImage: Boolean,
     isAnalyzingImage: Boolean,
+    isCinemaMode: Boolean,
     onSubmit: () -> Unit,
     onGalleryClick: () -> Unit,
     onCameraClick: () -> Unit
@@ -549,8 +695,11 @@ private fun SearchInputBar(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box {
+            // Faza D - pretraga slikom (Gemini vision) postoji samo u tekstualnom modu, dugme se
+            // onemogućava (ne skriva - manja skokovita promena layout-a) u "U bioskopima" modu.
             IconButton(
                 onClick = { showImageSourceMenu = true },
+                enabled = !isCinemaMode,
                 modifier = Modifier
                     .size(40.dp)
                     .clip(MaterialTheme.shapes.small)
@@ -593,7 +742,8 @@ private fun SearchInputBar(
                 .weight(1f)
                 .heightIn(min = 48.dp),
             placeholder = {
-                Text(stringResource(R.string.search_input_placeholder), style = MaterialTheme.typography.bodyMedium)
+                val placeholderRes = if (isCinemaMode) R.string.search_input_placeholder_cinemas else R.string.search_input_placeholder
+                Text(stringResource(placeholderRes), style = MaterialTheme.typography.bodyMedium)
             },
             singleLine = true,
             trailingIcon = {

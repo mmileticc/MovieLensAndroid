@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,6 +34,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import dev.milinko.movielens.R
 import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
+import dev.milinko.movielens.ui.components.SettingsDialog
 
 // ⚠️  Replace this with your actual Web Client ID from Firebase Console →
 //     Project Settings → Your apps → Web client (auto created by Google Service) → Client ID
@@ -162,6 +164,42 @@ fun SignInScreen(
                 imageVector = Icons.Default.Close,
                 contentDescription = stringResource(R.string.action_close),
                 tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+            )
+        }
+
+        // Dorada (17. avgust 2026, korisnička žalba "ne mogu ništa da uradim kad sam izlogovan jer
+        // se backend ruta vidi samo kad si ulogovan") - urediva backend ruta je ranije bila SAMO na
+        // Profile → Podešavanja tabu, koji je sad zaključan iza prijave (dorada #2). Sign In je
+        // jedini ekran koji izlogovan korisnik uvek vidi, pa dugme ide ovde, simetrično sa X gore
+        // levo. Reciklira isti UrlStorage preko AuthViewModel-a - ista podešavanja kao Profile.
+        var showBackendDialog by remember { mutableStateOf(false) }
+        IconButton(
+            onClick = { showBackendDialog = true },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Settings,
+                contentDescription = stringResource(R.string.sign_in_backend_content_description),
+                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+            )
+        }
+
+        if (showBackendDialog) {
+            val baseUrl by viewModel.baseUrl.collectAsState()
+            val savedRoutes by viewModel.savedRoutes.collectAsState()
+            SettingsDialog(
+                currentUrl = baseUrl,
+                savedRoutes = savedRoutes,
+                onDismiss = { showBackendDialog = false },
+                onSave = {
+                    viewModel.updateBaseUrl(it)
+                    showBackendDialog = false
+                },
+                onAddRoute = { viewModel.addSavedRoute(it) },
+                onDeleteRoute = { viewModel.removeSavedRoute(it) }
             )
         }
 

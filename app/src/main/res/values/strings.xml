@@ -26,6 +26,8 @@
     <string name="sign_in_google_button">Nastavi sa Google nalogom</string>
     <string name="sign_in_loading">Prijavljivanje…</string>
     <string name="sign_in_terms">Prijavljivanjem prihvataš uslove korišćenja i politiku privatnosti.</string>
+    <!-- Dorada (17. avgust 2026) - backend URL podešavanje, jedini uvek dostupan ulaz za izlogovanog korisnika -->
+    <string name="sign_in_backend_content_description">Podešavanja backend adrese</string>
 
     <!-- Faza 4 redizajna - HomeScreen -->
     <string name="home_fab_search_content_description">Pretraga</string>
@@ -82,6 +84,17 @@
     <string name="search_signin_required_toast">Za skeniranje slike moraš prvo da se uloguješ.</string>
     <string name="search_empty_state_title">Pronađi svoj sledeći film</string>
     <string name="search_empty_state_message">Ukucaj naslov ili pretraži pomoću slike.</string>
+    <!-- Faza D (17. avgust 2026, predlog mentora Marka) - semantička pretraga svedena na filmove
+         trenutno na repertoaru bioskopa, videti MOVIELENS_DESIGN_PLAN.md Faza D. -->
+    <string name="search_mode_all">Sve filmove</string>
+    <string name="search_mode_cinemas">U bioskopima</string>
+    <string name="search_input_placeholder_cinemas">Opiši šta bi da gledaš…</string>
+    <!-- Faza D dorada - poređenje Gemini vs. lokalni MiniLM embedding, vidljivo samo u "U bioskopima" modu. -->
+    <string name="search_engine_gemini">Gemini</string>
+    <string name="search_engine_local">Lokalno (MiniLM)</string>
+    <string name="search_cinemas_empty_title">Pronađi film po opisu</string>
+    <string name="search_cinemas_empty_message">Opiši atmosferu ili radnju - pretraga važi za filmove trenutno na repertoaru bioskopa.</string>
+    <string name="search_cinemas_no_results">Nema poklapanja među filmovima trenutno na repertoaru.</string>
     <!-- Dorada 17. avgust 2026 - istorija pretraga (RecentSearchesStore) -->
     <string name="search_recent_title">Nedavne pretrage</string>
     <string name="search_recent_remove_content_description">Ukloni iz istorije</string>

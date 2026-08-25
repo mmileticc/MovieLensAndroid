@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.milinko.movielens.data.auth.AuthRepository
 import dev.milinko.movielens.data.pref.SessionManager
+import dev.milinko.movielens.data.pref.UrlStorage
 import dev.milinko.movielens.data.remote.AuthApi
 import dev.milinko.movielens.data.remote.AuthFirebaseRequest
 import dev.milinko.movielens.data.remote.UserDto
@@ -13,6 +14,7 @@ import dev.milinko.movielens.util.friendlyMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -21,7 +23,8 @@ class AuthViewModel @Inject constructor(
     private val authRepo: AuthRepository,
     private val authApi: AuthApi,
     private val sessionManager: SessionManager,
-    private val movieRepository: MovieRepository
+    private val movieRepository: MovieRepository,
+    private val urlStorage: UrlStorage
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
@@ -102,6 +105,39 @@ class AuthViewModel @Inject constructor(
 
     fun isAlreadySignedIn(): Boolean =
         authRepo.isSignedIn() && sessionManager.isSessionValid()
+
+    // Dorada (17. avgust 2026, korisnička žalba "ne mogu ništa da uradim kad sam izlogovan jer se
+    // backend ruta vidi samo kad si ulogovan") - urediva backend ruta je ranije postojala SAMO na
+    // Profile → Podešavanja tabu, koji je (dorada #2, task #160) sad zaključan iza prijave. Bez
+    // ovoga, korisnik na pogrešnom backend URL-u (npr. promenjen IP na lokalnoj mreži) nije imao
+    // NIKAKAV način da ga promeni - Sign In je jedini ekran uvek dostupan izlogovanom korisniku.
+    // Reciklira isti UrlStorage/SettingsDialog koji Profile već koristi (videti ProfileViewModel) -
+    // ista podešavanja, samo drugi ulaz, nema duplog izvora istine.
+    private val _baseUrl = MutableStateFlow(urlStorage.getBaseUrl())
+    val baseUrl: StateFlow<String> = _baseUrl.asStateFlow()
+
+    private val _savedRoutes = MutableStateFlow(urlStorage.getSavedRoutes())
+    val savedRoutes: StateFlow<List<String>> = _savedRoutes.asStateFlow()
+
+    private fun refreshRoutesState() {
+        _baseUrl.value = urlStorage.getBaseUrl()
+        _savedRoutes.value = urlStorage.getSavedRoutes()
+    }
+
+    fun updateBaseUrl(newUrl: String) {
+        urlStorage.setBaseUrl(newUrl)
+        refreshRoutesState()
+    }
+
+    fun addSavedRoute(url: String) {
+        urlStorage.addRoute(url)
+        refreshRoutesState()
+    }
+
+    fun removeSavedRoute(url: String) {
+        urlStorage.removeRoute(url)
+        refreshRoutesState()
+    }
 }
 
 sealed interface AuthUiState {

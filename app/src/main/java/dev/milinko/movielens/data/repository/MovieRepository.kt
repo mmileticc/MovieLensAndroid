@@ -22,6 +22,11 @@ interface MovieRepository {
     suspend fun getFeaturedMovies(userId: String?, page: Int = 1): Result<List<MovieSearchResult>>
     suspend fun getFriendsWhoWatched(tmdbId: Int): Result<List<FriendWatched>>
     suspend fun getNowInCinemas(): Result<List<NowInCinemasMovie>>
+    // Faza D (17. avgust 2026) - semantička pretraga svedena na filmove trenutno na repertoaru
+    // (videti CinemaSemanticIndex na backendu) - ista lista forma kao getNowInCinemas.
+    // Faza D dorada - `engine` bira embedding provajder na backendu ("gemini" ili "local"), radi
+    // poređenja kvaliteta pretrage.
+    suspend fun semanticSearchNowInCinemas(query: String, engine: String = "gemini"): Result<List<NowInCinemasMovie>>
 }
 
 @Singleton
@@ -80,6 +85,15 @@ class MovieRepositoryImpl @Inject constructor(
             response.body()?.results ?: emptyList()
         } else {
             throw Exception("Get now-in-cinemas failed: ${response.code()}")
+        }
+    }
+
+    override suspend fun semanticSearchNowInCinemas(query: String, engine: String): Result<List<NowInCinemasMovie>> = safeApiCall {
+        val response = movieApiService.semanticSearchNowInCinemas(query, engine)
+        if (response.isSuccessful) {
+            response.body()?.results ?: emptyList()
+        } else {
+            throw Exception("Semantic search failed: ${response.code()}")
         }
     }
 }

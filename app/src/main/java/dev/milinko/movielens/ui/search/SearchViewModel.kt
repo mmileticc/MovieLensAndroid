@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.milinko.movielens.data.pref.RecentSearchesStore
 import dev.milinko.movielens.data.pref.SessionManager
 import dev.milinko.movielens.data.remote.movie.MovieSearchResult
+import dev.milinko.movielens.data.remote.movie.NowInCinemasMovie
 import dev.milinko.movielens.data.repository.MovieRepository
 import dev.milinko.movielens.data.repository.VisionRepository
 import dev.milinko.movielens.data.remote.vision.VisionSearchResponse
@@ -27,7 +28,19 @@ data class SearchUiState(
     val selectedImageUri: String? = null,
     val searchResults: List<MovieSearchResult> = emptyList(),
     val visionResult: VisionSearchResponse? = null,
-    val error: String? = null
+    val error: String? = null,
+    // Faza D (17. avgust 2026, predlog mentora Marka) - "U bioskopima" mod: semantička pretraga
+    // svedena na filmove trenutno na repertoaru (videti backend CinemaSemanticIndex). Odvojeno od
+    // searchResults/isSearching iznad - drugačiji tip podataka (NowInCinemasMovie, ne
+    // MovieSearchResult) i drugačiji trigger (samo eksplicitan submit, nikad debounce - videti
+    // setSearchQuery/searchMovies ispod).
+    val isCinemaMode: Boolean = false,
+    val cinemaResults: List<NowInCinemasMovie> = emptyList(),
+    val isSearchingCinemas: Boolean = false,
+    // Faza D dorada (korisnički zahtev za poređenje Gemini vs. lokalni MiniLM embedding) - bira koji
+    // embedding provajder backend koristi za "U bioskopima" semantičku pretragu. Podrazumevano
+    // Gemini (isti kvalitet kao pre ove dorade). Vidljivo samo u isCinemaMode - videti SearchScreen.
+    val useLocalEmbedding: Boolean = false
 )
 
 @HiltViewModel
@@ -66,6 +79,11 @@ class SearchViewModel @Inject constructor(
     fun setSearchQuery(query: String) {
         _uiState.value = _uiState.value.copy(searchQuery = query)
 
+        // Faza D - u "U bioskopima" modu NEMA debounce/"live" pretragu - svaki upit je pravi API
+        // poziv koji embeduje tekst preko Gemini-ja (stvaran trošak), pa se traži samo na
+        // eksplicitan submit (videti searchMovies ispod). Tekst polja se i dalje ažurira iznad.
+        if (_uiState.value.isCinemaMode) return
+
         searchJob?.cancel()
         val trimmed = query.trim()
         if (trimmed.length < MIN_QUERY_LENGTH) {
@@ -80,16 +98,79 @@ class SearchViewModel @Inject constructor(
     }
 
     /**
+     * Faza D (17. avgust 2026, predlog mentora Marka) - prebacuje između obične tekstualne
+     * pretrage (ceo TMDB katalog) i semantičke pretrage svedene na filmove trenutno na repertoaru
+     * bioskopa. Čisti rezultate OBA moda pri prebacivanju - sprečava da se stari rezultati
+     * drugačijeg tipa/obima vide ispod novog moda dok korisnik ne pretraži ponovo.
+     */
+    fun setCinemaMode(enabled: Boolean) {
+        if (_uiState.value.isCinemaMode == enabled) return
+        searchJob?.cancel()
+        _uiState.value = _uiState.value.copy(
+            isCinemaMode = enabled,
+            searchResults = emptyList(),
+            cinemaResults = emptyList(),
+            visionResult = null,
+            error = null,
+            // Pretraga slikom ne postoji u "U bioskopima" modu (dugme za kameru se onemogućava u
+            // SearchScreen-u) - ako je korisnik imao sliku izabranu PRE prebacivanja, uklanja se
+            // ovde da submit dugme posle prebacivanja ne bi tiho pokrenulo vision analizu umesto
+            // semantičke pretrage.
+            selectedImageUri = if (enabled) null else _uiState.value.selectedImageUri
+        )
+    }
+
+    /**
      * Trenutna pretraga na Enter/IME search akciju - preskače debounce, traži odmah. Namerno
      * upisuje u istoriju (eksplicitna, namerna akcija - videti napomenu na [recordCurrentQueryInHistory]).
+     * U "U bioskopima" modu delegira na [searchCinemasSemantic] - istorija pretraga ostaje samo za
+     * tekstualni mod (videti MOVIELENS_DESIGN_PLAN.md Faza D).
      */
     fun searchMovies() {
+        if (_uiState.value.isCinemaMode) {
+            searchCinemasSemantic()
+            return
+        }
+
         val query = _uiState.value.searchQuery.trim()
         if (query.isEmpty()) return
 
         _recentSearches.value = recentSearchesStore.addQuery(recentSearchesScopeId, query)
         searchJob?.cancel()
         searchJob = viewModelScope.launch { performSearch(query) }
+    }
+
+    /**
+     * Faza D dorada - prebacuje embedding provajder za "U bioskopima" pretragu (Gemini/lokalni
+     * MiniLM), radi poređenja ponašanja. Čisti stare rezultate - drugi provajder znači drugi
+     * vektorski prostor, stari rezultati više nisu relevantni dok se ne pretraži ponovo.
+     */
+    fun setUseLocalEmbedding(enabled: Boolean) {
+        if (_uiState.value.useLocalEmbedding == enabled) return
+        _uiState.value = _uiState.value.copy(useLocalEmbedding = enabled, cinemaResults = emptyList())
+    }
+
+    private fun searchCinemasSemantic() {
+        val query = _uiState.value.searchQuery.trim()
+        if (query.isEmpty()) return
+
+        val engine = if (_uiState.value.useLocalEmbedding) "local" else "gemini"
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSearchingCinemas = true, error = null)
+            movieRepository.semanticSearchNowInCinemas(query, engine)
+                .onSuccess { results ->
+                    _uiState.value = _uiState.value.copy(
+                        isSearchingCinemas = false,
+                        cinemaResults = results
+                    )
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        isSearchingCinemas = false,
+                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri pretrazi")
+                    )
+                }
+        }
     }
 
     /** Ponovo pokreće pretragu za upit iz istorije (tap na chip) - preskače debounce, kao Enter. */
@@ -172,7 +253,8 @@ class SearchViewModel @Inject constructor(
             searchResults = emptyList(),
             visionResult = null,
             searchQuery = "",
-            error = null
+            error = null,
+            cinemaResults = emptyList()
         )
     }
 }

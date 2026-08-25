@@ -44,5 +44,17 @@ interface MovieApiService {
     // "U bioskopima sada" traka na Home-u - javna ruta, iz postojećeg skraping repertoara.
     @GET("api/movies/now-in-cinemas")
     suspend fun getNowInCinemas(): Response<NowInCinemasResponse>
+
+    // Faza D (17. avgust 2026, predlog mentora Marka) - semantička pretraga, namerno svedena na
+    // filmove trenutno na repertoaru (videti CinemaSemanticIndex na backendu). Ista odgovor forma
+    // kao gornja now-in-cinemas ruta.
+    //
+    // Faza D dorada - opcioni `engine` parametar ("gemini" ili "local") bira koji embedding se
+    // koristi na backendu, radi poređenja kvaliteta pretrage. Podrazumevano "gemini" na klijentu.
+    @GET("api/movies/now-in-cinemas/semantic-search")
+    suspend fun semanticSearchNowInCinemas(
+        @Query("q") query: String,
+        @Query("engine") engine: String = "gemini"
+    ): Response<NowInCinemasResponse>
 }
 
