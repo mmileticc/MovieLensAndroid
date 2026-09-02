@@ -61,6 +61,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -106,6 +107,10 @@ fun ProfileScreen(
     // Potvrda pre nego što se prijatelj stvarno ukloni - nema pravog "undo" jer bi ponovno
     // dodavanje zahtevalo da druga strana opet prihvati zahtev (nije simetrično kao watched-undo).
     var friendPendingRemoval by remember { mutableStateOf<FriendInfo?>(null) }
+    // Dorada (2. septembar 2026, korisnički zahtev - "na odbij nema pitanje da li si siguran") -
+    // isti obrazac kao friendPendingRemoval - odbijanje zahteva za prijateljstvo nema pravi "undo"
+    // (druga strana bi morala opet da pošalje zahtev), pa se traži potvrda pre same akcije.
+    var requestPendingRejection by remember { mutableStateOf<PendingRequest?>(null) }
 
     val context = LocalContext.current
 
@@ -249,7 +254,9 @@ fun ProfileScreen(
                             viewModel = viewModel,
                             onNavigateToFriendProfile = onNavigateToFriendProfile,
                             onNavigateToDetail = onNavigateToDetail,
-                            onRemoveFriend = { friendPendingRemoval = it }
+                            onRemoveFriend = { friendPendingRemoval = it },
+                            onRejectRequest = { requestPendingRejection = it },
+                            onCancelSentRequest = { viewModel.cancelFriendRequest(it) }
                         )
                     }
                 }
@@ -271,6 +278,36 @@ fun ProfileScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { friendPendingRemoval = null }) {
+                        Text(stringResource(R.string.profile_remove_cancel))
+                    }
+                }
+            )
+        }
+
+        // Dorada (2. septembar 2026, korisnički zahtev - potvrda pre odbijanja zahteva za
+        // prijateljstvo) - isti obrazac kao friendPendingRemoval iznad.
+        requestPendingRejection?.let { request ->
+            AlertDialog(
+                onDismissRequest = { requestPendingRejection = null },
+                title = { Text(stringResource(R.string.profile_reject_request_dialog_title)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.profile_reject_request_dialog_message,
+                            request.username?.takeIf { it.isNotBlank() } ?: stringResource(R.string.profile_default_username)
+                        )
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.rejectFriendRequest(request.id)
+                        requestPendingRejection = null
+                    }) {
+                        Text(stringResource(R.string.profile_reject_content_description), color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { requestPendingRejection = null }) {
                         Text(stringResource(R.string.profile_remove_cancel))
                     }
                 }
@@ -329,7 +366,9 @@ private fun FriendsTabContent(
     viewModel: ProfileViewModel,
     onNavigateToFriendProfile: (String) -> Unit,
     onNavigateToDetail: (Int) -> Unit,
-    onRemoveFriend: (FriendInfo) -> Unit
+    onRemoveFriend: (FriendInfo) -> Unit,
+    onRejectRequest: (PendingRequest) -> Unit,
+    onCancelSentRequest: (String) -> Unit
 ) {
     // Bugfix (E1.4, 2. septembar 2026, feedback testera - "lista prijatelja se ne ažurira odmah,
     // nema pull-down") - swipe-down gest kao dodatna sigurnosna mreža uz automatski refresh posle
@@ -379,7 +418,28 @@ private fun FriendsTabContent(
                 PendingRequestCard(
                     request = request,
                     onAccept = { viewModel.acceptFriendRequest(request.id) },
-                    onReject = { viewModel.rejectFriendRequest(request.id) }
+                    onRejectClick = { onRejectRequest(request) },
+                    onOpenProfile = { onNavigateToFriendProfile(request.id) }
+                )
+            }
+        }
+
+        // Korisnički zahtev (2. septembar 2026, "da mi budu vidljivi izlistani poslati zahtevi
+        // kao sto su mi izlistani prijatelji, a ne samo da kad ponovo pretrazim osobu vidim da
+        // sam mu vec poslao zahtev") - odvojena sekcija, analogno prijateljima/primljenim
+        // zahtevima iznad, umesto da se status otkriva samo ponovnom pretragom te osobe.
+        if (uiState.sentRequests.isNotEmpty()) {
+            item {
+                SectionHeader(
+                    title = stringResource(R.string.profile_sent_requests_header),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                )
+            }
+            items(uiState.sentRequests, key = { "sent-${it.id}" }) { request ->
+                SentRequestCard(
+                    request = request,
+                    onCancelClick = { onCancelSentRequest(request.id) },
+                    onOpenProfile = { onNavigateToFriendProfile(request.id) }
                 )
             }
         }
@@ -1060,7 +1120,7 @@ private fun TasteProfileSection(genres: List<GenreAffinity>) {
                                     Text(
                                         text = stringResource(
                                             R.string.profile_taste_rating_count,
-                                            String.format(java.util.Locale.getDefault(), "%.1f", affinity.averageRating),
+                                            String.format(LocalLocale.current.platformLocale, "%.1f", affinity.averageRating),
                                             affinity.movieCount
                                         ),
                                         style = MaterialTheme.typography.bodyMedium,
@@ -1105,7 +1165,7 @@ private fun CompactGenreAffinityCard(affinity: GenreAffinity) {
         Text(
             text = stringResource(
                 R.string.profile_taste_rating_count,
-                String.format(java.util.Locale.getDefault(), "%.1f", affinity.averageRating),
+                String.format(LocalLocale.current.platformLocale, "%.1f", affinity.averageRating),
                 affinity.movieCount
             ),
             style = MaterialTheme.typography.labelSmall,
@@ -1213,7 +1273,10 @@ private fun UserSearchResultRow(
                 "PENDING_SENT" -> TextButton(onClick = onCancelRequest, enabled = !isActionInFlight) {
                     Text(stringResource(R.string.profile_cancel_request), color = MaterialTheme.colorScheme.error)
                 }
-                "PENDING_RECEIVED" -> AppButton(text = stringResource(R.string.profile_reply_below), onClick = {}, variant = AppButtonVariant.Secondary, enabled = false)
+                // Bugfix (2. septembar 2026) - videti napomenu uz profile_pending_received_badge
+                // u strings.xml - cela kartica (ElevatedCard iznad) je već klikabilna (onClick),
+                // vodi na profil te osobe gde se zahtev sad stvarno može prihvatiti/odbiti.
+                "PENDING_RECEIVED" -> AppButton(text = stringResource(R.string.profile_pending_received_badge), onClick = {}, variant = AppButtonVariant.Secondary, enabled = false)
                 "ACCEPTED" -> AppButton(text = stringResource(R.string.profile_already_friends), onClick = {}, variant = AppButtonVariant.Secondary, enabled = false)
                 else -> AppButton(text = stringResource(R.string.profile_add_friend), onClick = onAdd, variant = AppButtonVariant.Primary, enabled = !isActionInFlight)
             }
@@ -1221,12 +1284,27 @@ private fun UserSearchResultRow(
     }
 }
 
+
+/**
+ * Dorada (2. septembar 2026, korisnički zahtev - "stoji samo ime, na odbij nema potvrde, fali
+ * mogućnost da se vidi javni profil pre odluke") - dodat avatar pošiljaoca (backend već vraća
+ * `avatar_url` u `PendingRequestDto`, samo nije bio prikazan), ceo red je klikabilan i vodi na
+ * `FriendProfileScreen` (koji za PENDING_RECEIVED status već prikazuje ograničen javni preview -
+ * videti E1.5), i "Odbij" sad samo javlja roditelju da otvori potvrdu (videti
+ * `requestPendingRejection` na vrhu `ProfileScreen`) umesto da odmah odbije.
+ */
 @Composable
-private fun PendingRequestCard(request: PendingRequest, onAccept: () -> Unit, onReject: () -> Unit) {
+private fun PendingRequestCard(
+    request: PendingRequest,
+    onAccept: () -> Unit,
+    onRejectClick: () -> Unit,
+    onOpenProfile: () -> Unit
+) {
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clickable(onClick = onOpenProfile)
     ) {
         Row(
             modifier = Modifier
@@ -1235,16 +1313,88 @@ private fun PendingRequestCard(request: PendingRequest, onAccept: () -> Unit, on
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Box(modifier = Modifier.size(40.dp).clip(CircleShape)) {
+                if (!request.avatarUrl.isNullOrBlank()) {
+                    RemoteAvatarImage(
+                        url = request.avatarUrl,
+                        contentDescription = request.username,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.primaryContainer) {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = request.username,
+                            modifier = Modifier.fillMaxSize().padding(8.dp)
+                        )
+                    }
+                }
+            }
             Text(
                 text = request.username?.takeIf { it.isNotBlank() } ?: stringResource(R.string.profile_default_username),
                 style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).padding(start = 12.dp)
             )
             IconButton(onClick = onAccept) {
                 Icon(Icons.Default.Check, contentDescription = stringResource(R.string.profile_accept_content_description), tint = MaterialTheme.colorScheme.primary)
             }
-            IconButton(onClick = onReject) {
+            IconButton(onClick = onRejectClick) {
                 Icon(Icons.Default.Close, contentDescription = stringResource(R.string.profile_reject_content_description), tint = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+/**
+ * Korisnički zahtev (2. septembar 2026) - kartica za poslate (odlazne) zahteve, isti vizuelni
+ * obrazac kao PendingRequestCard iznad (avatar + klikabilna kartica ka javnom profilu), samo
+ * jedno dugme ("Otkaži zahtev") umesto prihvati/odbij ikonica.
+ */
+@Composable
+private fun SentRequestCard(
+    request: PendingRequest,
+    onCancelClick: () -> Unit,
+    onOpenProfile: () -> Unit
+) {
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clickable(onClick = onOpenProfile)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.size(40.dp).clip(CircleShape)) {
+                if (!request.avatarUrl.isNullOrBlank()) {
+                    RemoteAvatarImage(
+                        url = request.avatarUrl,
+                        contentDescription = request.username,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.primaryContainer) {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = request.username,
+                            modifier = Modifier.fillMaxSize().padding(8.dp)
+                        )
+                    }
+                }
+            }
+            Text(
+                text = request.username?.takeIf { it.isNotBlank() } ?: stringResource(R.string.profile_default_username),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f).padding(start = 12.dp)
+            )
+            TextButton(onClick = onCancelClick) {
+                Text(stringResource(R.string.profile_cancel_request))
             }
         }
     }

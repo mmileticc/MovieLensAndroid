@@ -32,6 +32,10 @@ data class ProfileUiState(
     val friends: List<FriendInfo> = emptyList(),
     val friendActivity: List<FriendActivity> = emptyList(),
     val pendingRequests: List<PendingRequest> = emptyList(),
+    // Korisnički zahtev (2. septembar 2026, "da mi budu vidljivi izlistani poslati zahtevi kao
+    // sto su mi izlistani prijatelji, a ne samo da kad ponovo pretrazim osobu vidim da sam mu
+    // vec poslao zahtev") - poslati (odlazni) zahtevi, prikazani u posebnoj sekciji.
+    val sentRequests: List<PendingRequest> = emptyList(),
     // Taste profile (Faza 4) - top žanrovi po prosečnoj oceni, izvedeno iz korisnikovih ocena.
     val tasteProfile: List<GenreAffinity> = emptyList(),
     // Search-as-you-type za dodavanje prijatelja (isti obrazac kao SearchViewModel za filmove).
@@ -214,8 +218,12 @@ class ProfileViewModel @Inject constructor(
         if (targetUserId in _uiState.value.friendActionInFlightIds) return
         val userId = sessionManager.getUserId() ?: return
         val previousResults = _uiState.value.friendSearchResults
+        // Korisnički zahtev (2. septembar 2026) - poslata lista se ažurira optimistički zajedno
+        // sa rezultatima pretrage, ista logika kao friendSearchResults ispod (bez mreže, odmah).
+        val previousSent = _uiState.value.sentRequests
         _uiState.value = _uiState.value.copy(
             friendSearchResults = previousResults.map { if (it.id == targetUserId) it.copy(status = "NONE") else it },
+            sentRequests = previousSent.filterNot { it.id == targetUserId },
             friendActionInFlightIds = _uiState.value.friendActionInFlightIds + targetUserId
         )
         viewModelScope.launch {
@@ -227,6 +235,7 @@ class ProfileViewModel @Inject constructor(
             userRepository.removeFriend(userId, targetUserId).onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     friendSearchResults = previousResults,
+                    sentRequests = previousSent,
                     friendActionError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri otkazivanju zahteva")
                 )
                 userRepository.updateCachedFriendshipStatus(userId, targetUserId, "PENDING_SENT")
@@ -241,8 +250,15 @@ class ProfileViewModel @Inject constructor(
         if (targetUserId in _uiState.value.friendActionInFlightIds) return
         val userId = sessionManager.getUserId() ?: return
         val previousResults = _uiState.value.friendSearchResults
+        // Korisnički zahtev (2. septembar 2026, "da mi budu vidljivi izlistani poslati zahtevi
+        // kao sto su mi izlistani prijatelji") - dodaje se odmah (optimistički, bez mreže) u
+        // sentRequests, građeno iz istog search rezultata (ima id/username/avatarUrl).
+        val previousSent = _uiState.value.sentRequests
+        val targetResult = previousResults.find { it.id == targetUserId }
+        val newSentEntry = targetResult?.let { PendingRequest(id = it.id, username = it.username, avatarUrl = it.avatarUrl) }
         _uiState.value = _uiState.value.copy(
             friendSearchResults = previousResults.map { if (it.id == targetUserId) it.copy(status = "PENDING_SENT") else it },
+            sentRequests = if (newSentEntry != null) previousSent + newSentEntry else previousSent,
             friendActionInFlightIds = _uiState.value.friendActionInFlightIds + targetUserId
         )
         viewModelScope.launch {
@@ -251,6 +267,7 @@ class ProfileViewModel @Inject constructor(
             userRepository.addFriend(userId, targetUserId).onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     friendSearchResults = previousResults,
+                    sentRequests = previousSent,
                     friendActionError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri slanju zahteva za prijateljstvo")
                 )
                 userRepository.updateCachedFriendshipStatus(userId, targetUserId, "NONE")
@@ -268,6 +285,13 @@ class ProfileViewModel @Inject constructor(
         pendingActionJobs[requesterId] = viewModelScope.launch {
             userRepository.acceptFriendRequest(userId, requesterId)
                 .onSuccess {
+                    // Dorada (2. septembar 2026, ista klasa buga kao sendFriendRequest/
+                    // cancelFriendRequest ranije u ovom fajlu) - RANIJE se ovde pisalo samo u
+                    // memoriju (pendingRequests/friends), NIKAD u friendprofile Room keš koji
+                    // FriendProfileScreen čita - pa bi taj ekran (ako se otvori odmah posle
+                    // prihvatanja) kratko prikazao stari "Odgovori ispod"/PENDING_RECEIVED status
+                    // dok mreža ne stigne da ispravi. Zatvara petlju u istom smeru kao dorada #5.
+                    userRepository.updateCachedFriendshipStatus(userId, requesterId, "ACCEPTED")
                     userRepository.getFriends(userId).onSuccess { friends ->
                         _uiState.value = _uiState.value.copy(friends = friends)
                     }
@@ -292,9 +316,14 @@ class ProfileViewModel @Inject constructor(
         pendingActionJobs[requesterId]?.cancel()
         pendingActionJobs[requesterId] = viewModelScope.launch {
             // Bugfix (E1.3) - isti princip kao acceptFriendRequest, videti napomenu tamo.
-            userRepository.rejectFriendRequest(userId, requesterId).onFailure { e ->
-                Log.w("ProfileViewModel", "rejectFriendRequest nije uspeo za requesterId=$requesterId (tiho, ne prikazuje se korisniku): ${e.message}")
-            }
+            userRepository.rejectFriendRequest(userId, requesterId)
+                .onSuccess {
+                    // Dorada (2. septembar 2026) - videti napomenu u acceptFriendRequest().
+                    userRepository.updateCachedFriendshipStatus(userId, requesterId, "NONE")
+                }
+                .onFailure { e ->
+                    Log.w("ProfileViewModel", "rejectFriendRequest nije uspeo za requesterId=$requesterId (tiho, ne prikazuje se korisniku): ${e.message}")
+                }
         }
     }
 
@@ -454,6 +483,7 @@ class ProfileViewModel @Inject constructor(
                 friends = userRepository.observeCachedFriends(userId).first().ifEmpty { _uiState.value.friends },
                 friendActivity = userRepository.observeCachedFriendActivity(userId).first().ifEmpty { _uiState.value.friendActivity },
                 pendingRequests = userRepository.observeCachedPendingRequests(userId).first().ifEmpty { _uiState.value.pendingRequests },
+                sentRequests = userRepository.observeCachedSentRequests(userId).first().ifEmpty { _uiState.value.sentRequests },
                 tasteProfile = userRepository.observeCachedTasteProfile(userId).first().ifEmpty { _uiState.value.tasteProfile }
             )
 
@@ -466,12 +496,14 @@ class ProfileViewModel @Inject constructor(
                 val friendsDeferred = async { userRepository.getFriends(userId) }
                 val activityDeferred = async { userRepository.getFriendActivity(userId) }
                 val pendingDeferred = async { userRepository.getPendingFriendRequests(userId) }
+                val sentDeferred = async { userRepository.getSentFriendRequests(userId) }
                 val tasteProfileDeferred = async { userRepository.getTasteProfile(userId) }
 
                 val profileResult = profileDeferred.await()
                 val friendsResult = friendsDeferred.await()
                 val activityResult = activityDeferred.await()
                 val pendingResult = pendingDeferred.await()
+                val sentResult = sentDeferred.await()
                 val tasteProfileResult = tasteProfileDeferred.await()
 
                 // Isti bugfix kao u updateProfile() - svaki svež profil sa mreže osvežava i
@@ -488,6 +520,7 @@ class ProfileViewModel @Inject constructor(
                     friends = friendsResult.getOrNull() ?: _uiState.value.friends,
                     friendActivity = activityResult.getOrNull() ?: _uiState.value.friendActivity,
                     pendingRequests = pendingResult.getOrNull() ?: _uiState.value.pendingRequests,
+                    sentRequests = sentResult.getOrNull() ?: _uiState.value.sentRequests,
                     tasteProfile = tasteProfileResult.getOrNull() ?: _uiState.value.tasteProfile
                 )
             } catch (e: CancellationException) {

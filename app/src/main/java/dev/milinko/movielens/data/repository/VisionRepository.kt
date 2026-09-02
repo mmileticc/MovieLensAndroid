@@ -11,6 +11,8 @@ import dev.milinko.movielens.data.remote.vision.VisionApi
 import dev.milinko.movielens.data.remote.vision.VisionSearchResponse
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -45,7 +47,15 @@ class VisionRepositoryImpl @Inject constructor(
 
     override suspend fun detect(imageUri: String): VisionSearchResponse {
         try {
-            val file = getFileFromUri(imageUri)
+            // Bugfix (E2.5 dorada, 2. septembar 2026) - iako je ova funkcija `suspend`,
+            // `viewModelScope.launch` je i dalje pokreće na Dispatchers.Main.immediate ako se
+            // dispečer eksplicitno ne promeni - `getFileFromUri` (dva BitmapFactory.decodeStream
+            // prolaza, EXIF čitanje/rotacija, petlja JPEG kompresije + upis fajla) je zato RANIJE
+            // blokirao glavnu nit u celosti dok korisnik skenira plakat filma preko kamere - za
+            // punu kamera sliku (8-15MB pre downsample-a) primetno zamrzavanje UI-ja. Isti obrazac
+            // bug-a kao RemoteAvatarImage.kt (E2.5) - fix je isti princip, samo `withContext`
+            // umesto `LaunchedEffect`, pošto ovo NIJE pozivano direktno iz kompozicije.
+            val file = withContext(Dispatchers.IO) { getFileFromUri(imageUri) }
                 ?: throw IllegalStateException("Ne mogu pripremiti sliku za upload.")
 
             // Fajl je posle kompresije uvek JPEG (compressBitmapToFile), bez obzira na originalni

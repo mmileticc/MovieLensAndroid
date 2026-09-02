@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,10 +27,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +66,9 @@ fun FriendProfileScreen(
     onNavigateToMovieNight: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    // Bugfix (2. septembar 2026) - potvrda pre odbijanja, isti obrazac/stringovi kao
+    // ProfileScreen (PendingRequestCard) - dosledna UX na oba mesta gde se zahtev može odbiti.
+    var showRejectConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.loadProfile()
@@ -112,13 +120,33 @@ fun FriendProfileScreen(
                             enabled = !uiState.isRequestActionInFlight,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        "PENDING_RECEIVED" -> AppButton(
-                            text = stringResource(R.string.profile_reply_below),
-                            onClick = {},
-                            variant = AppButtonVariant.Secondary,
-                            enabled = false,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        "PENDING_RECEIVED" -> Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Bugfix (2. septembar 2026, korisnički zahtev - "dugme 'Odgovori
+                            // ispod' pokazuje nadole ali ispod nema ničega, uzelo je vremena dok
+                            // se to pojavi, a pre toga je pisalo 'otkaži zahtev' sto uopste nije
+                            // dobro ponasanje") - RANIJE je ovde stajalo samo onemogućeno dugme
+                            // koje je upućivalo na prihvatanje/odbijanje "ispod" (taj UI je
+                            // postojao SAMO na Profile ekranu, ne i ovde) - sad ekran sam ume da
+                            // prihvati/odbije. Odbijanje traži potvrdu (isti dijalog/stringovi
+                            // kao PendingRequestCard na Profile ekranu).
+                            AppButton(
+                                text = stringResource(R.string.profile_reject_content_description),
+                                onClick = { showRejectConfirm = true },
+                                variant = AppButtonVariant.Secondary,
+                                enabled = !uiState.isRequestActionInFlight,
+                                modifier = Modifier.weight(1f)
+                            )
+                            AppButton(
+                                text = stringResource(R.string.profile_accept_content_description),
+                                onClick = { viewModel.acceptFriendRequest() },
+                                variant = AppButtonVariant.Primary,
+                                enabled = !uiState.isRequestActionInFlight,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                         else -> AppButton(
                             text = stringResource(R.string.profile_add_friend),
                             onClick = { viewModel.sendFriendRequest() },
@@ -276,6 +304,30 @@ fun FriendProfileScreen(
                 }
             }
         }
+    }
+
+    // Bugfix (2. septembar 2026) - potvrda pre odbijanja, isti stringovi kao PendingRequestCard
+    // na Profile ekranu (dosledna UX na oba mesta gde se zahtev može odbiti).
+    if (showRejectConfirm) {
+        val username = uiState.profile?.username?.takeIf { it.isNotBlank() } ?: stringResource(R.string.profile_default_username)
+        AlertDialog(
+            onDismissRequest = { showRejectConfirm = false },
+            title = { Text(stringResource(R.string.profile_reject_request_dialog_title)) },
+            text = { Text(stringResource(R.string.profile_reject_request_dialog_message, username)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRejectConfirm = false
+                    viewModel.rejectFriendRequest { onNavigateBack() }
+                }) {
+                    Text(stringResource(R.string.profile_reject_content_description), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRejectConfirm = false }) {
+                    Text(stringResource(R.string.profile_remove_cancel))
+                }
+            }
+        )
     }
 }
 

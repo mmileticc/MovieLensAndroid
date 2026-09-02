@@ -140,4 +140,58 @@ class FriendProfileViewModel @Inject constructor(
                 }
         }
     }
+
+    /**
+     * Bugfix (2. septembar 2026, korisnički zahtev - "dugme 'Odgovori ispod' pokazuje nadole ali
+     * ispod nema ničega") - RANIJE je za PENDING_RECEIVED status ovaj ekran prikazivao samo
+     * onemogućeno dugme koje je upućivalo na prihvatanje/odbijanje "ispod" - ali taj UI je
+     * postojao SAMO na Profile ekranu (PendingRequestCard), ne i ovde, pa je uputstvo bilo
+     * netačno kad god bi korisnik do ovog profila stigao klikom na karticu zahteva (E2 dorada -
+     * "pregled profila pre prihvatanja/odbijanja"). Sad ekran sam ume da prihvati/odbije, isti
+     * network poziv i cache write-through (updateCachedFriendshipStatus) kao ProfileViewModel.
+     */
+    fun acceptFriendRequest() {
+        if (_uiState.value.isRequestActionInFlight) return
+        val myUserId = sessionManager.getUserId() ?: return
+        _uiState.value = _uiState.value.copy(isRequestActionInFlight = true)
+        viewModelScope.launch {
+            userRepository.acceptFriendRequest(myUserId, friendId)
+                .onSuccess {
+                    userRepository.updateCachedFriendshipStatus(myUserId, friendId, "ACCEPTED")
+                    _uiState.value = _uiState.value.copy(isRequestActionInFlight = false)
+                    // Osvežava profil sa mreže - tek sad (posle prihvatanja) backend vraća punu
+                    // (otključanu) listu odgledanih filmova, ranije je bila namerno prazna.
+                    loadProfile()
+                }
+                .onFailure { e ->
+                    Log.w("FriendProfileViewModel", "acceptFriendRequest nije uspeo: ${e.message}")
+                    _uiState.value = _uiState.value.copy(
+                        isRequestActionInFlight = false,
+                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri prihvatanju zahteva")
+                    )
+                }
+        }
+    }
+
+    /** Odbija dolazni zahtev - `onRejected` se poziva samo posle uspešnog odbijanja (navigacija nazad). */
+    fun rejectFriendRequest(onRejected: () -> Unit) {
+        if (_uiState.value.isRequestActionInFlight) return
+        val myUserId = sessionManager.getUserId() ?: return
+        _uiState.value = _uiState.value.copy(isRequestActionInFlight = true)
+        viewModelScope.launch {
+            userRepository.rejectFriendRequest(myUserId, friendId)
+                .onSuccess {
+                    userRepository.updateCachedFriendshipStatus(myUserId, friendId, "NONE")
+                    _uiState.value = _uiState.value.copy(isRequestActionInFlight = false)
+                    onRejected()
+                }
+                .onFailure { e ->
+                    Log.w("FriendProfileViewModel", "rejectFriendRequest nije uspeo: ${e.message}")
+                    _uiState.value = _uiState.value.copy(
+                        isRequestActionInFlight = false,
+                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri odbijanju zahteva")
+                    )
+                }
+        }
+    }
 }

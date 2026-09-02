@@ -102,6 +102,13 @@ interface UserApiService {
         @Path("userId") userId: String
     ): Response<PendingRequestsResponse>
 
+    // Korisnički zahtev (2. septembar 2026) - poslati (odlazni) zahtevi, da budu vidljivi
+    // izlistani kao i lista prijatelja, ne samo otkriveni ponovnom pretragom te osobe.
+    @GET("api/users/{userId}/friends/pending/sent")
+    suspend fun getSentFriendRequests(
+        @Path("userId") userId: String
+    ): Response<PendingRequestsResponse>
+
     @POST("api/users/{userId}/friends/{friendId}")
     suspend fun manageFriend(
         @Path("userId") userId: String,

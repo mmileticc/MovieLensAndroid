@@ -43,6 +43,9 @@ interface UserRepository {
     fun observeCachedUserProfile(userId: String): Flow<UserProfile?>
     fun observeCachedFriends(userId: String): Flow<List<FriendInfo>>
     fun observeCachedPendingRequests(userId: String): Flow<List<PendingRequest>>
+    // Korisnički zahtev (2. septembar 2026, "da mi budu vidljivi izlistani poslati zahtevi kao
+    // sto su mi izlistani prijatelji") - isti obrazac keš/mreža kao dolazni pending zahtevi.
+    fun observeCachedSentRequests(userId: String): Flow<List<PendingRequest>>
     fun observeCachedFriendActivity(userId: String): Flow<List<FriendActivity>>
     fun observeCachedTasteProfile(userId: String): Flow<List<GenreAffinity>>
     fun observeCachedFriendProfile(userId: String, friendId: String): Flow<FriendProfileResponse?>
@@ -96,6 +99,7 @@ interface UserRepository {
     // Pretraga korisnika za dodavanje prijatelja (search-as-you-type, kao Search filmova).
     suspend fun searchUsers(query: String): Result<List<UserSearchResult>>
     suspend fun getPendingFriendRequests(userId: String): Result<List<PendingRequest>>
+    suspend fun getSentFriendRequests(userId: String): Result<List<PendingRequest>>
 
     suspend fun getFriends(userId: String): Result<List<FriendInfo>>
     suspend fun addFriend(userId: String, friendId: String): Result<Unit>
@@ -195,6 +199,7 @@ class UserRepositoryImpl @Inject constructor(
     private fun profileCacheKey(userId: String) = "profile:$userId"
     private fun friendsCacheKey(userId: String) = "friends:$userId"
     private fun pendingCacheKey(userId: String) = "pending:$userId"
+    private fun sentCacheKey(userId: String) = "sent:$userId"
     private fun activityCacheKey(userId: String) = "activity:$userId"
     private fun tasteCacheKey(userId: String) = "taste:$userId"
     private fun friendProfileCacheKey(userId: String, friendId: String) = "friendprofile:$userId:$friendId"
@@ -214,6 +219,13 @@ class UserRepositoryImpl @Inject constructor(
 
     override fun observeCachedPendingRequests(userId: String): Flow<List<PendingRequest>> =
         genericCacheDao.observe(pendingCacheKey(userId)).map { entity ->
+            entity?.jsonPayload?.let { json ->
+                runCatching { cacheGson.fromJson<List<PendingRequest>>(json, object : TypeToken<List<PendingRequest>>() {}.type) }.getOrNull()
+            } ?: emptyList()
+        }
+
+    override fun observeCachedSentRequests(userId: String): Flow<List<PendingRequest>> =
+        genericCacheDao.observe(sentCacheKey(userId)).map { entity ->
             entity?.jsonPayload?.let { json ->
                 runCatching { cacheGson.fromJson<List<PendingRequest>>(json, object : TypeToken<List<PendingRequest>>() {}.type) }.getOrNull()
             } ?: emptyList()
@@ -390,6 +402,17 @@ class UserRepositoryImpl @Inject constructor(
             requests
         } else {
             throw Exception("Get pending requests failed: ${response.code()}")
+        }
+    }
+
+    override suspend fun getSentFriendRequests(userId: String): Result<List<PendingRequest>> = safeApiCall {
+        val response = userApiService.getSentFriendRequests(userId)
+        if (response.isSuccessful) {
+            val requests = response.body()?.requests ?: emptyList()
+            genericCacheDao.put(GenericCacheEntity(sentCacheKey(userId), cacheGson.toJson(requests)))
+            requests
+        } else {
+            throw Exception("Get sent requests failed: ${response.code()}")
         }
     }
 

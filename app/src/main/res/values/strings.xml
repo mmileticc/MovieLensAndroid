@@ -72,7 +72,12 @@
     <string name="movie_detail_review_label">Tvoj komentar (opciono)</string>
     <string name="movie_detail_save_review">Sačuvaj komentar</string>
     <string name="movie_detail_share_content_description">Podeli</string>
-    <string name="movie_detail_share_text">Gledam \"%1$s\" na Movienee - probaj i ti!\n%2$s</string>
+    <!-- Bugfix (E2.6, 2. septembar 2026, feedback testera - "share poruka je čudna jer kaže da se
+         na našoj platformi gleda film što nije slučaj") - RANIJE "Gledam X na Movienee" tvrdilo je
+         da se film gleda/strimuje kroz app, a Movienee je otkrivanje/ocenjivanje/praćenje filmova,
+         ne strimovanje. Namerno bez "Pogledaj" (u srpskom kolokvijalno takođe znači "odgledaj film"
+         - ista dvosmislenost) - "Otkrij" je jednoznačno. -->
+    <string name="movie_detail_share_text">Otkrij \"%1$s\" na Movienee - oceni filmove i prati šta gledaju prijatelji!\n%2$s</string>
 
     <!-- Faza 6 redizajna - SearchScreen -->
     <string name="search_top_bar_title">Pretraži filmove</string>
@@ -156,6 +161,7 @@
     <string name="profile_backend_url_label">Backend URL</string>
     <string name="profile_backend_edit">Izmeni</string>
     <string name="profile_friend_requests_header">Zahtevi za prijateljstvo</string>
+    <string name="profile_sent_requests_header">Poslati zahtevi</string>
     <string name="profile_friends_header">Prijatelji</string>
     <string name="profile_friends_empty">Još nemaš prijatelja. Pretraži iznad da dodaš nekoga.</string>
     <string name="profile_friend_activity_header">Aktivnost prijatelja</string>
@@ -163,11 +169,19 @@
     <string name="profile_remove_friend_dialog_message">%1$s će biti uklonjen/a iz liste prijatelja. Ako se predomisliš, moraćeš ponovo da pošalješ zahtev.</string>
     <string name="profile_remove_confirm">Ukloni</string>
     <string name="profile_remove_cancel">Otkaži</string>
+    <string name="profile_reject_request_dialog_title">Odbij zahtev?</string>
+    <string name="profile_reject_request_dialog_message">Zahtev za prijateljstvo od korisnika %1$s će biti odbijen.</string>
     <string name="profile_search_users_label">Pretraži korisnike (ime ili email)</string>
     <string name="profile_search_no_results">Nema rezultata za \"%1$s\"</string>
     <string name="profile_add_friend">Dodaj</string>
     <string name="profile_cancel_request">Otkaži zahtev</string>
-    <string name="profile_reply_below">Odgovori ispod ↓</string>
+    <!-- Bugfix (2. septembar 2026, korisnički zahtev - "dugme pokazuje na 'ispod' ali ispod nema
+         ničega, i pre toga je pisalo 'otkaži zahtev' sto uopste nije dobro ponasanje") - RANIJE je
+         ova poruka upućivala na akciju "ispod" koja ovde nikad nije postojala (ni na
+         UserSearchResultRow ni, pre fix-a, na FriendProfileScreen bottomBar-u). Sad samo
+         informativno obeležava stanje - cela kartica je klikabilna i vodi na profil te osobe, gde
+         se zahtev sad stvarno može prihvatiti/odbiti. -->
+    <string name="profile_pending_received_badge">Poslao ti je zahtev</string>
     <string name="profile_already_friends">Već prijatelji</string>
     <string name="profile_accept_content_description">Prihvati</string>
     <string name="profile_reject_content_description">Odbij</string>
