@@ -88,6 +88,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import dev.milinko.movielens.R
+import dev.milinko.movielens.util.DevSettings
 import dev.milinko.movielens.data.remote.vision.ScrapedMovie
 import dev.milinko.movielens.data.remote.vision.TmdbMatch
 import dev.milinko.movielens.data.remote.vision.VisionSearchResponse
@@ -292,7 +293,14 @@ fun SearchScreen(
                 // ne bude isto veliko kao ova gore podela") - prekidač za embedding provajder,
                 // vidljiv SAMO u "U bioskopima" modu (nema smisla van semantičke pretrage). Namerno
                 // sitniji/sekundaran u odnosu na SearchModeToggle iznad - videti EmbeddingEngineToggle.
-                if (uiState.isCinemaMode) {
+                //
+                // Dorada (1. septembar 2026, priprema za testere) - dodat i
+                // DevSettings.SHOW_LOCAL_EMBEDDING_ENGINE_OPTION uslov. Render (difoltni backend za
+                // testere) namerno drži lokalni MiniLM indeks isključenim (ENABLE_LOCAL_EMBEDDING),
+                // pa bi "Lokalno" opcija uvek vraćala praznu listu - nema smisla da je testeri uopšte
+                // vide. uiState.useLocalEmbedding je već `false` po defaultu (SearchViewModel), pa
+                // sakrivanje ovog prekidača samo znači da pretraga uvek ide preko Gemini-ja.
+                if (uiState.isCinemaMode && DevSettings.SHOW_LOCAL_EMBEDDING_ENGINE_OPTION) {
                     Spacer(modifier = Modifier.height(8.dp))
                     EmbeddingEngineToggle(
                         useLocalEmbedding = uiState.useLocalEmbedding,

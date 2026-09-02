@@ -16,7 +16,11 @@ class UrlStorage @Inject constructor(
     companion object {
         private const val KEY_BASE_URL = "base_url"
         private const val KEY_SAVED_ROUTES = "saved_routes"
-        private const val DEFAULT_URL = "http://10.0.2.2:8080/"
+        // Dorada (1. septembar 2026, priprema APK-a za spoljne testere) - RANIJE "http://10.0.2.2:8080/"
+        // (Android emulator alias za localhost, korisno samo za dev na istoj mašini gde se pokreće
+        // backend). Testeri instaliraju APK bez pokrenutog lokalnog backend-a, pa default MORA biti
+        // pravi hostovan backend (Render) da app radi "iz kutije" bez ručnog podešavanja rute.
+        private const val DEFAULT_URL = "https://movielensbackendktor.onrender.com/"
         private const val MAX_SAVED_ROUTES = 6
     }
 

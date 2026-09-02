@@ -66,6 +66,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.milinko.movielens.R
+import dev.milinko.movielens.util.DevSettings
 import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.data.remote.user.FriendInfo
 import dev.milinko.movielens.data.remote.user.GenreAffinity
@@ -843,43 +844,50 @@ private fun SettingsSection(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        // Dorada (1. septembar 2026, priprema APK-a za spoljne testere) - ceo "Backend URL" editor
+        // (kartica + dijalog) je sad vidljiv samo kad je DevSettings.SHOW_BACKEND_URL_SETTINGS =
+        // true (videti obrazloženje tamo zašto NIJE vezano za BuildConfig.DEBUG). Testeri dobijaju
+        // `debug`-potpisan APK (radi bez keystore-a) sa ovim flag-om na `false` - ne vide/ne mogu
+        // da menjaju backend rutu, ostaju na difoltnoj (Render) iz UrlStorage.
+        if (DevSettings.SHOW_BACKEND_URL_SETTINGS) {
+            Spacer(modifier = Modifier.height(12.dp))
 
-        // Mini backend URL editor for testing
-        val showBackendDialog = remember { mutableStateOf(false) }
-        val baseUrl by viewModel.baseUrl.collectAsState()
+            // Mini backend URL editor for testing
+            val showBackendDialog = remember { mutableStateOf(false) }
+            val baseUrl by viewModel.baseUrl.collectAsState()
 
-        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(stringResource(R.string.profile_backend_url_label), style = MaterialTheme.typography.titleSmall)
-                    Text(baseUrl, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                TextButton(onClick = { showBackendDialog.value = true }) {
-                    Text(stringResource(R.string.profile_backend_edit))
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(stringResource(R.string.profile_backend_url_label), style = MaterialTheme.typography.titleSmall)
+                        Text(baseUrl, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    TextButton(onClick = { showBackendDialog.value = true }) {
+                        Text(stringResource(R.string.profile_backend_edit))
+                    }
                 }
             }
-        }
 
-        if (showBackendDialog.value) {
-            val savedRoutes by viewModel.savedRoutes.collectAsState()
-            SettingsDialog(
-                currentUrl = baseUrl,
-                savedRoutes = savedRoutes,
-                onDismiss = { showBackendDialog.value = false },
-                onSave = {
-                    viewModel.updateBaseUrl(it)
-                    showBackendDialog.value = false
-                },
-                onAddRoute = { viewModel.addSavedRoute(it) },
-                onDeleteRoute = { viewModel.removeSavedRoute(it) }
-            )
+            if (showBackendDialog.value) {
+                val savedRoutes by viewModel.savedRoutes.collectAsState()
+                SettingsDialog(
+                    currentUrl = baseUrl,
+                    savedRoutes = savedRoutes,
+                    onDismiss = { showBackendDialog.value = false },
+                    onSave = {
+                        viewModel.updateBaseUrl(it)
+                        showBackendDialog.value = false
+                    },
+                    onAddRoute = { viewModel.addSavedRoute(it) },
+                    onDeleteRoute = { viewModel.removeSavedRoute(it) }
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))

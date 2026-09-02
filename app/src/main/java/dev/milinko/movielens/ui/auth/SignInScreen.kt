@@ -38,6 +38,7 @@ import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 import dev.milinko.movielens.ui.components.MovieneeNameOrigin
 import dev.milinko.movielens.ui.components.MovieneeWordmark
 import dev.milinko.movielens.ui.components.SettingsDialog
+import dev.milinko.movielens.util.DevSettings
 
 // ⚠️  Replace this with your actual Web Client ID from Firebase Console →
 //     Project Settings → Your apps → Web client (auto created by Google Service) → Client ID
@@ -175,19 +176,27 @@ fun SignInScreen(
         // Profile → Podešavanja tabu, koji je sad zaključan iza prijave (dorada #2). Sign In je
         // jedini ekran koji izlogovan korisnik uvek vidi, pa dugme ide ovde, simetrično sa X gore
         // levo. Reciklira isti UrlStorage preko AuthViewModel-a - ista podešavanja kao Profile.
+        //
+        // Dorada (1. septembar 2026, priprema APK-a za spoljne testere) - dugme je sad vidljivo
+        // samo kad je DevSettings.SHOW_BACKEND_URL_SETTINGS = true (videti obrazloženje tamo zašto
+        // NIJE vezano za BuildConfig.DEBUG). Testeri i dalje dobijaju `debug`-potpisan APK (radi bez
+        // keystore-a), ali sa ovim flag-om na `false` ne vide/ne mogu da menjaju backend rutu -
+        // ostaju na difoltnoj (Render) ruti iz UrlStorage.kt.
         var showBackendDialog by remember { mutableStateOf(false) }
-        IconButton(
-            onClick = { showBackendDialog = true },
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(8.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Settings,
-                contentDescription = stringResource(R.string.sign_in_backend_content_description),
-                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-            )
+        if (DevSettings.SHOW_BACKEND_URL_SETTINGS) {
+            IconButton(
+                onClick = { showBackendDialog = true },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = stringResource(R.string.sign_in_backend_content_description),
+                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                )
+            }
         }
 
         if (showBackendDialog) {
