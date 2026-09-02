@@ -32,11 +32,24 @@ data class SearchUiState(
     // Faza D (17. avgust 2026, predlog mentora Marka) - "U bioskopima" mod: semantička pretraga
     // svedena na filmove trenutno na repertoaru (videti backend CinemaSemanticIndex). Odvojeno od
     // searchResults/isSearching iznad - drugačiji tip podataka (NowInCinemasMovie, ne
-    // MovieSearchResult) i drugačiji trigger (samo eksplicitan submit, nikad debounce - videti
-    // setSearchQuery/searchMovies ispod).
+    // MovieSearchResult).
+    // E2.1/E2.4 dorada (2. septembar 2026, korisnički zahtev - "dok se kuca da radi live pretraga
+    // po nazivu kao obična pretraga, a semantička ide samo na klik lupice") - `cinemaResults` se
+    // sad ažurira na DVA načina: (1) debounced lokalni filter po nazivu nad `allCinemaMovies` dok
+    // korisnik kuca (bez mreže, besplatno - videti setSearchQuery), (2) pravi semantički poziv
+    // SAMO na eksplicitan submit (nepromenjeno, videti searchCinemasSemantic/searchMovies).
     val isCinemaMode: Boolean = false,
     val cinemaResults: List<NowInCinemasMovie> = emptyList(),
     val isSearchingCinemas: Boolean = false,
+    // Bugfix (2. septembar 2026) - dok debounce (300ms) čeka pre lokalnog filtriranja, `cinemaResults`
+    // je i dalje "stara" (prazna posle svakog karaktera) - bez ovog flag-a, "nema poklapanja" poruka
+    // (SearchScreen) bi treperila na SVAKI karakter pre nego što filter stigne da se izvrši. Isti
+    // princip kao isSearchingCinemas, samo za jeftiniji lokalni posao umesto mrežnog poziva.
+    val isFilteringCinemasLive: Boolean = false,
+    // Cela lista filmova trenutno na repertoaru, preuzeta JEDNOM (network poziv bez ikakvog
+    // embedding troška - isti podaci kao Home "U bioskopima sada" traka) čim se uđe u "U
+    // bioskopima" mod - lokalni filter iznad radi nad ovom listom, ne nad mrežom.
+    val allCinemaMovies: List<NowInCinemasMovie> = emptyList(),
     // Faza D dorada (korisnički zahtev za poređenje Gemini vs. lokalni MiniLM embedding) - bira koji
     // embedding provajder backend koristi za "U bioskopima" semantičku pretragu. Podrazumevano
     // Gemini (isti kvalitet kao pre ove dorade). Vidljivo samo u isCinemaMode - videti SearchScreen.
@@ -79,10 +92,17 @@ class SearchViewModel @Inject constructor(
     fun setSearchQuery(query: String) {
         _uiState.value = _uiState.value.copy(searchQuery = query)
 
-        // Faza D - u "U bioskopima" modu NEMA debounce/"live" pretragu - svaki upit je pravi API
-        // poziv koji embeduje tekst preko Gemini-ja (stvaran trošak), pa se traži samo na
-        // eksplicitan submit (videti searchMovies ispod). Tekst polja se i dalje ažurira iznad.
-        if (_uiState.value.isCinemaMode) return
+        // E2.1/E2.4 dorada (2. septembar 2026) - RANIJE u "U bioskopima" modu NIJE bilo
+        // debounce/"live" pretrage jer je svaki upit slao pravi API poziv koji embeduje tekst
+        // preko Gemini-ja (stvaran trošak) - delovalo je "mrtvo" dok korisnik kuca. Sad se dok
+        // kuca radi ISTI princip kao obična pretraga (debounce + filter), samo lokalno nad već
+        // preuzetom listom `allCinemaMovies` (videti loadCinemaCatalog) - bez mreže, besplatno.
+        // Pravi semantički poziv i dalje ide SAMO na eksplicitan submit (searchMovies ispod),
+        // nepromenjeno.
+        if (_uiState.value.isCinemaMode) {
+            filterCinemaResultsLive(query)
+            return
+        }
 
         searchJob?.cancel()
         val trimmed = query.trim()
@@ -94,6 +114,26 @@ class SearchViewModel @Inject constructor(
         searchJob = viewModelScope.launch {
             delay(SEARCH_DEBOUNCE_MS)
             performSearch(trimmed)
+        }
+    }
+
+    /**
+     * E2.1/E2.4 dorada - lokalni debounced filter po nazivu nad `allCinemaMovies` (bez mreže).
+     * Isti debounce (300ms) i minimalna dužina kao obična tekstualna pretraga - korisniku deluje
+     * identično dok kuca, razlika (lokalni filter vs. Gemini embedding) je nevidljiva.
+     */
+    private fun filterCinemaResultsLive(query: String) {
+        searchJob?.cancel()
+        val trimmed = query.trim()
+        if (trimmed.length < MIN_QUERY_LENGTH) {
+            _uiState.value = _uiState.value.copy(cinemaResults = emptyList(), isFilteringCinemasLive = false, error = null)
+            return
+        }
+        _uiState.value = _uiState.value.copy(isFilteringCinemasLive = true)
+        searchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MS)
+            val filtered = _uiState.value.allCinemaMovies.filter { it.title.contains(trimmed, ignoreCase = true) }
+            _uiState.value = _uiState.value.copy(cinemaResults = filtered, isFilteringCinemasLive = false, error = null)
         }
     }
 
@@ -110,6 +150,10 @@ class SearchViewModel @Inject constructor(
             isCinemaMode = enabled,
             searchResults = emptyList(),
             cinemaResults = emptyList(),
+            // Higijena - searchJob?.cancel() iznad prekida debounce posao PRE nego što stigne da
+            // ovaj flag vrati na false, pa bi bez ovoga mogao ostati "zaglavljen" na true ako se
+            // mod promeni usred debounce prozora.
+            isFilteringCinemasLive = false,
             visionResult = null,
             error = null,
             // Pretraga slikom ne postoji u "U bioskopima" modu (dugme za kameru se onemogućava u
@@ -118,6 +162,38 @@ class SearchViewModel @Inject constructor(
             // semantičke pretrage.
             selectedImageUri = if (enabled) null else _uiState.value.selectedImageUri
         )
+        // E2.1/E2.4 dorada - katalog se preuzima JEDNOM po ulasku u mod (ne na svaki karakter),
+        // da lokalni filter u filterCinemaResultsLive ima nad čime da radi. Ako je već preuzet
+        // (npr. korisnik izašao pa se vratio u istom ViewModel-u), ne ponavlja se poziv.
+        if (enabled && _uiState.value.allCinemaMovies.isEmpty()) {
+            loadCinemaCatalog()
+        }
+    }
+
+    private var cinemaCatalogJob: Job? = null
+
+    /**
+     * E2.1/E2.4 dorada - preuzima celu listu filmova trenutno na repertoaru (isti podaci kao Home
+     * "U bioskopima sada" traka, obična ruta bez embedding troška) da lokalni filter po nazivu
+     * ima nad čime da radi dok korisnik kuca. Tiho guta grešku - ako padne, lokalni filter samo
+     * neće naći ništa (prazna lista), a eksplicitna semantička pretraga (submit) i dalje radi
+     * potpuno nezavisno, svojim network pozivom.
+     */
+    private fun loadCinemaCatalog() {
+        cinemaCatalogJob?.cancel()
+        cinemaCatalogJob = viewModelScope.launch {
+            movieRepository.getNowInCinemas().onSuccess { movies ->
+                _uiState.value = _uiState.value.copy(allCinemaMovies = movies)
+                // Ako je korisnik već nešto ukucao dok se katalog učitavao, primeni filter odmah
+                // umesto da čeka sledeći karakter.
+                val query = _uiState.value.searchQuery.trim()
+                if (query.length >= MIN_QUERY_LENGTH) {
+                    _uiState.value = _uiState.value.copy(
+                        cinemaResults = movies.filter { it.title.contains(query, ignoreCase = true) }
+                    )
+                }
+            }
+        }
     }
 
     /**
@@ -249,12 +325,14 @@ class SearchViewModel @Inject constructor(
     }
 
     fun clearResults() {
+        searchJob?.cancel()
         _uiState.value = _uiState.value.copy(
             searchResults = emptyList(),
             visionResult = null,
             searchQuery = "",
             error = null,
-            cinemaResults = emptyList()
+            cinemaResults = emptyList(),
+            isFilteringCinemasLive = false
         )
     }
 }

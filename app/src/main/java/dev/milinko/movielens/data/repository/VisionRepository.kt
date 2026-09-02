@@ -16,7 +16,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
-import org.json.JSONObject
+import retrofit2.HttpException
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -69,18 +69,27 @@ class VisionRepositoryImpl @Inject constructor(
                     ?: throw IllegalStateException("Server je vratio prazan odgovor.")
             }
 
-            val rawError = response.errorBody()?.string().orEmpty()
-            val parsedMessage = runCatching {
-                val json = JSONObject(rawError)
-                json.optString("error").ifBlank { json.optString("message") }
-            }.getOrDefault("")
-
-            throw IllegalStateException(
-                parsedMessage.takeIf { it.isNotBlank() }
-                    ?: "Greška servera (${response.code()})"
-            )
+            // Bugfix (2. septembar 2026, korisnički izveštaj - "pukla mi je greška za Gemini
+            // preopterećenost") - RANIJE se ovde ručno parsirao JSON iz error body-ja i taj SIROVI
+            // tekst backend-a (npr. "Gemini SDK error: 503 UNAVAILABLE. {\"error\":...}") se
+            // direktno prikazivao korisniku - mimoilazeći centralnu `friendlyMessage()` funkciju
+            // (Faza A, `util/FriendlyError.kt`) koja postoji TAČNO za ovaj slučaj, ali je ovaj
+            // repository nikad nije koristio (napravljen je pre nje, sa sopstvenom ad-hoc logikom).
+            // Sad se baca `HttpException` kao svuda drugde u app-u - hvata se ispod.
+            throw HttpException(response)
         } catch (e: CancellationException) {
             throw e
+        } catch (e: HttpException) {
+            // Backend (Routing.kt /chat/vision) sad eksplicitno vraća 503 kad Gemini SDK javi
+            // preopterećenost/rate limit (videti GeminiService.isGeminiOverloadSignal) - to je
+            // dovoljno česta i specifična situacija (testirano uživo) da zaslužuje sopstvenu,
+            // actionable poruku umesto generičkog "server ima problema" iz friendlyMessage().
+            val message = if (e.code() == 503) {
+                "Prepoznavanje slike je trenutno preopterećeno (previše zahteva odjednom). Pokušaj ponovo za par trenutaka."
+            } else {
+                dev.milinko.movielens.util.friendlyMessage(e, "Greška servera pri analizi slike.")
+            }
+            throw IllegalStateException(message, e)
         } catch (e: Exception) {
             throw IllegalStateException(e.toUserFacingMessage(), e)
         }

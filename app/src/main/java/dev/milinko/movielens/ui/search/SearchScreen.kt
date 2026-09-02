@@ -307,6 +307,17 @@ fun SearchScreen(
                         onChange = { viewModel.setUseLocalEmbedding(it) }
                     )
                 }
+                // E2.1/E2.4 dorada (2. septembar 2026) - stalno vidljivo objašnjenje kako "U
+                // bioskopima" mod radi (dva sloja pretrage - videti SearchViewModel), ne samo u
+                // praznom stanju pre prve pretrage (koje nestaje čim korisnik počne da kuca).
+                if (uiState.isCinemaMode) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.search_cinemas_live_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (uiState.error != null) {
@@ -466,8 +477,14 @@ private fun CinemaResultsPage(
                     onRecentQueryRemove = {}
                 )
             }
-        } else if (uiState.error == null && !uiState.isSearchingCinemas) {
+        } else if (uiState.error == null && !uiState.isSearchingCinemas && !uiState.isFilteringCinemasLive) {
             item {
+                // E2.1/E2.4 dorada - ova poruka se sad prikazuje i kad lokalni filter po nazivu
+                // (dok korisnik kuca) ne nađe ništa, NE samo posle prave semantičke pretrage -
+                // zato sad eksplicitno usmerava na dugme za slanje umesto generičkog "nema
+                // poklapanja", da korisnik zna da postoji i pametnija (AI) opcija.
+                // Bugfix - !isFilteringCinemasLive sprečava treperenje ove poruke tokom debounce
+                // prozora (300ms) posle svakog karaktera, pre nego što lokalni filter završi.
                 Text(
                     text = stringResource(R.string.search_cinemas_no_results),
                     style = MaterialTheme.typography.bodyMedium,

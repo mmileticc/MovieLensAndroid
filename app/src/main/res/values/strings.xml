@@ -98,13 +98,19 @@
          trenutno na repertoaru bioskopa, videti MOVIELENS_DESIGN_PLAN.md Faza D. -->
     <string name="search_mode_all">Sve filmove</string>
     <string name="search_mode_cinemas">U bioskopima</string>
-    <string name="search_input_placeholder_cinemas">Opiši šta bi da gledaš…</string>
+    <!-- E2.1/E2.4 dorada (2. septembar 2026) - placeholder sad odražava da kucanje radi pretragu
+         PO NAZIVU (uživo, lokalno) - opis/radnja je posao dugmeta za slanje (semantička pretraga),
+         videti search_cinemas_live_hint ispod. -->
+    <string name="search_input_placeholder_cinemas">Pretraži naziv u bioskopima…</string>
     <!-- Faza D dorada - poređenje Gemini vs. lokalni MiniLM embedding, vidljivo samo u "U bioskopima" modu. -->
     <string name="search_engine_gemini">Gemini</string>
     <string name="search_engine_local">Lokalno (MiniLM)</string>
-    <string name="search_cinemas_empty_title">Pronađi film po opisu</string>
-    <string name="search_cinemas_empty_message">Opiši atmosferu ili radnju - pretraga važi za filmove trenutno na repertoaru bioskopa.</string>
-    <string name="search_cinemas_no_results">Nema poklapanja među filmovima trenutno na repertoaru.</string>
+    <string name="search_cinemas_empty_title">Filmovi trenutno na repertoaru</string>
+    <string name="search_cinemas_empty_message">Kucaj za pretragu po nazivu, ili pritisni dugme za slanje da opišeš atmosferu/radnju i dobiješ pametniju (AI) pretragu.</string>
+    <!-- E2.1/E2.4 dorada - ova poruka se prikazuje i za "prazan" lokalni filter dok korisnik kuca
+         (ne samo posle prave semantičke pretrage) - zato eksplicitno usmerava na dugme za slanje. -->
+    <string name="search_cinemas_no_results">Nema poklapanja po nazivu. Pritisni dugme za slanje za pretragu po opisu/radnji (AI).</string>
+    <string name="search_cinemas_live_hint">Kucaš = pretraga po nazivu. Pritisni ➤ za pametniju pretragu po opisu ili raspoloženju.</string>
     <!-- Dorada 17. avgust 2026 - istorija pretraga (RecentSearchesStore) -->
     <string name="search_recent_title">Nedavne pretrage</string>
     <string name="search_recent_remove_content_description">Ukloni iz istorije</string>
