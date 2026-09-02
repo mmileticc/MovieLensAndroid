@@ -109,8 +109,15 @@ class LibraryViewModel @Inject constructor(
             val watchlistResult = watchlistDeferred.await()
             val historyResult = historyDeferred.await()
 
-            val errorMessage = watchlistResult.exceptionOrNull()?.message
-                ?: historyResult.exceptionOrNull()?.message
+            // Dorada (2. septembar 2026, korisnički zahtev - "nijedna sirova poruka ne sme da
+            // postoji nigde") - RANIJE se `exceptionOrNull()?.message` uzimao direktno, bez
+            // prevoda - repository sloj (UserRepository) je tada bacao generičke izuzetke poput
+            // "Get watchlist failed: 500" koji bi se doslovno prikazali korisniku. Sad ide kroz
+            // `friendlyMessage()`, isti obrazac kao svuda drugde u appu.
+            val firstException = watchlistResult.exceptionOrNull() ?: historyResult.exceptionOrNull()
+            val errorMessage = firstException?.let {
+                dev.milinko.movielens.util.friendlyMessage(it, "Greška pri učitavanju biblioteke")
+            }
 
             _uiState.value = _uiState.value.copy(
                 isLoading = false,

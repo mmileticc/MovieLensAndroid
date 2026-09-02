@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -321,16 +322,51 @@ fun SearchScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (uiState.error != null) {
-                    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = stringResource(R.string.error_generic_title),
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            // Faza B bugfix - `?:` umesto `!!` (isti razlog kao MovieDetailScreen).
-                            Text(uiState.error ?: stringResource(R.string.error_generic_title), style = MaterialTheme.typography.bodyMedium)
+                    // Dorada (2. septembar 2026, korisnički zahtev - "poruka o preopterećenju me
+                    // para oči, deluje kao greška koju sam ja skrivio") - "meke" greške (Gemini
+                    // trenutno zauzet i slično - videti TransientServiceException.kt) dobijaju
+                    // smireniji karton (bez crvene boje/reči "Greška", info ikonica umesto
+                    // upozorenja) - jasno vizuelno drugačije od pravih grešaka ispod.
+                    if (uiState.isSoftError) {
+                        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Icon(
+                                    Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = stringResource(R.string.error_transient_title),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        uiState.error ?: stringResource(R.string.error_transient_title),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = stringResource(R.string.error_generic_title),
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                // Faza B bugfix - `?:` umesto `!!` (isti razlog kao MovieDetailScreen).
+                                Text(uiState.error ?: stringResource(R.string.error_generic_title), style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))

@@ -8,6 +8,7 @@ import dev.milinko.movielens.data.remote.movie.NowInCinemasMovie
 import dev.milinko.movielens.data.remote.movie.WatchlistItem
 import dev.milinko.movielens.data.remote.user.FriendWatched
 import dev.milinko.movielens.util.safeApiCall
+import retrofit2.HttpException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,21 +35,29 @@ class MovieRepositoryImpl @Inject constructor(
     private val movieApiService: MovieApiService
 ) : MovieRepository {
 
+    // Dorada (2. septembar 2026, korisnički zahtev - "nijedna sirova poruka ne sme da postoji
+    // nigde") - SVE metode ispod su ranije na neuspešan odgovor bacale generički `Exception("X
+    // failed: ${response.code()}")` - taj tekst NIJE HttpException, pa `friendlyMessage()`
+    // (util/FriendlyError.kt) nije mogao da prepozna status kod i taj sirovi engleski tekst je
+    // prolazio direktno do korisnika. Sad se svuda baca pravi `HttpException(response)` - isti
+    // obrazac kao `VisionRepository`/`UserRepository` - da gornja HTTP-kod grana u
+    // `friendlyMessage()` stvarno uhvati 401/403/404/5xx i vrati razumljivu srpsku poruku.
+
     override suspend fun searchMovies(query: String): Result<List<MovieSearchResult>> = safeApiCall {
         val response = movieApiService.searchMovies(query)
         if (response.isSuccessful) {
             response.body()?.results ?: emptyList()
         } else {
-            throw Exception("Search failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
     override suspend fun getMovieDetail(tmdbId: Int, lat: Double?, lon: Double?): Result<MovieDetail> = safeApiCall {
         val response = movieApiService.getMovieDetail(tmdbId, lat, lon)
         if (response.isSuccessful) {
-            response.body() ?: throw Exception("Empty response")
+            response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
         } else {
-            throw Exception("Get detail failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -57,7 +66,7 @@ class MovieRepositoryImpl @Inject constructor(
         if (response.isSuccessful) {
             response.body()?.results ?: emptyList()
         } else {
-            throw Exception("Trending failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -66,7 +75,7 @@ class MovieRepositoryImpl @Inject constructor(
         if (response.isSuccessful) {
             response.body()?.results ?: emptyList()
         } else {
-            throw Exception("Featured failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -75,7 +84,7 @@ class MovieRepositoryImpl @Inject constructor(
         if (response.isSuccessful) {
             response.body()?.friends ?: emptyList()
         } else {
-            throw Exception("Get friends-watched failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -84,7 +93,7 @@ class MovieRepositoryImpl @Inject constructor(
         if (response.isSuccessful) {
             response.body()?.results ?: emptyList()
         } else {
-            throw Exception("Get now-in-cinemas failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -93,8 +102,7 @@ class MovieRepositoryImpl @Inject constructor(
         if (response.isSuccessful) {
             response.body()?.results ?: emptyList()
         } else {
-            throw Exception("Semantic search failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 }
-

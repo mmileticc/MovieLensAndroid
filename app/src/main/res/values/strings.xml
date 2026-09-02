@@ -19,6 +19,9 @@
     <string name="action_back">Nazad</string>
     <string name="action_close">Zatvori</string>
     <string name="error_generic_title">Greška</string>
+    <!-- Dorada (2. septembar 2026) - naslov za "blage" (transient) greške poput Gemini overload-a,
+         gde nije korisnik ništa pokvario - videti TransientServiceException.kt/SearchScreen.kt. -->
+    <string name="error_transient_title">Trenutno nedostupno</string>
 
     <!-- Faza 3 redizajna - AppBottomNavigationBar -->
     <string name="nav_home">Home</string>

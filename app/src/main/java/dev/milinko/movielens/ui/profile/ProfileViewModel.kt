@@ -411,7 +411,10 @@ class ProfileViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _events.emit(ProfileUiEvent.ShowMessage("Greška pri čuvanju URL-a: ${e.message}"))
+                // Dorada (2. septembar 2026) - `e.message` se ranije ulepljivao direktno u
+                // poruku, bez prevoda - `friendlyMessage()` sad garantuje da nikad ne procuri
+                // sirov tehnički tekst, isti obrazac kao svuda drugde u appu.
+                _events.emit(ProfileUiEvent.ShowMessage(dev.milinko.movielens.util.friendlyMessage(e, "Greška pri čuvanju URL-a.")))
             }
         }
     }
@@ -425,7 +428,7 @@ class ProfileViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _events.emit(ProfileUiEvent.ShowMessage("Greška pri dodavanju rute: ${e.message}"))
+                _events.emit(ProfileUiEvent.ShowMessage(dev.milinko.movielens.util.friendlyMessage(e, "Greška pri dodavanju rute.")))
             }
         }
     }
@@ -439,7 +442,7 @@ class ProfileViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _events.emit(ProfileUiEvent.ShowMessage("Greška pri brisanju rute: ${e.message}"))
+                _events.emit(ProfileUiEvent.ShowMessage(dev.milinko.movielens.util.friendlyMessage(e, "Greška pri brisanju rute.")))
             }
         }
     }

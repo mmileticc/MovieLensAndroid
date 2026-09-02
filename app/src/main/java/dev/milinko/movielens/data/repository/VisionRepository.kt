@@ -84,24 +84,37 @@ class VisionRepositoryImpl @Inject constructor(
             // preopterećenost/rate limit (videti GeminiService.isGeminiOverloadSignal) - to je
             // dovoljno česta i specifična situacija (testirano uživo) da zaslužuje sopstvenu,
             // actionable poruku umesto generičkog "server ima problema" iz friendlyMessage().
-            val message = if (e.code() == 503) {
-                "Prepoznavanje slike je trenutno preopterećeno (previše zahteva odjednom). Pokušaj ponovo za par trenutaka."
-            } else {
-                dev.milinko.movielens.util.friendlyMessage(e, "Greška servera pri analizi slike.")
+            //
+            // Dorada (2. septembar 2026, korisnički zahtev - "poruka me para oči, deluje kao da
+            // sam nešto pokvario, hoću da bude blaže prikazana") - 503 sad baca posebno obeležen
+            // `TransientServiceException` umesto `IllegalStateException` - SearchViewModel ga
+            // hvata odvojeno i signalizira UI-ju (SearchScreen) da prikaže smireniji karton
+            // umesto crvene "Greške" (videti TransientServiceException.kt zašto ova razlika
+            // uopšte postoji). Sve ostale HTTP greške (nisu Gemini-specifične) ostaju kao pre.
+            if (e.code() == 503) {
+                throw dev.milinko.movielens.util.TransientServiceException(
+                    "Prepoznavanje slike je trenutno preopterećeno (previše zahteva odjednom). Pokušaj ponovo za par trenutaka."
+                )
             }
-            throw IllegalStateException(message, e)
+            throw IllegalStateException(dev.milinko.movielens.util.friendlyMessage(e, "Greška servera pri analizi slike."), e)
         } catch (e: Exception) {
             throw IllegalStateException(e.toUserFacingMessage(), e)
         }
     }
 
     private fun Throwable.toUserFacingMessage(): String {
+        // Dorada (2. septembar 2026, korisnički zahtev - "nijedna sirova poruka ne sme da
+        // postoji nigde") - `else` grana je RANIJE propuštala `message` bilo kog neočekivanog
+        // tipa izuzetka (npr. JSON parsiranje, biblioteke koje ne kontrolišemo) direktno
+        // korisniku. `IllegalStateException` ostaje bezbedan (app ga sam baca sa već napisanim
+        // srpskim tekstom, videti VisionRepository.detect() iznad) - sve ostalo sad pada na
+        // generičnu poruku umesto da rizikuje sirov tehnički tekst.
         return when (this) {
             is SocketTimeoutException -> "Vreme je isteklo dok je slika slana. Proveri internet i pokušaj ponovo."
             is UnknownHostException -> "Ne mogu da pronađem server. Proveri internet i adresu backend-a."
             is IOException -> "Mrežna greška tokom slanja slike. Pokušaj ponovo."
-            is IllegalStateException -> message?.takeIf { it.isNotBlank() } ?: "Nepoznata greška."
-            else -> message?.takeIf { it.isNotBlank() } ?: "Nepoznata greška."
+            is IllegalStateException -> message?.takeIf { it.isNotBlank() } ?: "Nepoznata greška. Pokušaj ponovo."
+            else -> "Nepoznata greška. Pokušaj ponovo."
         }
     }
 

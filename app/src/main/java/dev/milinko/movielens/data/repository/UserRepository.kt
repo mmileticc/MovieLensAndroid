@@ -26,6 +26,7 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import retrofit2.HttpException
 import retrofit2.Response
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -263,18 +264,18 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun getUserProfile(userId: String): Result<UserProfile> = safeApiCall {
         val response = userApiService.getUserProfile(userId)
         if (response.isSuccessful) {
-            val profile = response.body() ?: throw Exception("Empty response")
+            val profile = response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
             genericCacheDao.put(GenericCacheEntity(profileCacheKey(userId), cacheGson.toJson(profile)))
             profile
         } else {
-            throw Exception("Get profile failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
     override suspend fun updateUserProfile(userId: String, profile: UserProfile): Result<UserProfile> = safeApiCall {
         val response = userApiService.updateUserProfile(userId, profile)
         if (response.isSuccessful) {
-            val updated = response.body() ?: throw Exception("Empty response")
+            val updated = response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
             // Faza C - i ovde upisujemo u keš (ne samo GET), da observeCachedUserProfile odmah
             // odražava izmenu, bez čekanja na sledeći loadProfile() network refresh.
             genericCacheDao.put(GenericCacheEntity(profileCacheKey(userId), cacheGson.toJson(updated)))
@@ -284,7 +285,7 @@ class UserRepositoryImpl @Inject constructor(
             // greške ({"error": "..."}) - izvlačimo je da UI može da prikaže nešto korisnije od
             // golog HTTP koda (jedini poziv u repo-u gde je poruka greške stvarno actionable za
             // korisnika, za razliku od ostalih mrežnih poziva ovde).
-            throw Exception(response.parseErrorMessage("Ažuriranje profila nije uspelo (${response.code()})"))
+            throw IllegalStateException(response.parseErrorMessage("Ažuriranje profila nije uspelo (${response.code()})"))
         }
     }
 
@@ -300,18 +301,18 @@ class UserRepositoryImpl @Inject constructor(
             watchlistDao.replaceAll(userId, items.map { it.toEntity(userId) })
             items
         } else {
-            throw Exception("Get watchlist failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
     override suspend fun addToWatchlist(userId: String, tmdbId: Int): Result<WatchlistItem> = safeApiCall {
         val response = userApiService.addToWatchlist(userId, mapOf("tmdbId" to tmdbId))
         if (response.isSuccessful) {
-            val item = response.body() ?: throw Exception("Empty response")
+            val item = response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
             watchlistDao.insert(item.toEntity(userId))
             item
         } else {
-            throw Exception("Add to watchlist failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -320,7 +321,7 @@ class UserRepositoryImpl @Inject constructor(
         if (response.isSuccessful) {
             watchlistDao.delete(userId, tmdbId)
         } else {
-            throw Exception("Remove from watchlist failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -334,7 +335,7 @@ class UserRepositoryImpl @Inject constructor(
             historyDao.replaceAll(userId, items.map { it.toEntity(userId) })
             items
         } else {
-            throw Exception("Get history failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -343,18 +344,18 @@ class UserRepositoryImpl @Inject constructor(
         // ima podrazumevanu vrednost null za oba, pa je to ekvivalentno izostavljanju polja.
         val response = userApiService.addToHistory(userId, AddToHistoryBody(tmdbId, rating, review, duration))
         if (response.isSuccessful) {
-            val item = response.body() ?: throw Exception("Empty response")
+            val item = response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
             historyDao.insert(item.toEntity(userId))
             item
         } else {
-            throw Exception("Add to history failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
     override suspend fun updateHistoryItem(userId: String, tmdbId: Int, rating: Double?, review: String?): Result<HistoryItem> = safeApiCall {
         val response = userApiService.updateHistoryItem(userId, tmdbId, UpdateHistoryBody(rating, review))
         if (response.isSuccessful) {
-            val item = response.body() ?: throw Exception("Empty response")
+            val item = response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
             historyDao.insert(item.toEntity(userId))
             item
         } else if (response.code() == 404) {
@@ -365,14 +366,14 @@ class UserRepositoryImpl @Inject constructor(
             // probamo POST kao fallback umesto da odmah prijavimo grešku korisniku.
             val addResponse = userApiService.addToHistory(userId, AddToHistoryBody(tmdbId, rating, review, null))
             if (addResponse.isSuccessful) {
-                val item = addResponse.body() ?: throw Exception("Empty response")
+                val item = addResponse.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
                 historyDao.insert(item.toEntity(userId))
                 item
             } else {
-                throw Exception("Update history failed: ${addResponse.code()}")
+                throw HttpException(addResponse)
             }
         } else {
-            throw Exception("Update history failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -381,7 +382,7 @@ class UserRepositoryImpl @Inject constructor(
         if (response.isSuccessful) {
             historyDao.delete(userId, tmdbId)
         } else {
-            throw Exception("Remove from history failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -390,7 +391,7 @@ class UserRepositoryImpl @Inject constructor(
         if (response.isSuccessful) {
             response.body()?.users ?: emptyList()
         } else {
-            throw Exception("Search users failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -401,7 +402,7 @@ class UserRepositoryImpl @Inject constructor(
             genericCacheDao.put(GenericCacheEntity(pendingCacheKey(userId), cacheGson.toJson(requests)))
             requests
         } else {
-            throw Exception("Get pending requests failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -412,7 +413,7 @@ class UserRepositoryImpl @Inject constructor(
             genericCacheDao.put(GenericCacheEntity(sentCacheKey(userId), cacheGson.toJson(requests)))
             requests
         } else {
-            throw Exception("Get sent requests failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -423,46 +424,46 @@ class UserRepositoryImpl @Inject constructor(
             genericCacheDao.put(GenericCacheEntity(friendsCacheKey(userId), cacheGson.toJson(friends)))
             friends
         } else {
-            throw Exception("Get friends failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
     override suspend fun addFriend(userId: String, friendId: String): Result<Unit> = safeApiCall {
         val response = userApiService.manageFriend(userId, friendId, FriendActionBody("add"))
         if (!response.isSuccessful) {
-            throw Exception("Add friend failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
     override suspend fun acceptFriendRequest(userId: String, friendId: String): Result<Unit> = safeApiCall {
         val response = userApiService.manageFriend(userId, friendId, FriendActionBody("accept"))
         if (!response.isSuccessful) {
-            throw Exception("Accept friend request failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
     override suspend fun rejectFriendRequest(userId: String, friendId: String): Result<Unit> = safeApiCall {
         val response = userApiService.manageFriend(userId, friendId, FriendActionBody("reject"))
         if (!response.isSuccessful) {
-            throw Exception("Reject friend request failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
     override suspend fun removeFriend(userId: String, friendId: String): Result<Unit> = safeApiCall {
         val response = userApiService.removeFriend(userId, friendId)
         if (!response.isSuccessful) {
-            throw Exception("Remove friend failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
     override suspend fun getFriendProfile(userId: String, friendId: String): Result<FriendProfileResponse> = safeApiCall {
         val response = userApiService.getFriendProfile(userId, friendId)
         if (response.isSuccessful) {
-            val profile = response.body() ?: throw Exception("Empty response")
+            val profile = response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
             genericCacheDao.put(GenericCacheEntity(friendProfileCacheKey(userId, friendId), cacheGson.toJson(profile)))
             profile
         } else {
-            throw Exception("Get friend profile failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -485,7 +486,7 @@ class UserRepositoryImpl @Inject constructor(
             genericCacheDao.put(GenericCacheEntity(tasteCacheKey(userId), cacheGson.toJson(genres)))
             genres
         } else {
-            throw Exception("Get taste profile failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -496,7 +497,7 @@ class UserRepositoryImpl @Inject constructor(
             genericCacheDao.put(GenericCacheEntity(activityCacheKey(userId), cacheGson.toJson(activities)))
             activities
         } else {
-            throw Exception("Get activity failed: ${response.code()}")
+            throw HttpException(response)
         }
     }
 
@@ -527,7 +528,7 @@ class UserRepositoryImpl @Inject constructor(
                 genericCacheDao.put(GenericCacheEntity(movieNightCacheKey(userId, friendId, page), cacheGson.toJson(body)))
                 body
             } else {
-                throw Exception("Get suggestions failed: ${response.code()}")
+                throw HttpException(response)
             }
         }
     }

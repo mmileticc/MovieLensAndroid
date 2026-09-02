@@ -29,6 +29,11 @@ data class SearchUiState(
     val searchResults: List<MovieSearchResult> = emptyList(),
     val visionResult: VisionSearchResponse? = null,
     val error: String? = null,
+    // Dorada (2. septembar 2026, korisnički zahtev - "poruka o preopterećenju me para oči, deluje
+    // kao greška koju sam ja skrivio") - razlikuje "pravu" grešku (crveni karton) od privremenog,
+    // ne-korisnikovog stanja poput Gemini overload-a (smireniji, info karton). Videti
+    // TransientServiceException.kt i SearchScreen.kt (uslovni stil error kartona).
+    val isSoftError: Boolean = false,
     // Faza D (17. avgust 2026, predlog mentora Marka) - "U bioskopima" mod: semantička pretraga
     // svedena na filmove trenutno na repertoaru (videti backend CinemaSemanticIndex). Odvojeno od
     // searchResults/isSearching iznad - drugačiji tip podataka (NowInCinemasMovie, ne
@@ -107,7 +112,7 @@ class SearchViewModel @Inject constructor(
         searchJob?.cancel()
         val trimmed = query.trim()
         if (trimmed.length < MIN_QUERY_LENGTH) {
-            _uiState.value = _uiState.value.copy(searchResults = emptyList(), error = null)
+            _uiState.value = _uiState.value.copy(searchResults = emptyList(), error = null, isSoftError = false)
             return
         }
 
@@ -126,14 +131,14 @@ class SearchViewModel @Inject constructor(
         searchJob?.cancel()
         val trimmed = query.trim()
         if (trimmed.length < MIN_QUERY_LENGTH) {
-            _uiState.value = _uiState.value.copy(cinemaResults = emptyList(), isFilteringCinemasLive = false, error = null)
+            _uiState.value = _uiState.value.copy(cinemaResults = emptyList(), isFilteringCinemasLive = false, error = null, isSoftError = false)
             return
         }
         _uiState.value = _uiState.value.copy(isFilteringCinemasLive = true)
         searchJob = viewModelScope.launch {
             delay(SEARCH_DEBOUNCE_MS)
             val filtered = _uiState.value.allCinemaMovies.filter { it.title.contains(trimmed, ignoreCase = true) }
-            _uiState.value = _uiState.value.copy(cinemaResults = filtered, isFilteringCinemasLive = false, error = null)
+            _uiState.value = _uiState.value.copy(cinemaResults = filtered, isFilteringCinemasLive = false, error = null, isSoftError = false)
         }
     }
 
@@ -156,6 +161,7 @@ class SearchViewModel @Inject constructor(
             isFilteringCinemasLive = false,
             visionResult = null,
             error = null,
+            isSoftError = false,
             // Pretraga slikom ne postoji u "U bioskopima" modu (dugme za kameru se onemogućava u
             // SearchScreen-u) - ako je korisnik imao sliku izabranu PRE prebacivanja, uklanja se
             // ovde da submit dugme posle prebacivanja ne bi tiho pokrenulo vision analizu umesto
@@ -232,7 +238,7 @@ class SearchViewModel @Inject constructor(
 
         val engine = if (_uiState.value.useLocalEmbedding) "local" else "gemini"
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isSearchingCinemas = true, error = null)
+            _uiState.value = _uiState.value.copy(isSearchingCinemas = true, error = null, isSoftError = false)
             movieRepository.semanticSearchNowInCinemas(query, engine)
                 .onSuccess { results ->
                     _uiState.value = _uiState.value.copy(
@@ -243,7 +249,8 @@ class SearchViewModel @Inject constructor(
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         isSearchingCinemas = false,
-                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri pretrazi")
+                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri pretrazi"),
+                        isSoftError = false
                     )
                 }
         }
@@ -278,7 +285,7 @@ class SearchViewModel @Inject constructor(
     }
 
     private suspend fun performSearch(query: String) {
-        _uiState.value = _uiState.value.copy(isSearching = true, error = null)
+        _uiState.value = _uiState.value.copy(isSearching = true, error = null, isSoftError = false)
         movieRepository.searchMovies(query)
             .onSuccess { results ->
                 _uiState.value = _uiState.value.copy(
@@ -289,7 +296,8 @@ class SearchViewModel @Inject constructor(
             .onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     isSearching = false,
-                    error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri pretrazi")
+                    error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri pretrazi"),
+                    isSoftError = false
                 )
             }
     }
@@ -298,14 +306,15 @@ class SearchViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             selectedImageUri = uri,
             visionResult = null,
-            error = null
+            error = null,
+            isSoftError = false
         )
     }
 
     fun detectImage() {
         val imageUri = _uiState.value.selectedImageUri ?: return
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isAnalyzingImage = true, error = null)
+            _uiState.value = _uiState.value.copy(isAnalyzingImage = true, error = null, isSoftError = false)
             try {
                 val response = visionRepository.detect(imageUri)
                 _uiState.value = _uiState.value.copy(
@@ -315,10 +324,19 @@ class SearchViewModel @Inject constructor(
                 )
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: dev.milinko.movielens.util.TransientServiceException) {
+                // Videti TransientServiceException.kt/VisionRepository.kt - Gemini overload i
+                // slična "nije tvoja greška" stanja dobijaju smireniji UI umesto crvene "Greške".
+                _uiState.value = _uiState.value.copy(
+                    isAnalyzingImage = false,
+                    error = e.message,
+                    isSoftError = true
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isAnalyzingImage = false,
-                    error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri analizi slike")
+                    error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri analizi slike"),
+                    isSoftError = false
                 )
             }
         }
@@ -331,6 +349,7 @@ class SearchViewModel @Inject constructor(
             visionResult = null,
             searchQuery = "",
             error = null,
+            isSoftError = false,
             cinemaResults = emptyList(),
             isFilteringCinemasLive = false
         )
