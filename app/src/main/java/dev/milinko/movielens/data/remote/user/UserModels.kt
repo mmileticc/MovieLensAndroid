@@ -126,7 +126,26 @@ data class FriendProfileResponse(
     @SerializedName("bio")
     val bio: String? = null,
     @SerializedName("watched_movies")
-    val watchedMovies: List<FriendProfileMovie> = emptyList()
+    val watchedMovies: List<FriendProfileMovie> = emptyList(),
+    // E1.5 dorada (2. septembar 2026) - ograničen preview PRE prihvaćenog prijateljstva. Kad
+    // friendshipStatus != "ACCEPTED", watchedMovies je uvek prazna (backend je nikad ne popunjava)
+    // - email/commonGenres su ono što se umesto toga prikazuje. Videti FriendsRouting.kt na backendu.
+    @SerializedName("email")
+    val email: String? = null,
+    // Bugfix (2. septembar 2026, logcat crash - "Attempt to invoke virtual method
+    // 'int java.lang.String.hashCode()' on a null object reference" u FriendProfileScreen.kt).
+    // Uzrok: Gson (Retrofit konverter) NE poziva Kotlin konstruktor kad popunjava polja iz JSON-a
+    // (koristi refleksiju/Unsafe), pa Kotlin default vrednosti (npr. "ACCEPTED" ovde) VAŽE SAMO
+    // pri direktnoj konstrukciji iz koda (npr. .copy(...) u ViewModel-u) - NE i kad polje
+    // nedostaje u JSON-u. Stari keš zapisi u Room bazi (snimljeni PRE nego što je ovo polje
+    // dodato u E1.5) zato daju friendshipStatus = null uprkos deklarisanom ne-null tipu, što
+    // ruši `when` na tom polju (String `when` se kompajlira preko hashCode()). Polja su zato
+    // eksplicitno nullable - stvarnost onoga što Gson može da vrati - a mesta koja ih čitaju
+    // (FriendProfileScreen.kt) koriste `?:`/`.orEmpty()` fallback.
+    @SerializedName("friendship_status")
+    val friendshipStatus: String? = "ACCEPTED",
+    @SerializedName("common_genres")
+    val commonGenres: List<String>? = emptyList()
 )
 
 // Taste profile (Faza 4) - prosečna ocena po žanru, izvedeno direktno iz korisnikovih ocena.

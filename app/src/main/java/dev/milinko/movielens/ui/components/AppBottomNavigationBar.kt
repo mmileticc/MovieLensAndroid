@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -50,16 +51,23 @@ fun AppBottomNavigationBar(
     selectedTab: BottomNavTab,
     onTabSelected: (BottomNavTab) -> Unit
 ) {
+    // Bugfix (E1.6, 2. septembar 2026, feedback testera - "nav traka ide ispod sistemske nav trake
+    // na nekim verzijama") - RANIJE je Surface imao fiksnu `.height(64.dp)` bez ikakvog insets
+    // podešavanja, pa se na gesture-navigation (ili nekim 3-dugme) uređajima sadržaj trake
+    // preklapao sa sistemskom navigacijom na dnu ekrana. `.navigationBarsPadding()` na Surface-u
+    // dodaje dodatni razmak VELIČINE sistemskog dna ISPOD sadržaja (koji i dalje ima svojih 64dp,
+    // sad na unutrašnjem Row-u), umesto da se ceo Surface samo suzi/prekrije.
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp),
+            .navigationBarsPadding(),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 8.dp
     ) {
         Row(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .height(64.dp)
                 .padding(horizontal = 8.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically

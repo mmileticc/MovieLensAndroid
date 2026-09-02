@@ -46,6 +46,31 @@ interface UserRepository {
     fun observeCachedFriendActivity(userId: String): Flow<List<FriendActivity>>
     fun observeCachedTasteProfile(userId: String): Flow<List<GenreAffinity>>
     fun observeCachedFriendProfile(userId: String, friendId: String): Flow<FriendProfileResponse?>
+    // Bugfix (2. septembar 2026, feedback - "posalje se zahtev, pa se ponovo otvori profil i
+    // dugme i dalje pise 'Dodaj prijatelja'") - `sendFriendRequest`/`cancelFriendRequest` na
+    // FriendProfileScreen-u RANIJE su menjali SAMO _uiState u memoriji, ne i Room keš - pa bi
+    // sveže otvoren (nova ViewModel instanca) ekran tog istog prijatelja pročitao STARI keš
+    // zapis (npr. i dalje "NONE") i nakratko prikazao pogrešno dugme dok mreža (koja može biti
+    // spora na Render cold-startu) ne stigne da ispravi stanje. Ovo piše samo u keš, bez mreže -
+    // zove se odmah uz optimistički UI update, isto kao što getFriendProfile piše keš posle
+    // stvarnog mrežnog odgovora.
+    suspend fun cacheFriendProfile(userId: String, friendId: String, profile: FriendProfileResponse)
+
+    // Bugfix (2. septembar 2026, feedback - "otkažem zahtev kod prijatelja [na Profile ekranu],
+    // uđem na detalje [FriendProfileScreen] - stanje se nije promenilo, vratim se nazad na
+    // prijatelje - tu bude opet pogrešno kao na detaljima") - `sendFriendRequest`/
+    // `cancelFriendRequest` na ProfileScreen-u (rezultati pretrage) su menjali SAMO
+    // `friendSearchResults` u memoriji, NE i isti Room keš zapis koji FriendProfileScreen čita
+    // (`friendprofile:userId:friendId`). Kad bi se posle toga otvorio taj profil, čitao bi se
+    // STARI keš (netaknut ProfileScreen akcijom) - i taj (pogrešan) zapis bi se onda, preko
+    // `refreshFriendSearchResults()` cache-merge dorade, prepisao NAZAD u `friendSearchResults`
+    // pri povratku na Profile ekran - efektivno brišući ispravno stanje pogrešnim. Ovo zatvara
+    // petlju u OBA smera: ako keš zapis za tog prijatelja već postoji (znači korisnik ga je
+    // nekad otvorio), status u njemu se odmah ažurira - bez mreže. Ako zapis ne postoji, nema šta
+    // da se ažurira (nema dovoljno podataka - bio/email/watchedMovies - da se napravi ceo
+    // FriendProfileResponse iz UserSearchResult-a, koji ima samo id/username/avatar/status) - to
+    // je ok, prvi network fetch na FriendProfileScreen-u će ga sam popuniti ispravno.
+    suspend fun updateCachedFriendshipStatus(userId: String, friendId: String, status: String)
 
     // Offline-first: čita se odmah iz Room keša (instant, radi i bez interneta), getWatchlist
     // ispod ostaje "osveži sa mreže" - poziva se u pozadini, upisuje u isti keš, Flow automatski
@@ -211,6 +236,16 @@ class UserRepositoryImpl @Inject constructor(
     override fun observeCachedFriendProfile(userId: String, friendId: String): Flow<FriendProfileResponse?> =
         genericCacheDao.observe(friendProfileCacheKey(userId, friendId)).map { entity ->
             entity?.jsonPayload?.let { json -> runCatching { cacheGson.fromJson(json, FriendProfileResponse::class.java) }.getOrNull() }
+                // Bugfix (2. septembar 2026, feedback - "otvorim profil prijatelja i prikaže ga
+                // kao da nismo prijatelji, pa se tek posle malo osveži") - stari keš zapisi
+                // (snimljeni PRE E1.5) nemaju friendshipStatus u JSON-u, pa Gson tu vrednost
+                // ostavlja null (videti komentar u UserModels.kt). Takav zapis se NE SME
+                // prikazati kao da je "nije prijatelj" (isLocked=true bi bio pogrešan zaključak,
+                // ne stvarno stanje) - bolje je da ekran ostane na spinneru dok pravi mrežni
+                // odgovor ne stigne, nego da na trenutak prikaže pogrešan "zaključan" prikaz koji
+                // posle "trepne" u tačan. Zato se ovakav (stari/nepotpun) keš zapis tretira kao
+                // da uopšte ne postoji.
+                ?.takeIf { it.friendshipStatus != null }
         }
 
     override suspend fun getUserProfile(userId: String): Result<UserProfile> = safeApiCall {
@@ -310,6 +345,20 @@ class UserRepositoryImpl @Inject constructor(
             val item = response.body() ?: throw Exception("Empty response")
             historyDao.insert(item.toEntity(userId))
             item
+        } else if (response.code() == 404) {
+            // Bugfix (E1.1, 2. septembar 2026) - odbrambeni sloj uz backend samoisceljujući PUT
+            // (videti UserActionsRouting.kt komentar). Lokalni uiState je mislio da je film već
+            // "odgledan" (npr. stari keš iz vremena pre backend fix-a, ili druga verzija backend-a
+            // dok se ne redeploy-uje) pa je pozvan PUT umesto POST - ako backend ipak vrati 404,
+            // probamo POST kao fallback umesto da odmah prijavimo grešku korisniku.
+            val addResponse = userApiService.addToHistory(userId, AddToHistoryBody(tmdbId, rating, review, null))
+            if (addResponse.isSuccessful) {
+                val item = addResponse.body() ?: throw Exception("Empty response")
+                historyDao.insert(item.toEntity(userId))
+                item
+            } else {
+                throw Exception("Update history failed: ${addResponse.code()}")
+            }
         } else {
             throw Exception("Update history failed: ${response.code()}")
         }
@@ -392,6 +441,18 @@ class UserRepositoryImpl @Inject constructor(
         } else {
             throw Exception("Get friend profile failed: ${response.code()}")
         }
+    }
+
+    override suspend fun cacheFriendProfile(userId: String, friendId: String, profile: FriendProfileResponse) {
+        genericCacheDao.put(GenericCacheEntity(friendProfileCacheKey(userId, friendId), cacheGson.toJson(profile)))
+    }
+
+    override suspend fun updateCachedFriendshipStatus(userId: String, friendId: String, status: String) {
+        val key = friendProfileCacheKey(userId, friendId)
+        val existing = genericCacheDao.get(key)?.jsonPayload
+            ?.let { json -> runCatching { cacheGson.fromJson(json, FriendProfileResponse::class.java) }.getOrNull() }
+            ?: return
+        genericCacheDao.put(GenericCacheEntity(key, cacheGson.toJson(existing.copy(friendshipStatus = status))))
     }
 
     override suspend fun getTasteProfile(userId: String): Result<List<GenreAffinity>> = safeApiCall {

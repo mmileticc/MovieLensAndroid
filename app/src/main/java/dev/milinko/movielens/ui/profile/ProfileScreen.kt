@@ -40,6 +40,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
@@ -330,6 +331,14 @@ private fun FriendsTabContent(
     onNavigateToDetail: (Int) -> Unit,
     onRemoveFriend: (FriendInfo) -> Unit
 ) {
+    // Bugfix (E1.4, 2. septembar 2026, feedback testera - "lista prijatelja se ne ažurira odmah,
+    // nema pull-down") - swipe-down gest kao dodatna sigurnosna mreža uz automatski refresh posle
+    // prihvatanja zahteva (videti ProfileViewModel.acceptFriendRequest/refreshFriends).
+    PullToRefreshBox(
+        isRefreshing = uiState.isRefreshingFriends,
+        onRefresh = { viewModel.refreshFriends() },
+        modifier = Modifier.fillMaxSize()
+    ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
             // Faza 7 dorada #3 - isti header/taste profile kao na Podešavanja tabu, sad deo
@@ -351,6 +360,7 @@ private fun FriendsTabContent(
                 query = uiState.friendSearchQuery,
                 isSearching = uiState.isSearchingFriends,
                 results = uiState.friendSearchResults,
+                inFlightIds = uiState.friendActionInFlightIds,
                 onQueryChange = viewModel::setFriendSearchQuery,
                 onAdd = viewModel::sendFriendRequest,
                 onCancelRequest = viewModel::cancelFriendRequest,
@@ -428,6 +438,7 @@ private fun FriendsTabContent(
         item {
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
     }
 }
 
@@ -1118,6 +1129,7 @@ private fun FriendSearchSection(
     query: String,
     isSearching: Boolean,
     results: List<UserSearchResult>,
+    inFlightIds: Set<String>,
     onQueryChange: (String) -> Unit,
     onAdd: (String) -> Unit,
     onCancelRequest: (String) -> Unit,
@@ -1143,9 +1155,15 @@ private fun FriendSearchSection(
                 results.forEach { result ->
                     UserSearchResultRow(
                         result = result,
+                        isActionInFlight = result.id in inFlightIds,
                         onAdd = { onAdd(result.id) },
                         onCancelRequest = { onCancelRequest(result.id) },
-                        onClick = { if (result.status == "ACCEPTED") onOpenProfile(result.id) }
+                        // Bugfix (E1.5, 2. septembar 2026, feedback testera - "nemogućnost pregleda
+                        // profila pre slanja zahteva") - RANIJE klik nije radio dok status nije
+                        // ACCEPTED. FriendProfileScreen sad prikazuje ograničen preview za bilo koji
+                        // status (videti FriendsRouting.kt/FriendProfileScreen.kt), pa je klik uvek
+                        // dozvoljen.
+                        onClick = { onOpenProfile(result.id) }
                     )
                 }
             }
@@ -1163,6 +1181,7 @@ private fun FriendSearchSection(
 @Composable
 private fun UserSearchResultRow(
     result: UserSearchResult,
+    isActionInFlight: Boolean,
     onAdd: () -> Unit,
     onCancelRequest: () -> Unit,
     onClick: () -> Unit
@@ -1185,14 +1204,18 @@ private fun UserSearchResultRow(
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.weight(1f)
             )
+            // Bugfix (2. septembar 2026, feedback - "posalji/otkazi rapidno, dodaj posle radi sporo
+            // i nikako da osvezi") - dugme se onemogući dok je akcija za ovaj id u letu (videti
+            // friendActionInFlightIds/ProfileViewModel) - sprečava rapidno naizmenično
+            // slanje/otkazivanje koje je ranije otkazivalo prethodni mrežni poziv usred leta.
             when (result.status) {
-                "NONE" -> AppButton(text = stringResource(R.string.profile_add_friend), onClick = onAdd, variant = AppButtonVariant.Primary)
-                "PENDING_SENT" -> TextButton(onClick = onCancelRequest) {
+                "NONE" -> AppButton(text = stringResource(R.string.profile_add_friend), onClick = onAdd, variant = AppButtonVariant.Primary, enabled = !isActionInFlight)
+                "PENDING_SENT" -> TextButton(onClick = onCancelRequest, enabled = !isActionInFlight) {
                     Text(stringResource(R.string.profile_cancel_request), color = MaterialTheme.colorScheme.error)
                 }
                 "PENDING_RECEIVED" -> AppButton(text = stringResource(R.string.profile_reply_below), onClick = {}, variant = AppButtonVariant.Secondary, enabled = false)
                 "ACCEPTED" -> AppButton(text = stringResource(R.string.profile_already_friends), onClick = {}, variant = AppButtonVariant.Secondary, enabled = false)
-                else -> AppButton(text = stringResource(R.string.profile_add_friend), onClick = onAdd, variant = AppButtonVariant.Primary)
+                else -> AppButton(text = stringResource(R.string.profile_add_friend), onClick = onAdd, variant = AppButtonVariant.Primary, enabled = !isActionInFlight)
             }
         }
     }

@@ -125,17 +125,10 @@ fun MovieDetailScreen(
         viewModel.loadMovieDetail(tmdbId)
     }
 
-    LaunchedEffect(uiState.watchlistError) {
-        uiState.watchlistError?.let {
-            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-        }
-    }
-
-    LaunchedEffect(uiState.historyError) {
-        uiState.historyError?.let {
-            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-        }
-    }
+    // Bugfix (E1.2, 2. septembar 2026, feedback testera - ružna "Update history failed: 404"
+    // poruka pri brzim uzastopnim klikovima) - watchlistError/historyError polja i ovi Toast-ovi su
+    // namerno uklonjeni, videti MovieDetailViewModel.kt (historyJob/watchlistJob napomena) - greške
+    // iz ovog toka se sad samo tiho loguju, nikad ne prekidaju korisnika usred klika.
 
     Scaffold(
         topBar = {

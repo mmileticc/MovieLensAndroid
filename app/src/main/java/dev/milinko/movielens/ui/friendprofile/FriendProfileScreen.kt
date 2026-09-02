@@ -41,6 +41,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import dev.milinko.movielens.R
 import dev.milinko.movielens.data.remote.user.FriendProfileMovie
 import dev.milinko.movielens.ui.components.AppButton
+import dev.milinko.movielens.ui.components.AppButtonVariant
+import dev.milinko.movielens.ui.components.GenreChip
 import dev.milinko.movielens.ui.components.MovieListRow
 import dev.milinko.movielens.ui.components.RemoteAvatarImage
 
@@ -86,14 +88,45 @@ fun FriendProfileScreen(
             }
         },
         bottomBar = {
+            // Bugfix (E1.5, 2. septembar 2026) - RANIJE se do ovog ekrana moglo stići SAMO za već
+            // prihvaćene prijatelje, pa je "Movie Night" CTA bilo jedino moguće dugme ovde. Sad se
+            // ekran otvara i za NEprihvaćene (ograničen preview) - dugme zavisi od
+            // `profile.friendshipStatus`, isti stringovi/varijante kao FriendSearchSection na
+            // Profile ekranu (dosledan jezik kroz app).
             val profile = uiState.profile
             if (profile != null && !uiState.isSelf) {
                 Box(modifier = Modifier.padding(16.dp)) {
-                    AppButton(
-                        text = stringResource(R.string.friend_profile_movie_night_cta),
-                        onClick = { onNavigateToMovieNight(profile.id) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    // Bugfix (2. septembar 2026) - `friendshipStatus` je nullable jer ga Gson može
+                    // vratiti kao null iz starog keš zapisa (videti komentar u UserModels.kt) - String
+                    // `when` bez ovog fallback-a ruši aplikaciju (poziva hashCode() na null).
+                    when (profile.friendshipStatus ?: "NONE") {
+                        "ACCEPTED" -> AppButton(
+                            text = stringResource(R.string.friend_profile_movie_night_cta),
+                            onClick = { onNavigateToMovieNight(profile.id) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        "PENDING_SENT" -> AppButton(
+                            text = stringResource(R.string.profile_cancel_request),
+                            onClick = { viewModel.cancelFriendRequest() },
+                            variant = AppButtonVariant.Secondary,
+                            enabled = !uiState.isRequestActionInFlight,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        "PENDING_RECEIVED" -> AppButton(
+                            text = stringResource(R.string.profile_reply_below),
+                            onClick = {},
+                            variant = AppButtonVariant.Secondary,
+                            enabled = false,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        else -> AppButton(
+                            text = stringResource(R.string.profile_add_friend),
+                            onClick = { viewModel.sendFriendRequest() },
+                            variant = AppButtonVariant.Primary,
+                            enabled = !uiState.isRequestActionInFlight,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
         }
@@ -119,6 +152,9 @@ fun FriendProfileScreen(
                 }
                 uiState.profile != null -> {
                     val profile = uiState.profile!!
+                    // E1.5 dorada (2. septembar 2026) - "zaključan" prikaz (bez liste odgledanih
+                    // filmova) za svakoga ko NIJE prihvaćen prijatelj, videti FriendsRouting.kt.
+                    val isLocked = !uiState.isSelf && profile.friendshipStatus != "ACCEPTED"
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         item {
                             Column(
@@ -153,11 +189,24 @@ fun FriendProfileScreen(
                                 }
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(profile.username, style = MaterialTheme.typography.titleLarge)
-                                Text(
-                                    text = stringResource(R.string.friend_profile_watched_count, profile.watchedMovies.size),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                // E1.5 dorada - dok nije prihvaćen prijatelj, umesto broja odgledanih
+                                // filmova (koji se namerno ne otkriva, videti isLocked) prikazuje se
+                                // email, ako backend ima da ga vrati.
+                                if (isLocked) {
+                                    if (!profile.email.isNullOrBlank()) {
+                                        Text(
+                                            text = profile.email,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                } else {
+                                    Text(
+                                        text = stringResource(R.string.friend_profile_watched_count, profile.watchedMovies.size),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                                 // Faza 7 dorada - prijateljev "mini status", isti izvor podataka
                                 // kao sopstveni profil (UserProfile.bio / UserDao.updateProfile).
                                 if (!profile.bio.isNullOrBlank()) {
@@ -171,10 +220,41 @@ fun FriendProfileScreen(
                                             .padding(top = 8.dp, start = 24.dp, end = 24.dp)
                                     )
                                 }
+                                // E1.5 dorada - presek žanrovskih interesovanja umesto liste filmova
+                                // dok prijateljstvo nije prihvaćeno (isti compareTasteProfiles kao
+                                // Profile → Prijatelji lista, videti FriendsRouting.kt na backendu).
+                                if (isLocked && !profile.commonGenres.isNullOrEmpty()) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        text = stringResource(R.string.friend_profile_common_genres_header),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    ) {
+                                        profile.commonGenres.orEmpty().take(4).forEach { genre ->
+                                            GenreChip(text = genre)
+                                        }
+                                    }
+                                }
                             }
                         }
 
-                        if (profile.watchedMovies.isEmpty()) {
+                        if (isLocked) {
+                            item {
+                                Text(
+                                    text = if (profile.friendshipStatus == "PENDING_RECEIVED") {
+                                        stringResource(R.string.friend_profile_pending_received_note)
+                                    } else {
+                                        stringResource(R.string.friend_profile_locked_note)
+                                    },
+                                    modifier = Modifier.padding(16.dp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        } else if (profile.watchedMovies.isEmpty()) {
                             item {
                                 Text(
                                     text = stringResource(R.string.friend_profile_empty),

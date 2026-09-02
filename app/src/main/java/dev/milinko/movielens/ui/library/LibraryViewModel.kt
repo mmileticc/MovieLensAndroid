@@ -1,5 +1,6 @@
 package dev.milinko.movielens.ui.library
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -42,6 +43,14 @@ class LibraryViewModel @Inject constructor(
     private var observingForUserId: String? = null
     private var watchlistCollectJob: Job? = null
     private var historyCollectJob: Job? = null
+
+    // Bugfix (E1.2, 2. septembar 2026, feedback testera - "greske 500/400 pri brzim uzastopnim
+    // klikovima") - isti obrazac kao MovieDetailViewModel (historyJob/watchlistJob), samo keyed po
+    // tmdbId jer ovde više različitih filmova u listi mogu da se menjaju nezavisno (ne sme jedan
+    // klik da otkaže zahtev za DRUGI film). Nova akcija nad ISTIM filmom otkaže prethodnu ako je
+    // još u letu, umesto da se dva zahteva sudare na backendu.
+    private val historyJobs = mutableMapOf<Int, Job>()
+    private val watchlistJobs = mutableMapOf<Int, Job>()
 
     /** Učitava biblioteku za trenutno ulogovanog korisnika (iz SessionManager-a). */
     fun loadLibrary() {
@@ -125,13 +134,14 @@ class LibraryViewModel @Inject constructor(
             history = previousHistory.map { if (it.tmdbId == tmdbId) it.copy(userRating = rating.toDouble()) else it }
         )
 
-        viewModelScope.launch {
+        historyJobs[tmdbId]?.cancel()
+        historyJobs[tmdbId] = viewModelScope.launch {
+            // Bugfix (E1.2) - tiho se loguje umesto da se prikaže kao greška preko cele Biblioteke -
+            // najčešći uzrok je otkazan/sudaren zahtev od brzog uzastopnog klika na zvezdice.
             userRepository.updateHistoryItem(userId, tmdbId, rating.toDouble())
                 .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        history = previousHistory,
-                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri ažuriranju ocene")
-                    )
+                    Log.w("LibraryViewModel", "rateMovie nije uspeo (tiho, ne prikazuje se korisniku): ${e.message}")
+                    _uiState.value = _uiState.value.copy(history = previousHistory)
                 }
         }
     }
@@ -142,13 +152,13 @@ class LibraryViewModel @Inject constructor(
         val previousWatchlist = _uiState.value.watchlist
         _uiState.value = _uiState.value.copy(watchlist = previousWatchlist.filter { it.tmdbId != tmdbId })
 
-        viewModelScope.launch {
+        watchlistJobs[tmdbId]?.cancel()
+        watchlistJobs[tmdbId] = viewModelScope.launch {
+            // Bugfix (E1.2) - videti napomenu na rateMovie iznad, isti princip.
             userRepository.removeFromWatchlist(userId, tmdbId)
                 .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        watchlist = previousWatchlist,
-                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri uklanjanju iz watchlist-e")
-                    )
+                    Log.w("LibraryViewModel", "removeFromWatchlist nije uspeo (tiho, ne prikazuje se korisniku): ${e.message}")
+                    _uiState.value = _uiState.value.copy(watchlist = previousWatchlist)
                 }
         }
     }

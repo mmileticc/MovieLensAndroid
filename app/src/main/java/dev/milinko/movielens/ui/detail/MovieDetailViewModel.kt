@@ -1,5 +1,6 @@
 package dev.milinko.movielens.ui.detail
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -9,6 +10,7 @@ import dev.milinko.movielens.data.remote.movie.MovieDetail
 import dev.milinko.movielens.data.remote.user.FriendWatched
 import dev.milinko.movielens.data.repository.MovieRepository
 import dev.milinko.movielens.data.repository.UserRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,8 +31,10 @@ data class MovieDetailUiState(
     // Prijatelji koji su odgledali ovaj film (i njihova ocena, ako postoji). Tiho prazno ako
     // korisnik nije ulogovan ili poziv padne - nije kritična funkcionalnost, ne blokira ekran.
     val friendsWatched: List<FriendWatched> = emptyList(),
-    val watchlistError: String? = null,
-    val historyError: String? = null,
+    // Bugfix (E1.2, 2. septembar 2026) - RANIJE watchlistError/historyError polja koja su se
+    // prikazivala kao Toast ("Update history failed: 404" iz test feedback-a). Uklonjena namerno -
+    // watchlist/watched/ocena greške se sad samo tiho loguju (Log.w), nikad ne prekidaju korisnika,
+    // videti historyJob/watchlistJob napomenu ispod.
     val error: String? = null
 )
 
@@ -44,6 +48,16 @@ class MovieDetailViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(MovieDetailUiState())
     val uiState: StateFlow<MovieDetailUiState> = _uiState.asStateFlow()
+
+    // Bugfix (E1.2, 2. septembar 2026, feedback testera - "greske 500/400 pri brzim uzastopnim
+    // klikovima na watchlist/odgledano") - toggleWatched/rateMovie/saveReview sve mutiraju ISTI
+    // backend red (user_actions/history), pa dele jedan Job. toggleWatchlist je odvojen resurs
+    // (watchlist tabela) - sopstveni Job. Svaka nova akcija OTKAŽE prethodnu ako je još u letu
+    // (umesto da oba zahteva odu na mrežu istovremeno i sudare se) - Retrofit suspend pozivi
+    // prate coroutine cancellation, pa se i stvaran HTTP poziv prekine, ne samo lokalno stanje.
+    // Rezultat: brzo uzastopno kuckanje zvezdica/dugmeta šalje SAMO poslednji zahtev, bez trke.
+    private var historyJob: Job? = null
+    private var watchlistJob: Job? = null
 
     fun loadMovieDetail(tmdbId: Int) {
         viewModelScope.launch {
@@ -134,22 +148,26 @@ class MovieDetailViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             isWatched = !wasWatched,
             userRating = if (wasWatched) 0.0 else previousRating,
-            userReview = if (wasWatched) null else previousReview,
-            historyError = null
+            userReview = if (wasWatched) null else previousReview
         )
 
-        viewModelScope.launch {
+        historyJob?.cancel()
+        historyJob = viewModelScope.launch {
             val result = if (wasWatched) {
                 userRepository.removeFromHistory(userId, tmdbId)
             } else {
                 userRepository.addToHistory(userId, tmdbId).map { }
             }
+            // Bugfix (E1.2) - ne prikazujemo grešku korisniku za ovaj tok (videti napomenu na
+            // historyJob) - najčešći uzrok je otkazan/sudaren zahtev od brzog uzastopnog klika,
+            // ne stvaran problem. Tiho se loguje i lokalno stanje se vrati na poslednje poznato
+            // dobro - sledeći uspešan poziv (ili sledeće otvaranje ekrana) ionako sve resinhronizuje.
             result.onFailure { e ->
+                Log.w("MovieDetailViewModel", "toggleWatched nije uspeo (tiho, ne prikazuje se korisniku): ${e.message}")
                 _uiState.value = _uiState.value.copy(
                     isWatched = wasWatched,
                     userRating = previousRating,
-                    userReview = previousReview,
-                    historyError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri ažuriranju statusa odgledano")
+                    userReview = previousReview
                 )
             }
         }
@@ -172,22 +190,24 @@ class MovieDetailViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             userRating = rating.toDouble(),
             userReview = if (review != null) review.ifBlank { null } else previousReview,
-            isWatched = true,
-            historyError = null
+            isWatched = true
         )
 
-        viewModelScope.launch {
+        historyJob?.cancel()
+        historyJob = viewModelScope.launch {
             val result = if (wasWatched) {
                 userRepository.updateHistoryItem(userId, tmdbId, rating.toDouble(), review)
             } else {
                 userRepository.addToHistory(userId, tmdbId, rating = rating.toDouble(), review = review)
             }
+            // Bugfix (E1.2) - videti napomenu na historyJob/toggleWatched: tiho se loguje umesto da
+            // korisnik vidi "Update history failed: CODE" (tačan bag sa test feedback-a).
             result.onFailure { e ->
+                Log.w("MovieDetailViewModel", "rateMovie nije uspeo (tiho, ne prikazuje se korisniku): ${e.message}")
                 _uiState.value = _uiState.value.copy(
                     userRating = previousRating,
                     userReview = previousReview,
-                    isWatched = wasWatched,
-                    historyError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri ažuriranju ocene")
+                    isWatched = wasWatched
                 )
             }
         }
@@ -209,21 +229,22 @@ class MovieDetailViewModel @Inject constructor(
         val currentRating = _uiState.value.userRating.takeIf { it > 0 }
         _uiState.value = _uiState.value.copy(
             userReview = trimmedReview,
-            isWatched = true,
-            historyError = null
+            isWatched = true
         )
 
-        viewModelScope.launch {
+        historyJob?.cancel()
+        historyJob = viewModelScope.launch {
             val result = if (wasWatched) {
                 userRepository.updateHistoryItem(userId, tmdbId, currentRating, review.trim())
             } else {
                 userRepository.addToHistory(userId, tmdbId, rating = currentRating, review = review.trim())
             }
+            // Bugfix (E1.2) - videti napomenu na historyJob/toggleWatched.
             result.onFailure { e ->
+                Log.w("MovieDetailViewModel", "saveReview nije uspeo (tiho, ne prikazuje se korisniku): ${e.message}")
                 _uiState.value = _uiState.value.copy(
                     userReview = previousReview,
-                    isWatched = wasWatched,
-                    historyError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri čuvanju komentara")
+                    isWatched = wasWatched
                 )
             }
         }
@@ -239,19 +260,19 @@ class MovieDetailViewModel @Inject constructor(
         val userId = sessionManager.getUserId() ?: return false
 
         val wasInWatchlist = _uiState.value.isInWatchlist
-        _uiState.value = _uiState.value.copy(isInWatchlist = !wasInWatchlist, watchlistError = null)
+        _uiState.value = _uiState.value.copy(isInWatchlist = !wasInWatchlist)
 
-        viewModelScope.launch {
+        watchlistJob?.cancel()
+        watchlistJob = viewModelScope.launch {
             val result = if (wasInWatchlist) {
                 userRepository.removeFromWatchlist(userId, tmdbId).map { }
             } else {
                 userRepository.addToWatchlist(userId, tmdbId).map { }
             }
+            // Bugfix (E1.2) - videti napomenu na historyJob/toggleWatched, isti princip za watchlist.
             result.onFailure { e ->
-                _uiState.value = _uiState.value.copy(
-                    isInWatchlist = wasInWatchlist,
-                    watchlistError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri ažuriranju watchlist-e")
-                )
+                Log.w("MovieDetailViewModel", "toggleWatchlist nije uspeo (tiho, ne prikazuje se korisniku): ${e.message}")
+                _uiState.value = _uiState.value.copy(isInWatchlist = wasInWatchlist)
             }
         }
         return true

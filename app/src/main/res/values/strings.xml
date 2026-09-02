@@ -206,4 +206,8 @@
     <string name="friend_profile_movie_night_cta">Predlozi za zajedničko gledanje</string>
     <string name="friend_profile_empty">Još nema odgledanih filmova.</string>
     <string name="friend_profile_no_rating">Odgledano (bez ocene)</string>
+    <!-- E1.5 dorada (2. septembar 2026) - ograničen preview profila pre prihvaćenog prijateljstva. -->
+    <string name="friend_profile_common_genres_header">Zajednička interesovanja</string>
+    <string name="friend_profile_locked_note">Postanite prijatelji da vidite listu odgledanih filmova.</string>
+    <string name="friend_profile_pending_received_note">Ovaj korisnik ti je poslao zahtev za prijateljstvo - prihvati ga sa Profil ekrana.</string>
 </resources>
