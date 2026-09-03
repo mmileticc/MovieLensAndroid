@@ -47,7 +47,13 @@ data class MovieDetail(
     @SerializedName("cast")
     val cast: List<CastMember> = emptyList(),
     @SerializedName("showtimes")
-    val showtimes: List<Showtime> = emptyList()
+    val showtimes: List<Showtime> = emptyList(),
+    // Dopunske ocene sa OMDb-a (3. septembar 2026) - null ako backend nema podešen OMDb ključ ili
+    // OMDb nema podatke za dati film; ekran ih u tom slučaju prosto ne prikazuje.
+    @SerializedName("imdb_rating")
+    val imdbRating: Double? = null,
+    @SerializedName("rotten_tomatoes")
+    val rottenTomatoes: String? = null
 )
 
 data class Genre(

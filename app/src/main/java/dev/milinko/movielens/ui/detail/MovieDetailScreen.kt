@@ -340,6 +340,39 @@ fun MovieDetailScreen(
                                 text = "${String.format(LocalLocale.current.platformLocale, "%.1f", movie.voteAverage)}/10",
                                 style = MaterialTheme.typography.titleSmall
                             )
+                            Text(
+                                text = stringResource(R.string.movie_detail_tmdb_rating_source),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
+                        // Dopunske ocene (3. septembar 2026) - IMDb i Rotten Tomatoes, dolaze sa
+                        // OMDb-a preko backend-a. Ceo red se ne prikazuje ako oba polja nedostaju
+                        // (npr. OMDB_API_KEY nije podešen na serveru).
+                        if (movie.imdbRating != null || movie.rottenTomatoes != null) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                movie.imdbRating?.let { imdb ->
+                                    ExternalRatingBadge(
+                                        label = "IMDb",
+                                        value = String.format(LocalLocale.current.platformLocale, "%.1f/10", imdb),
+                                        badgeColor = Color(0xFFF5C518),
+                                        textColor = Color(0xFF000000)
+                                    )
+                                }
+                                movie.rottenTomatoes?.let { rt ->
+                                    ExternalRatingBadge(
+                                        label = "RT",
+                                        value = rt,
+                                        badgeColor = Color(0xFFFA320A),
+                                        textColor = Color(0xFFFFFFFF)
+                                    )
+                                }
+                            }
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -681,6 +714,34 @@ private fun CastAvatarCard(actor: CastMember, onClick: () -> Unit = {}) {
 
 // RatingStars je premešten u ui/components/RatingStars.kt (deljena komponenta - koristi je i
 // Library/Istorija tab za izmenu ocene, videti LibraryScreen.kt).
+
+/**
+ * Mali bedž za dopunsku ocenu (IMDb/Rotten Tomatoes) sa OMDb-a, prikazan pored TMDB ocene na
+ * Movie Detail ekranu (3. septembar 2026). Namerno prost tekstualni bedž umesto pravih logoa
+ * (nema licenciranih ikonica u projektu) - boja pozadine dovoljno jasno signalizira izvor.
+ */
+@Composable
+private fun ExternalRatingBadge(label: String, value: String, badgeColor: Color, textColor: Color) {
+    Row(
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(badgeColor)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = textColor
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelMedium,
+            color = textColor
+        )
+    }
+}
 
 /**
  * Javni komentari na film (E2.2 dorada, 3. septembar 2026) - zamenjuje stari privatan "komentar

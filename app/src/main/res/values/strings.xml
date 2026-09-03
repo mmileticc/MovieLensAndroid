@@ -60,6 +60,7 @@
     <string name="movie_detail_your_rating_value">Tvoja ocena: %1$d/10</string>
     <string name="movie_detail_rate_signin_toast">Prijavi se da bi ocenio film</string>
     <string name="movie_detail_genres_header">Žanrovi</string>
+    <string name="movie_detail_tmdb_rating_source">(TMDB)</string>
     <string name="movie_detail_showtimes_header">Bioskopski termini</string>
     <string name="movie_detail_sort_by_distance">Sortiraj po udaljenosti</string>
     <string name="movie_detail_show_more_showtimes">Prikaži još %1$d bioskopa</string>
