@@ -56,5 +56,11 @@ interface MovieApiService {
         @Query("q") query: String,
         @Query("engine") engine: String = "gemini"
     ): Response<NowInCinemasResponse>
+
+    // E2.3 (2. septembar 2026) - stranica glumca. Javna ruta, isti obrazac kao getMovieDetail.
+    @GET("api/people/{id}")
+    suspend fun getPersonDetail(
+        @Path("id") personId: Int
+    ): Response<PersonDetail>
 }
 

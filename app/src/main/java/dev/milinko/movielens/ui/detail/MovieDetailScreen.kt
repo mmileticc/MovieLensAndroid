@@ -97,7 +97,9 @@ fun MovieDetailScreen(
     viewModel: MovieDetailViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
     onRequireSignIn: () -> Unit = {},
-    onNavigateToFriendProfile: (String) -> Unit = {}
+    onNavigateToFriendProfile: (String) -> Unit = {},
+    // E2.3 (2. septembar 2026) - klik na glumca u "Cast" traci vodi na njegovu stranicu.
+    onNavigateToActor: (Int) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -498,7 +500,7 @@ fun MovieDetailScreen(
                             contentPadding = PaddingValues(horizontal = 16.dp)
                         ) {
                             items(movie.cast.take(6)) { actor ->
-                                CastAvatarCard(actor = actor)
+                                CastAvatarCard(actor = actor, onClick = { onNavigateToActor(actor.id) })
                             }
                         }
                     }
@@ -706,9 +708,11 @@ private fun FriendsWatchedBadge(friends: List<FriendWatched>, onFriendClick: (St
  * bez toga slika renderuje na malu podrazumevanu veličinu u gornjem levom uglu Box-a).
  */
 @Composable
-private fun CastAvatarCard(actor: CastMember) {
+private fun CastAvatarCard(actor: CastMember, onClick: () -> Unit = {}) {
     Column(
-        modifier = Modifier.width(72.dp),
+        modifier = Modifier
+            .width(72.dp)
+            .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(

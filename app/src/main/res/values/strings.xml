@@ -82,6 +82,19 @@
          - ista dvosmislenost) - "Otkrij" je jednoznačno. -->
     <string name="movie_detail_share_text">Otkrij \"%1$s\" na Movienee - oceni filmove i prati šta gledaju prijatelji!\n%2$s</string>
 
+    <!-- E2.3 (2. septembar 2026) - ActorDetailScreen -->
+    <string name="actor_detail_top_bar_title">Glumac</string>
+    <string name="actor_detail_retry">Pokušaj ponovno</string>
+    <string name="actor_detail_biography_header">Biografija</string>
+    <string name="actor_detail_biography_empty">Biografija nije dostupna.</string>
+    <string name="actor_detail_show_more">Prikaži više</string>
+    <string name="actor_detail_show_less">Prikaži manje</string>
+    <string name="actor_detail_born">Rođen/a</string>
+    <string name="actor_detail_died">Preminuo/la</string>
+    <string name="actor_detail_place_of_birth">Mesto rođenja</string>
+    <string name="actor_detail_filmography_header">Filmovi</string>
+    <string name="actor_detail_filmography_empty">Nema poznatih filmova.</string>
+
     <!-- Faza 6 redizajna - SearchScreen -->
     <string name="search_top_bar_title">Pretraži filmove</string>
     <string name="search_input_placeholder">Pretraži filmove…</string>

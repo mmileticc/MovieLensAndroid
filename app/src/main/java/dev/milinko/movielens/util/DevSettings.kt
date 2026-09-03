@@ -13,7 +13,7 @@ package dev.milinko.movielens.util
  *           ostaju na difoltnoj (Render) ruti iz UrlStorage.kt bez mogućnosti da je promene.
  */
 object DevSettings {
-    const val SHOW_BACKEND_URL_SETTINGS = false
+    const val SHOW_BACKEND_URL_SETTINGS = true
 
     // Dorada (1. septembar 2026, isti razlog kao SHOW_BACKEND_URL_SETTINGS iznad) - Render (hostovan
     // backend, difoltna ruta za testere) namerno drži ENABLE_LOCAL_EMBEDDING isključeno (videti

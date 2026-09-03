@@ -5,6 +5,7 @@ import dev.milinko.movielens.data.remote.movie.MovieDetail
 import dev.milinko.movielens.data.remote.movie.MovieSearchResult
 import dev.milinko.movielens.data.remote.movie.HistoryItem
 import dev.milinko.movielens.data.remote.movie.NowInCinemasMovie
+import dev.milinko.movielens.data.remote.movie.PersonDetail
 import dev.milinko.movielens.data.remote.movie.WatchlistItem
 import dev.milinko.movielens.data.remote.user.FriendWatched
 import dev.milinko.movielens.util.safeApiCall
@@ -28,6 +29,8 @@ interface MovieRepository {
     // Faza D dorada - `engine` bira embedding provajder na backendu ("gemini" ili "local"), radi
     // poređenja kvaliteta pretrage.
     suspend fun semanticSearchNowInCinemas(query: String, engine: String = "gemini"): Result<List<NowInCinemasMovie>>
+    // E2.3 (2. septembar 2026) - stranica glumca (foto, biografija, filmografija).
+    suspend fun getPersonDetail(personId: Int): Result<PersonDetail>
 }
 
 @Singleton
@@ -101,6 +104,15 @@ class MovieRepositoryImpl @Inject constructor(
         val response = movieApiService.semanticSearchNowInCinemas(query, engine)
         if (response.isSuccessful) {
             response.body()?.results ?: emptyList()
+        } else {
+            throw HttpException(response)
+        }
+    }
+
+    override suspend fun getPersonDetail(personId: Int): Result<PersonDetail> = safeApiCall {
+        val response = movieApiService.getPersonDetail(personId)
+        if (response.isSuccessful) {
+            response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
         } else {
             throw HttpException(response)
         }

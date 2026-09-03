@@ -8,6 +8,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import dev.milinko.movielens.ui.actor.ActorDetailScreen
 import dev.milinko.movielens.ui.auth.SignInScreen
 import dev.milinko.movielens.ui.detail.MovieDetailScreen
 import dev.milinko.movielens.ui.friendprofile.FriendProfileScreen
@@ -27,6 +28,11 @@ sealed class Screen(val route: String) {
     object Search : Screen("search")
     object MovieDetail : Screen("detail/{tmdbId}") {
         fun createRoute(tmdbId: Int) = "detail/$tmdbId"
+    }
+
+    // E2.3 (2. septembar 2026) - stranica glumca, otvara se sa Movie Detail-a.
+    object ActorDetail : Screen("actor/{actorId}") {
+        fun createRoute(actorId: Int) = "actor/$actorId"
     }
 
     object Library : Screen("library")
@@ -120,6 +126,20 @@ fun MovieLensNavHost(
                 },
                 onNavigateToFriendProfile = { friendId: String ->
                     navController.navigate(Screen.FriendProfile.createRoute(friendId))
+                },
+                onNavigateToActor = { actorId: Int ->
+                    navController.navigate(Screen.ActorDetail.createRoute(actorId))
+                }
+            )
+        }
+
+        composable(Screen.ActorDetail.route) { backStackEntry ->
+            val actorId = backStackEntry.arguments?.getString("actorId")?.toIntOrNull() ?: return@composable
+            ActorDetailScreen(
+                personId = actorId,
+                onNavigateBack = { navController.navigateUp() },
+                onNavigateToMovie = { tmdbId: Int ->
+                    navController.navigate(Screen.MovieDetail.createRoute(tmdbId))
                 }
             )
         }

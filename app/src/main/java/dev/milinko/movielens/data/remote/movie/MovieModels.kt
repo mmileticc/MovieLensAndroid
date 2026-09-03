@@ -68,6 +68,45 @@ data class CastMember(
     val profilePath: String? = null
 )
 
+// E2.3 (2. septembar 2026) - stranica glumca. `character` je ovde uloga koju je glumac igrao u
+// SVAKOM filmu iz njegove filmografije (obrnuto od CastMember.character iznad, koji opisuje
+// glumca IZ UGLA jednog filma) - otud posebna, zasebna data klasa umesto ponovne upotrebe CastMember.
+data class PersonMovieCredit(
+    @SerializedName("id")
+    val tmdbId: Int,
+    @SerializedName("title")
+    val title: String,
+    @SerializedName("character")
+    val character: String? = null,
+    @SerializedName("poster_path")
+    val posterPath: String? = null,
+    @SerializedName("release_date")
+    val releaseDate: String? = null,
+    @SerializedName("vote_average")
+    val voteAverage: Double? = null
+)
+
+data class PersonDetail(
+    @SerializedName("id")
+    val id: Int,
+    @SerializedName("name")
+    val name: String,
+    @SerializedName("biography")
+    val biography: String? = null,
+    @SerializedName("birthday")
+    val birthday: String? = null,
+    @SerializedName("deathday")
+    val deathday: String? = null,
+    @SerializedName("place_of_birth")
+    val placeOfBirth: String? = null,
+    @SerializedName("profile_path")
+    val profilePath: String? = null,
+    @SerializedName("known_for_department")
+    val knownForDepartment: String? = null,
+    @SerializedName("movie_credits")
+    val movieCredits: List<PersonMovieCredit> = emptyList()
+)
+
 // Bioskopski termin - polja prate stvarni ScrapedMovie model na backendu (cinema_id/times/city iz
 // ranije verzije ovog modela nisu odgovarali stvarnim podacima i nikad nisu bili popunjeni - videti
 // MOVIELENS_ROADMAP.md, Faza 4.5). distanceKm je null ako korisnik nije dao lokacijsku dozvolu.
