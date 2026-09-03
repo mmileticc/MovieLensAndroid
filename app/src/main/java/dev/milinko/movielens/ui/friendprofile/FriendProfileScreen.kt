@@ -337,10 +337,9 @@ private fun WatchedMovieRow(movie: FriendProfileMovie, onClick: () -> Unit) {
         title = movie.title,
         posterPath = movie.posterPath,
         ratingText = movie.rating?.let { "$it/10" },
-        // Komentar prijatelja (ako postoji) ima prednost nad "bez ocene" napomenom - korisnička
-        // žalba: komentari se nisu prikazivali nigde, ni na profilu prijatelja.
-        description = movie.review?.takeIf { it.isNotBlank() }
-            ?: if (movie.rating == null) stringResource(R.string.friend_profile_no_rating) else null,
+        // E2.2 dorada (3. septembar 2026) - stari privatan review prikaz uklonjen (zamenjen javnim
+        // komentarima na Movie Detail ekranu) - "bez ocene" napomena ostaje kad je relevantna.
+        description = if (movie.rating == null) stringResource(R.string.friend_profile_no_rating) else null,
         onClick = onClick,
         modifier = Modifier.padding(horizontal = 16.dp)
     )

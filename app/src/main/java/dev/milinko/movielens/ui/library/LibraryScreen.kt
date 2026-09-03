@@ -266,9 +266,9 @@ private fun HistoryItemRow(
             title = item.title,
             posterPath = item.posterPath,
             ratingText = "${String.format("%.1f", item.userRating)}/10",
-            // Kratak pregled komentara (ako postoji) - puna izmena/pisanje komentara ide preko
-            // Movie Detail ekrana (MovieDetailViewModel.saveReview), ovde samo prikaz.
-            description = item.review?.takeIf { it.isNotBlank() },
+            // E2.2 dorada (3. septembar 2026) - stari privatan "komentar uz ocenu" (item.review) je
+            // uklonjen iz prikaza, zamenjen javnim komentarima na Movie Detail ekranu (vidljivi
+            // svima, ne samo ovde) - videti CommentsSection u MovieDetailScreen.kt.
             onClick = onMovieClick,
             trailing = {
                 // Odvojen tap-target od MovieListRow-ovog glavnog onClick-a (koji vodi na Movie

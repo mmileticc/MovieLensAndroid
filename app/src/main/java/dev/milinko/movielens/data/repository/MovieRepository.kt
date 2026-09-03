@@ -1,6 +1,10 @@
 package dev.milinko.movielens.data.repository
 
+import dev.milinko.movielens.data.remote.movie.AddCommentRequest
+import dev.milinko.movielens.data.remote.movie.LikeCommentResponse
 import dev.milinko.movielens.data.remote.movie.MovieApiService
+import dev.milinko.movielens.data.remote.movie.MovieComment
+import dev.milinko.movielens.data.remote.movie.MovieCommentsResponse
 import dev.milinko.movielens.data.remote.movie.MovieDetail
 import dev.milinko.movielens.data.remote.movie.MovieSearchResult
 import dev.milinko.movielens.data.remote.movie.HistoryItem
@@ -31,6 +35,12 @@ interface MovieRepository {
     suspend fun semanticSearchNowInCinemas(query: String, engine: String = "gemini"): Result<List<NowInCinemasMovie>>
     // E2.3 (2. septembar 2026) - stranica glumca (foto, biografija, filmografija).
     suspend fun getPersonDetail(personId: Int): Result<PersonDetail>
+
+    // E2.2 dorada (3. septembar 2026) - javni komentari na film, videti MovieModels.kt/MovieComment.
+    suspend fun getComments(tmdbId: Int, offset: Int = 0, limit: Int = 3): Result<MovieCommentsResponse>
+    suspend fun addComment(tmdbId: Int, body: String): Result<MovieComment>
+    suspend fun deleteComment(commentId: Int): Result<Unit>
+    suspend fun toggleCommentLike(commentId: Int): Result<LikeCommentResponse>
 }
 
 @Singleton
@@ -111,6 +121,42 @@ class MovieRepositoryImpl @Inject constructor(
 
     override suspend fun getPersonDetail(personId: Int): Result<PersonDetail> = safeApiCall {
         val response = movieApiService.getPersonDetail(personId)
+        if (response.isSuccessful) {
+            response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+        } else {
+            throw HttpException(response)
+        }
+    }
+
+    override suspend fun getComments(tmdbId: Int, offset: Int, limit: Int): Result<MovieCommentsResponse> = safeApiCall {
+        val response = movieApiService.getComments(tmdbId, offset, limit)
+        if (response.isSuccessful) {
+            response.body() ?: MovieCommentsResponse()
+        } else {
+            throw HttpException(response)
+        }
+    }
+
+    override suspend fun addComment(tmdbId: Int, body: String): Result<MovieComment> = safeApiCall {
+        val response = movieApiService.addComment(tmdbId, AddCommentRequest(body))
+        if (response.isSuccessful) {
+            response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+        } else {
+            throw HttpException(response)
+        }
+    }
+
+    override suspend fun deleteComment(commentId: Int): Result<Unit> = safeApiCall {
+        val response = movieApiService.deleteComment(commentId)
+        if (response.isSuccessful) {
+            Unit
+        } else {
+            throw HttpException(response)
+        }
+    }
+
+    override suspend fun toggleCommentLike(commentId: Int): Result<LikeCommentResponse> = safeApiCall {
+        val response = movieApiService.toggleCommentLike(commentId)
         if (response.isSuccessful) {
             response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
         } else {

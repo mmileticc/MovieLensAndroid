@@ -72,9 +72,26 @@
     <string name="movie_detail_friends_watched_many">%1$d prijatelja su gledala ovaj film</string>
     <string name="movie_detail_runtime_minutes">%1$d min</string>
     <!-- Faza "komentar/share" (16. avgust 2026) -->
-    <string name="movie_detail_review_label">Tvoj komentar (opciono)</string>
-    <string name="movie_detail_save_review">Sačuvaj komentar</string>
     <string name="movie_detail_share_content_description">Podeli</string>
+    <!-- E2.2 dorada (3. septembar 2026) - javni komentari na film, ZAMENJUJU stari
+         movie_detail_review_label/save_review (jedan privatan komentar uz ocenu, vidljiv samo
+         prijateljima) - videti MovieDetailViewModel.kt/CommentsSection ispod. -->
+    <string name="movie_detail_comments_header">Komentari</string>
+    <string name="movie_detail_comment_label">Napiši komentar…</string>
+    <string name="movie_detail_post_comment">Objavi</string>
+    <string name="movie_detail_comment_post_signin_toast">Prijavi se da bi komentarisao</string>
+    <string name="movie_detail_comments_empty">Još nema komentara. Budi prvi!</string>
+    <string name="movie_detail_comments_show_more">Prikaži više</string>
+    <string name="movie_detail_comments_show_less">Prikaži manje</string>
+    <string name="movie_detail_comment_friend_badge">Prijatelj</string>
+    <string name="movie_detail_comment_delete_content_description">Obriši komentar</string>
+    <string name="movie_detail_comment_like_content_description">Lajkuj komentar</string>
+    <!-- Dorada (3. septembar 2026, korisnički zahtev - "pre brisanja komentara treba samo da pita
+         da li je siguran") - isti obrazac kao profile_remove_friend_dialog_*. -->
+    <string name="movie_detail_comment_delete_dialog_title">Obriši komentar?</string>
+    <string name="movie_detail_comment_delete_dialog_message">Ova radnja se ne može opozvati.</string>
+    <string name="movie_detail_comment_delete_confirm">Obriši</string>
+    <string name="movie_detail_comment_delete_cancel">Otkaži</string>
     <!-- Bugfix (E2.6, 2. septembar 2026, feedback testera - "share poruka je čudna jer kaže da se
          na našoj platformi gleda film što nije slučaj") - RANIJE "Gledam X na Movienee" tvrdilo je
          da se film gleda/strimuje kroz app, a Movienee je otkrivanje/ocenjivanje/praćenje filmova,

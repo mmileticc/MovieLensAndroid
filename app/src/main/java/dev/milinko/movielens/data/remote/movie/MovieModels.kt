@@ -196,6 +196,51 @@ data class NowInCinemasResponse(
     val results: List<NowInCinemasMovie> = emptyList()
 )
 
+// E2.2 dorada (3. septembar 2026) - javni komentari na film, ZAMENJUJE stari HistoryItem.review
+// koncept (jedan privatni komentar vezan za ocenu). Potpuno odvojena funkcionalnost - ne zavisi
+// od watched/rating statusa, više komentara po korisniku po filmu je dozvoljeno.
+data class MovieComment(
+    @SerializedName("id")
+    val id: Int,
+    @SerializedName("user_id")
+    val userId: String,
+    @SerializedName("username")
+    val username: String,
+    @SerializedName("avatar_url")
+    val avatarUrl: String? = null,
+    @SerializedName("body")
+    val body: String,
+    @SerializedName("created_at")
+    val createdAt: Long,
+    @SerializedName("like_count")
+    val likeCount: Int = 0,
+    @SerializedName("liked_by_me")
+    val likedByMe: Boolean = false,
+    @SerializedName("is_friend")
+    val isFriend: Boolean = false,
+    @SerializedName("is_own")
+    val isOwn: Boolean = false
+)
+
+data class MovieCommentsResponse(
+    @SerializedName("comments")
+    val comments: List<MovieComment> = emptyList(),
+    @SerializedName("has_more")
+    val hasMore: Boolean = false
+)
+
+data class AddCommentRequest(
+    @SerializedName("body")
+    val body: String
+)
+
+data class LikeCommentResponse(
+    @SerializedName("liked_by_me")
+    val likedByMe: Boolean,
+    @SerializedName("like_count")
+    val likeCount: Int
+)
+
 // Generic API Response wrapper
 data class ApiResponse<T>(
     @SerializedName("success")

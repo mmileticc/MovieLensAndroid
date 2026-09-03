@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.milinko.movielens.data.location.LocationHelper
 import dev.milinko.movielens.data.pref.SessionManager
+import dev.milinko.movielens.data.remote.movie.MovieComment
 import dev.milinko.movielens.data.remote.movie.MovieDetail
 import dev.milinko.movielens.data.remote.user.FriendWatched
 import dev.milinko.movielens.data.repository.MovieRepository
@@ -26,11 +27,20 @@ data class MovieDetailUiState(
     val isWatched: Boolean = false,
     // 0.0 = odgledano bez ocene (isti dogovor kao na backendu - videti UserActionsRouting.kt)
     val userRating: Double = 0.0,
-    // Kratak tekstualni komentar uz ocenu (opcion) - videti HistoryItem.review.
-    val userReview: String? = null,
     // Prijatelji koji su odgledali ovaj film (i njihova ocena, ako postoji). Tiho prazno ako
     // korisnik nije ulogovan ili poziv padne - nije kritična funkcionalnost, ne blokira ekran.
     val friendsWatched: List<FriendWatched> = emptyList(),
+    // E2.2 dorada (3. septembar 2026) - javni komentari, ZAMENJUJU stari userReview koncept
+    // (jedan privatan tekst uz ocenu). Potpuno odvojeno od ocene/watched statusa ispod.
+    // `comments` su SVI do sada mrežno učitani komentari; `commentsVisibleCount` je koliko se od
+    // njih trenutno prikazuje - "Prikaži više" prvo samo otkriva već učitane (bez mreže), tek kad
+    // ih ponestane a `commentsHasMoreOnServer` je true ide se po sledeću stranicu. "Prikaži manje"
+    // samo vraća vidljivi broj na COMMENTS_PAGE_SIZE, bez brisanja već učitanih iz memorije.
+    val comments: List<MovieComment> = emptyList(),
+    val commentsVisibleCount: Int = 0,
+    val commentsHasMoreOnServer: Boolean = false,
+    val isLoadingComments: Boolean = false,
+    val isLoadingMoreComments: Boolean = false,
     // Bugfix (E1.2, 2. septembar 2026) - RANIJE watchlistError/historyError polja koja su se
     // prikazivala kao Toast ("Update history failed: 404" iz test feedback-a). Uklonjena namerno -
     // watchlist/watched/ocena greške se sad samo tiho loguju (Log.w), nikad ne prekidaju korisnika,
@@ -50,7 +60,7 @@ class MovieDetailViewModel @Inject constructor(
     val uiState: StateFlow<MovieDetailUiState> = _uiState.asStateFlow()
 
     // Bugfix (E1.2, 2. septembar 2026, feedback testera - "greske 500/400 pri brzim uzastopnim
-    // klikovima na watchlist/odgledano") - toggleWatched/rateMovie/saveReview sve mutiraju ISTI
+    // klikovima na watchlist/odgledano") - toggleWatched/rateMovie sve mutiraju ISTI
     // backend red (user_actions/history), pa dele jedan Job. toggleWatchlist je odvojen resurs
     // (watchlist tabela) - sopstveni Job. Svaka nova akcija OTKAŽE prethodnu ako je još u letu
     // (umesto da oba zahteva odu na mrežu istovremeno i sudare se) - Retrofit suspend pozivi
@@ -82,8 +92,7 @@ class MovieDetailViewModel @Inject constructor(
                 if (cachedHistoryItem != null) {
                     _uiState.value = _uiState.value.copy(
                         isWatched = true,
-                        userRating = cachedHistoryItem.userRating,
-                        userReview = cachedHistoryItem.review
+                        userRating = cachedHistoryItem.userRating
                     )
                 }
                 val isCachedInWatchlist = userRepository.observeWatchlist(userId).first().any { it.tmdbId == tmdbId }
@@ -125,12 +134,14 @@ class MovieDetailViewModel @Inject constructor(
             historyDeferred?.await()?.onSuccess { items ->
                 val item = items.firstOrNull { it.tmdbId == tmdbId }
                 if (item != null) {
-                    _uiState.value = _uiState.value.copy(isWatched = true, userRating = item.userRating, userReview = item.review)
+                    _uiState.value = _uiState.value.copy(isWatched = true, userRating = item.userRating)
                 }
             }
             friendsWatchedDeferred?.await()?.onSuccess { friends ->
                 _uiState.value = _uiState.value.copy(friendsWatched = friends)
             }
+
+            loadComments(tmdbId)
         }
     }
 
@@ -144,11 +155,9 @@ class MovieDetailViewModel @Inject constructor(
 
         val wasWatched = _uiState.value.isWatched
         val previousRating = _uiState.value.userRating
-        val previousReview = _uiState.value.userReview
         _uiState.value = _uiState.value.copy(
             isWatched = !wasWatched,
-            userRating = if (wasWatched) 0.0 else previousRating,
-            userReview = if (wasWatched) null else previousReview
+            userRating = if (wasWatched) 0.0 else previousRating
         )
 
         historyJob?.cancel()
@@ -166,8 +175,7 @@ class MovieDetailViewModel @Inject constructor(
                 Log.w("MovieDetailViewModel", "toggleWatched nije uspeo (tiho, ne prikazuje se korisniku): ${e.message}")
                 _uiState.value = _uiState.value.copy(
                     isWatched = wasWatched,
-                    userRating = previousRating,
-                    userReview = previousReview
+                    userRating = previousRating
                 )
             }
         }
@@ -175,30 +183,27 @@ class MovieDetailViewModel @Inject constructor(
     }
 
     /**
-     * Postavlja/menja ocenu (1-10) i opcioni kratak tekstualni komentar - automatski označava film
-     * kao odgledan ako već nije. `review = null` znači "ne diraj postojeći komentar" (npr. brza
-     * izmena samo zvezdica bez otvaranja polja za komentar) - prazan string ("") eksplicitno briše
-     * postojeći komentar (korisnik je namerno ispraznio polje), videti napomenu u backend
-     * UserActionsRepository.markWatched. true ako je zahtev pokrenut, false ako korisnik nije ulogovan.
+     * Postavlja/menja ocenu (1-10) - automatski označava film kao odgledan ako već nije. Kratak
+     * tekstualni "komentar uz ocenu" je uklonjen (E2.2 dorada, 3. septembar 2026) - zamenjen
+     * potpuno odvojenim javnim komentarima ispod, videti loadComments/postComment. true ako je
+     * zahtev pokrenut, false ako korisnik nije ulogovan.
      */
-    fun rateMovie(tmdbId: Int, rating: Int, review: String? = null): Boolean {
+    fun rateMovie(tmdbId: Int, rating: Int): Boolean {
         val userId = sessionManager.getUserId() ?: return false
 
         val previousRating = _uiState.value.userRating
-        val previousReview = _uiState.value.userReview
         val wasWatched = _uiState.value.isWatched
         _uiState.value = _uiState.value.copy(
             userRating = rating.toDouble(),
-            userReview = if (review != null) review.ifBlank { null } else previousReview,
             isWatched = true
         )
 
         historyJob?.cancel()
         historyJob = viewModelScope.launch {
             val result = if (wasWatched) {
-                userRepository.updateHistoryItem(userId, tmdbId, rating.toDouble(), review)
+                userRepository.updateHistoryItem(userId, tmdbId, rating.toDouble())
             } else {
-                userRepository.addToHistory(userId, tmdbId, rating = rating.toDouble(), review = review)
+                userRepository.addToHistory(userId, tmdbId, rating = rating.toDouble())
             }
             // Bugfix (E1.2) - videti napomenu na historyJob/toggleWatched: tiho se loguje umesto da
             // korisnik vidi "Update history failed: CODE" (tačan bag sa test feedback-a).
@@ -206,44 +211,6 @@ class MovieDetailViewModel @Inject constructor(
                 Log.w("MovieDetailViewModel", "rateMovie nije uspeo (tiho, ne prikazuje se korisniku): ${e.message}")
                 _uiState.value = _uiState.value.copy(
                     userRating = previousRating,
-                    userReview = previousReview,
-                    isWatched = wasWatched
-                )
-            }
-        }
-        return true
-    }
-
-    /**
-     * Čuva SAMO komentar, bez dodira na ocenu (npr. korisnik je film označio kao odgledan preko
-     * `toggleWatched` bez zvezdica, i sad želi da ostavi utisak u tekstu). Šalje postojeću ocenu
-     * (ako postoji) nepromenjenu - ne postoji poseban UI put za "obriši ocenu, ostani odgledano".
-     * true ako je zahtev pokrenut, false ako korisnik nije ulogovan.
-     */
-    fun saveReview(tmdbId: Int, review: String): Boolean {
-        val userId = sessionManager.getUserId() ?: return false
-
-        val trimmedReview = review.trim().ifBlank { null }
-        val previousReview = _uiState.value.userReview
-        val wasWatched = _uiState.value.isWatched
-        val currentRating = _uiState.value.userRating.takeIf { it > 0 }
-        _uiState.value = _uiState.value.copy(
-            userReview = trimmedReview,
-            isWatched = true
-        )
-
-        historyJob?.cancel()
-        historyJob = viewModelScope.launch {
-            val result = if (wasWatched) {
-                userRepository.updateHistoryItem(userId, tmdbId, currentRating, review.trim())
-            } else {
-                userRepository.addToHistory(userId, tmdbId, rating = currentRating, review = review.trim())
-            }
-            // Bugfix (E1.2) - videti napomenu na historyJob/toggleWatched.
-            result.onFailure { e ->
-                Log.w("MovieDetailViewModel", "saveReview nije uspeo (tiho, ne prikazuje se korisniku): ${e.message}")
-                _uiState.value = _uiState.value.copy(
-                    userReview = previousReview,
                     isWatched = wasWatched
                 )
             }
@@ -276,6 +243,163 @@ class MovieDetailViewModel @Inject constructor(
             }
         }
         return true
+    }
+
+    // E2.2 dorada (3. septembar 2026) - javni komentari na film. Videti obrazloženje na
+    // MovieDetailUiState.comments/commentsVisibleCount iznad za "otkrij već učitano pre nego što
+    // se ide po sledeću mrežnu stranicu" logiku.
+
+    private fun loadComments(tmdbId: Int) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingComments = true)
+            movieRepository.getComments(tmdbId, offset = 0, limit = COMMENTS_PAGE_SIZE)
+                .onSuccess { response ->
+                    _uiState.value = _uiState.value.copy(
+                        comments = response.comments,
+                        commentsVisibleCount = response.comments.size,
+                        commentsHasMoreOnServer = response.hasMore,
+                        isLoadingComments = false
+                    )
+                }
+                .onFailure { e ->
+                    // Tiho, isti princip kao friendsWatched - komentari nisu kritični, ne
+                    // blokiraju ostatak ekrana koji se već učitao.
+                    Log.w("MovieDetailViewModel", "loadComments nije uspeo (tiho): ${e.message}")
+                    _uiState.value = _uiState.value.copy(isLoadingComments = false)
+                }
+        }
+    }
+
+    /**
+     * "Prikaži više" - prvo samo otkriva već mrežno učitane komentare (bez poziva), tek kad
+     * ponestane a server ima još ide se po sledeću stranicu.
+     */
+    fun showMoreComments(tmdbId: Int) {
+        val state = _uiState.value
+        if (state.commentsVisibleCount < state.comments.size) {
+            _uiState.value = state.copy(
+                commentsVisibleCount = (state.commentsVisibleCount + COMMENTS_PAGE_SIZE).coerceAtMost(state.comments.size)
+            )
+            return
+        }
+        if (!state.commentsHasMoreOnServer || state.isLoadingMoreComments) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingMoreComments = true)
+            movieRepository.getComments(tmdbId, offset = state.comments.size, limit = COMMENTS_PAGE_SIZE)
+                .onSuccess { response ->
+                    val merged = _uiState.value.comments + response.comments
+                    _uiState.value = _uiState.value.copy(
+                        comments = merged,
+                        commentsVisibleCount = (_uiState.value.commentsVisibleCount + COMMENTS_PAGE_SIZE).coerceAtMost(merged.size),
+                        commentsHasMoreOnServer = response.hasMore,
+                        isLoadingMoreComments = false
+                    )
+                }
+                .onFailure { e ->
+                    Log.w("MovieDetailViewModel", "showMoreComments nije uspeo (tiho): ${e.message}")
+                    _uiState.value = _uiState.value.copy(isLoadingMoreComments = false)
+                }
+        }
+    }
+
+    /** "Prikaži manje" - vraća vidljivi broj na prvu stranicu, bez brisanja iz memorije/mreže. */
+    fun showLessComments() {
+        val state = _uiState.value
+        _uiState.value = state.copy(commentsVisibleCount = COMMENTS_PAGE_SIZE.coerceAtMost(state.comments.size))
+    }
+
+    /**
+     * Objavljuje novi komentar - novi komentar se odmah dodaje na vrh vidljive liste (optimistički,
+     * pre nego što mreža potvrdi) da se ekran oseti trenutno responzivan. true ako je zahtev
+     * pokrenut, false ako korisnik nije ulogovan ili je tekst prazan.
+     */
+    fun postComment(tmdbId: Int, body: String): Boolean {
+        if (sessionManager.getUserId() == null) return false
+        val trimmed = body.trim()
+        if (trimmed.isEmpty()) return false
+
+        viewModelScope.launch {
+            movieRepository.addComment(tmdbId, trimmed)
+                .onSuccess { comment ->
+                    val state = _uiState.value
+                    _uiState.value = state.copy(
+                        comments = listOf(comment) + state.comments,
+                        commentsVisibleCount = state.commentsVisibleCount + 1
+                    )
+                }
+                .onFailure { e ->
+                    Log.w("MovieDetailViewModel", "postComment nije uspeo (tiho, ne prikazuje se korisniku): ${e.message}")
+                }
+        }
+        return true
+    }
+
+    /** Briše sopstveni komentar (optimistički, uz rollback ako mreža odbije). */
+    fun deleteComment(commentId: Int) {
+        val state = _uiState.value
+        val index = state.comments.indexOfFirst { it.id == commentId }
+        if (index == -1) return
+        val removed = state.comments[index]
+        _uiState.value = state.copy(
+            comments = state.comments.filterNot { it.id == commentId },
+            commentsVisibleCount = (state.commentsVisibleCount - 1).coerceAtLeast(0)
+        )
+
+        viewModelScope.launch {
+            movieRepository.deleteComment(commentId).onFailure { e ->
+                Log.w("MovieDetailViewModel", "deleteComment nije uspeo, vraćam komentar nazad: ${e.message}")
+                val current = _uiState.value
+                _uiState.value = current.copy(
+                    comments = current.comments.toMutableList().apply { add(index.coerceAtMost(size), removed) },
+                    commentsVisibleCount = current.commentsVisibleCount + 1
+                )
+            }
+        }
+    }
+
+    /**
+     * Lajk/skidanje lajka (toggle) - optimistički menja srce/brojač odmah, uz rollback ako mreža
+     * odbije (npr. pokušaj lajkovanja sopstvenog komentara - backend to odbija, videti
+     * CommentsRepository.toggleLike). Ne deli Job sa ostalima - lajkovi na različitim komentarima
+     * su nezavisni resursi, za razliku od historyJob/watchlistJob slučaja.
+     */
+    fun toggleCommentLike(commentId: Int) {
+        val state = _uiState.value
+        val comment = state.comments.firstOrNull { it.id == commentId } ?: return
+        val optimisticLiked = !comment.likedByMe
+        val optimisticCount = (comment.likeCount + if (optimisticLiked) 1 else -1).coerceAtLeast(0)
+        _uiState.value = state.copy(
+            comments = state.comments.map {
+                if (it.id == commentId) it.copy(likedByMe = optimisticLiked, likeCount = optimisticCount) else it
+            }
+        )
+
+        viewModelScope.launch {
+            movieRepository.toggleCommentLike(commentId)
+                .onSuccess { result ->
+                    _uiState.value = _uiState.value.copy(
+                        comments = _uiState.value.comments.map {
+                            if (it.id == commentId) it.copy(likedByMe = result.likedByMe, likeCount = result.likeCount) else it
+                        }
+                    )
+                }
+                .onFailure { e ->
+                    Log.w("MovieDetailViewModel", "toggleCommentLike nije uspeo, vraćam nazad: ${e.message}")
+                    _uiState.value = _uiState.value.copy(
+                        comments = _uiState.value.comments.map {
+                            if (it.id == commentId) it.copy(likedByMe = comment.likedByMe, likeCount = comment.likeCount) else it
+                        }
+                    )
+                }
+        }
+    }
+
+    companion object {
+        // Dorada (3. septembar 2026) - smanjeno sa 10 na 3, videti napomenu uz istoimenu konstantu
+        // u MovieDetailScreen.kt (mora ostati identično - "Prikaži više/manje" se pojavljivalo
+        // samo kad ima preko 10 komentara, do tada nevidljivo).
+        private const val COMMENTS_PAGE_SIZE = 3
     }
 }
 

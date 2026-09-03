@@ -1428,9 +1428,8 @@ private fun FriendActivityRow(activity: FriendActivity, onClick: () -> Unit) {
         title = activity.movieTitle,
         posterPath = activity.posterPath,
         metaText = metaText,
-        // Komentar prijatelja (16. avgust 2026, korisnička žalba: komentari se nisu prikazivali ni
-        // na feed-u aktivnosti) - ispod "ko/šta" reda, ako postoji.
-        description = activity.metadata.review?.takeIf { it.isNotBlank() },
+        // E2.2 dorada (3. septembar 2026) - stari privatan review prikaz uklonjen iz feed-a
+        // aktivnosti (zamenjen javnim komentarima na Movie Detail ekranu).
         onClick = onClick,
         modifier = Modifier.padding(horizontal = 16.dp)
     )

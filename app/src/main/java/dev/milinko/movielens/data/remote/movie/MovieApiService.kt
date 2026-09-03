@@ -2,7 +2,10 @@ package dev.milinko.movielens.data.remote.movie
 
 import dev.milinko.movielens.data.remote.user.FriendsWatchedResponse
 import retrofit2.Response
+import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -62,5 +65,31 @@ interface MovieApiService {
     suspend fun getPersonDetail(
         @Path("id") personId: Int
     ): Response<PersonDetail>
+
+    // E2.2 dorada (3. septembar 2026) - javni komentari na film. Sve 4 rute JWT-zaštićene (isto
+    // kao getFriendsWhoWatched iznad) - backend treba identitet pozivaoca da bi znao koji
+    // komentari su "od prijatelja"/već lajkovani/sopstveni, čak i za obično čitanje.
+    @GET("api/movies/{tmdbId}/comments")
+    suspend fun getComments(
+        @Path("tmdbId") tmdbId: Int,
+        @Query("offset") offset: Int = 0,
+        @Query("limit") limit: Int = 3
+    ): Response<MovieCommentsResponse>
+
+    @POST("api/movies/{tmdbId}/comments")
+    suspend fun addComment(
+        @Path("tmdbId") tmdbId: Int,
+        @Body request: AddCommentRequest
+    ): Response<MovieComment>
+
+    @DELETE("api/comments/{id}")
+    suspend fun deleteComment(
+        @Path("id") commentId: Int
+    ): Response<Unit>
+
+    @POST("api/comments/{id}/like")
+    suspend fun toggleCommentLike(
+        @Path("id") commentId: Int
+    ): Response<LikeCommentResponse>
 }
 
