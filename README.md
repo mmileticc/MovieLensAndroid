@@ -225,7 +225,9 @@ machine) — up to 6 recently-used URLs are remembered.
 |---|---|---|
 | `home` | `HomeScreen` | Default start destination; usable signed-out |
 | `search` | `SearchScreen` | Text / photo / semantic search |
-| `detail/{tmdbId}` | `MovieDetailScreen` | |
+| `browse/suggested` | `SuggestedMoviesScreen` | "See all" for *Predloženo za tebe*: grid/list toggle, title search, genre filter, infinite scroll |
+| `browse/now_in_cinemas` | `NowInCinemasScreen` | "See all" for *U bioskopima sada*: + cinema chain, now/upcoming and sort filters |
+| `detail/{tmdbId}` | `MovieDetailScreen` | Includes IMDb/TMDB links, in-app YouTube trailer player and backdrop gallery |
 | `actor/{actorId}` | `ActorDetailScreen` | |
 | `library` | `LibraryScreen` | Watchlist + history; requires sign-in for content |
 | `profile` | `ProfileScreen` | Own profile, friends, settings |

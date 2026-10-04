@@ -44,7 +44,11 @@ interface MovieApiService {
         @Path("tmdbId") tmdbId: Int
     ): Response<FriendsWatchedResponse>
 
-    // "U bioskopima sada" traka na Home-u - javna ruta, iz postojećeg skraping repertoara.
+    // Svi TMDB žanrovi (id -> naziv) - za filter po žanru na "Vidi sve" ekranima.
+    @GET("api/movies/genres")
+    suspend fun getGenres(): Response<GenreListResponse>
+
+    // Ceo skrapovani repertoar (Home traka uzima prvih 20, "U bioskopima" ekran sve).
     @GET("api/movies/now-in-cinemas")
     suspend fun getNowInCinemas(): Response<NowInCinemasResponse>
 

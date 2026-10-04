@@ -264,4 +264,32 @@
     <string name="friend_profile_common_genres_header">Zajednička interesovanja</string>
     <string name="friend_profile_locked_note">Postanite prijatelji da vidite listu odgledanih filmova.</string>
     <string name="friend_profile_pending_received_note">Ovaj korisnik ti je poslao zahtev za prijateljstvo - prihvati ga sa Profil ekrana.</string>
+
+    <!-- "Vidi sve" ekrani (Predloženo za tebe / U bioskopima) -->
+    <string name="home_see_all">Vidi sve</string>
+    <string name="browse_search_placeholder">Pretraži po nazivu</string>
+    <string name="browse_clear_search">Obriši pretragu</string>
+    <string name="browse_view_as_list">Prikaži kao listu</string>
+    <string name="browse_view_as_grid">Prikaži kao mrežu</string>
+    <string name="browse_empty_filtered">Nijedan film ne odgovara filterima</string>
+    <string name="browse_empty_filtered_hint">Probaj da ukloniš neki filter ili promeniš pretragu.</string>
+    <string name="browse_suggested_empty">Trenutno nema predloga</string>
+    <string name="browse_cinemas_empty">Repertoar je trenutno prazan</string>
+    <string name="browse_status_all">Sve</string>
+    <string name="browse_status_now">Sada</string>
+    <string name="browse_status_upcoming">Uskoro</string>
+    <string name="browse_sort_content_description">Sortiraj</string>
+    <string name="browse_sort_rating">Po oceni</string>
+    <string name="browse_sort_title">Po nazivu</string>
+    <string name="browse_sort_cinema_count">Po broju bioskopa</string>
+
+    <!-- Movie Detail - "Istraži više" (IMDb/TMDB, trejler, slike) -->
+    <string name="movie_detail_explore_header">Istraži više</string>
+    <string name="movie_detail_open_imdb">IMDb</string>
+    <string name="movie_detail_open_tmdb">TMDB</string>
+    <string name="movie_detail_more_on_tmdb">Više na TMDB-u</string>
+    <string name="movie_detail_trailer_header">Trejler</string>
+    <string name="movie_detail_open_youtube">Otvori na YouTube-u</string>
+    <string name="movie_detail_trailer_not_embeddable">Ovaj trejler ne može da se pusti u aplikaciji.</string>
+    <string name="movie_detail_images_header">Slike</string>
 </resources>

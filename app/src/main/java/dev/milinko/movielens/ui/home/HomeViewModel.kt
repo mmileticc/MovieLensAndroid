@@ -70,6 +70,7 @@ class HomeViewModel @Inject constructor(
 
     private companion object {
         const val MAX_PERSONALIZED_PAGE = 5
+        const val HOME_NOW_IN_CINEMAS_LIMIT = 20
     }
 
     init {
@@ -197,11 +198,14 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /** "U bioskopima sada" traka - tiho ignoriše grešku, ovo je bonus sadržaj, ne kritičan poziv. */
+    /**
+     * "U bioskopima sada" traka - tiho ignoriše grešku, ovo je bonus sadržaj, ne kritičan poziv.
+     * Backend sad vraća CEO repertoar (za "Vidi sve" ekran), traka prikazuje samo prvih 20.
+     */
     private fun loadNowInCinemas() {
         viewModelScope.launch {
             movieRepository.getNowInCinemas().onSuccess { movies ->
-                _uiState.value = _uiState.value.copy(nowInCinemas = movies)
+                _uiState.value = _uiState.value.copy(nowInCinemas = movies.take(HOME_NOW_IN_CINEMAS_LIMIT))
             }
         }
     }

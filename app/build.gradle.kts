@@ -83,6 +83,9 @@ dependencies {
     // Coil
     implementation(libs.coil.compose)
 
+    // Ugrađen YouTube plejer za trejlere na Movie Detail-u (IFrame API u WebView-u)
+    implementation(libs.youtube.player.core)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

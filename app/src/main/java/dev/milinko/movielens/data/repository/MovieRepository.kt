@@ -1,6 +1,7 @@
 package dev.milinko.movielens.data.repository
 
 import dev.milinko.movielens.data.remote.movie.AddCommentRequest
+import dev.milinko.movielens.data.remote.movie.Genre
 import dev.milinko.movielens.data.remote.movie.LikeCommentResponse
 import dev.milinko.movielens.data.remote.movie.MovieApiService
 import dev.milinko.movielens.data.remote.movie.MovieComment
@@ -28,6 +29,8 @@ interface MovieRepository {
     suspend fun getFeaturedMovies(userId: String?, page: Int = 1): Result<List<MovieSearchResult>>
     suspend fun getFriendsWhoWatched(tmdbId: Int): Result<List<FriendWatched>>
     suspend fun getNowInCinemas(): Result<List<NowInCinemasMovie>>
+    // Svi TMDB žanrovi - keširani u memoriji posle prvog uspešnog poziva.
+    suspend fun getGenres(): Result<List<Genre>>
     // Faza D (17. avgust 2026) - semantička pretraga svedena na filmove trenutno na repertoaru
     // (videti CinemaSemanticIndex na backendu) - ista lista forma kao getNowInCinemas.
     // Faza D dorada - `engine` bira embedding provajder na backendu ("gemini" ili "local"), radi
@@ -98,6 +101,22 @@ class MovieRepositoryImpl @Inject constructor(
             response.body()?.friends ?: emptyList()
         } else {
             throw HttpException(response)
+        }
+    }
+
+    // Lista žanrova se ne menja tokom sesije - jedan poziv po pokretanju aplikacije.
+    @Volatile
+    private var cachedGenres: List<Genre>? = null
+
+    override suspend fun getGenres(): Result<List<Genre>> {
+        cachedGenres?.let { return Result.success(it) }
+        return safeApiCall {
+            val response = movieApiService.getGenres()
+            if (response.isSuccessful) {
+                (response.body()?.genres ?: emptyList()).also { if (it.isNotEmpty()) cachedGenres = it }
+            } else {
+                throw HttpException(response)
+            }
         }
     }
 

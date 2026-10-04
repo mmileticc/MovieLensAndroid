@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,6 +28,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
@@ -84,6 +86,7 @@ import dev.milinko.movielens.ui.components.GenreChip
 import dev.milinko.movielens.ui.components.RatingStars
 import dev.milinko.movielens.ui.components.RemoteAvatarImage
 import dev.milinko.movielens.ui.components.SectionHeader
+import dev.milinko.movielens.ui.components.YouTubeTrailerPlayer
 
 /** Koliko bioskopa se uvek prikazuje pre "Prikaži još N" - videti dorada posle Faze 6 feedback-a. */
 private const val ALWAYS_VISIBLE_SHOWTIMES = 3
@@ -131,6 +134,8 @@ fun MovieDetailScreen(
     // Fullscreen pregled postera na klik (kao u drugim movie/photo aplikacijama) - poster je inače
     // ContentScale.Crop u fiksnoj visini pa se seče, ovde se vidi ceo + može da se zumira.
     var showFullPoster by remember { mutableStateOf(false) }
+    // Backdrop iz galerije "Slike" otvoren preko celog ekrana (null = zatvoreno).
+    var fullBackdropPath by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(tmdbId) {
         viewModel.loadMovieDetail(tmdbId)
@@ -374,6 +379,8 @@ fun MovieDetailScreen(
                                 }
                             }
                         }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        ExternalLinksRow(tmdbId = movie.tmdbId, imdbId = movie.imdbId)
                         Spacer(modifier = Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             AppButton(
@@ -433,6 +440,20 @@ fun MovieDetailScreen(
                                 friends = uiState.friendsWatched,
                                 onFriendClick = onNavigateToFriendProfile
                             )
+                        }
+                    }
+                }
+
+                // "Istraži više" - trejler pušten u aplikaciji (sekcija se ne prikazuje bez videa).
+                val videos = movie.videos.orEmpty()
+                if (videos.isNotEmpty()) {
+                    item {
+                        Column(modifier = Modifier.padding(vertical = 16.dp)) {
+                            SectionHeader(
+                                title = stringResource(R.string.movie_detail_trailer_header),
+                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                            )
+                            YouTubeTrailerPlayer(videos = videos)
                         }
                     }
                 }
@@ -512,6 +533,35 @@ fun MovieDetailScreen(
                     }
                 }
 
+                val backdrops = movie.backdrops.orEmpty()
+                if (backdrops.isNotEmpty()) {
+                    item {
+                        SectionHeader(
+                            title = stringResource(R.string.movie_detail_images_header),
+                            modifier = Modifier.padding(16.dp)
+                        )
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp)
+                        ) {
+                            items(backdrops) { path ->
+                                AsyncImage(
+                                    model = tmdbPosterUrl(path, "w780"),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .width(260.dp)
+                                        .aspectRatio(16f / 9f)
+                                        .clip(MaterialTheme.shapes.medium)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .clickable { fullBackdropPath = path }
+                                )
+                            }
+                        }
+                    }
+                }
+
                 if (movie.cast.isNotEmpty()) {
                     item {
                         SectionHeader(
@@ -533,6 +583,13 @@ fun MovieDetailScreen(
                 item {
                     Spacer(modifier = Modifier.height(16.dp))
                 }
+            }
+
+            fullBackdropPath?.let { path ->
+                FullScreenImageDialog(
+                    imageUrl = tmdbPosterUrl(path, "original") ?: "",
+                    onDismiss = { fullBackdropPath = null }
+                )
             }
 
             if (showFullPoster && movie.posterPath != null) {
@@ -714,6 +771,68 @@ private fun CastAvatarCard(actor: CastMember, onClick: () -> Unit = {}) {
 
 // RatingStars je premešten u ui/components/RatingStars.kt (deljena komponenta - koristi je i
 // Library/Istorija tab za izmenu ocene, videti LibraryScreen.kt).
+
+/**
+ * "Istraži više" linkovi: IMDb dugme (ako TMDB zna IMDb ID filma), inače TMDB dugme; uz to uvek i
+ * manji "Više na TMDB-u" link. Otvaraju se u browser-u / IMDb aplikaciji, isto kao booking link.
+ */
+@Composable
+private fun ExternalLinksRow(tmdbId: Int, imdbId: String?) {
+    val context = LocalContext.current
+    val tmdbUrl = "https://www.themoviedb.org/movie/$tmdbId"
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.movie_detail_explore_header),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (imdbId != null) {
+            ExternalLinkChip(
+                label = stringResource(R.string.movie_detail_open_imdb),
+                badgeColor = Color(0xFFF5C518),
+                textColor = Color(0xFF000000),
+                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, "https://www.imdb.com/title/$imdbId/".toUri())) }
+            )
+            Text(
+                text = stringResource(R.string.movie_detail_more_on_tmdb),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { context.startActivity(Intent(Intent.ACTION_VIEW, tmdbUrl.toUri())) }
+            )
+        } else {
+            ExternalLinkChip(
+                label = stringResource(R.string.movie_detail_open_tmdb),
+                badgeColor = Color(0xFF01B4E4),
+                textColor = Color(0xFF0D253F),
+                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, tmdbUrl.toUri())) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExternalLinkChip(label: String, badgeColor: Color, textColor: Color, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(badgeColor)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(text = label, style = MaterialTheme.typography.labelMedium, color = textColor)
+        Icon(
+            Icons.AutoMirrored.Filled.OpenInNew,
+            contentDescription = null,
+            tint = textColor,
+            modifier = Modifier.size(14.dp)
+        )
+    }
+}
 
 /**
  * Mali bedž za dopunsku ocenu (IMDb/Rotten Tomatoes) sa OMDb-a, prikazan pored TMDB ocene na

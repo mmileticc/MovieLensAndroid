@@ -64,7 +64,9 @@ fun HomeScreen(
     onNavigateToDetail: (Int) -> Unit,
     onNavigateToSearch: () -> Unit,
     onNavigateToLibrary: () -> Unit,
-    onNavigateToProfile: () -> Unit
+    onNavigateToProfile: () -> Unit,
+    onNavigateToSuggested: () -> Unit,
+    onNavigateToNowInCinemas: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
@@ -179,6 +181,8 @@ fun HomeScreen(
                         Column(modifier = Modifier.padding(16.dp)) {
                             SectionHeader(
                                 title = stringResource(R.string.home_section_personalized),
+                                actionText = stringResource(R.string.home_see_all),
+                                onActionClick = onNavigateToSuggested,
                                 modifier = Modifier.padding(bottom = 12.dp)
                             )
                             LazyRow(
@@ -201,6 +205,8 @@ fun HomeScreen(
                         Column(modifier = Modifier.padding(16.dp)) {
                             SectionHeader(
                                 title = stringResource(R.string.home_section_now_in_cinemas),
+                                actionText = stringResource(R.string.home_see_all),
+                                onActionClick = onNavigateToNowInCinemas,
                                 modifier = Modifier.padding(bottom = 12.dp)
                             )
                             LazyRow(

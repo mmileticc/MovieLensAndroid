@@ -10,6 +10,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import dev.milinko.movielens.ui.actor.ActorDetailScreen
 import dev.milinko.movielens.ui.auth.SignInScreen
+import dev.milinko.movielens.ui.browse.NowInCinemasScreen
+import dev.milinko.movielens.ui.browse.SuggestedMoviesScreen
 import dev.milinko.movielens.ui.detail.MovieDetailScreen
 import dev.milinko.movielens.ui.friendprofile.FriendProfileScreen
 import dev.milinko.movielens.ui.home.HomeScreen
@@ -34,6 +36,10 @@ sealed class Screen(val route: String) {
     object ActorDetail : Screen("actor/{actorId}") {
         fun createRoute(actorId: Int) = "actor/$actorId"
     }
+
+    // "Vidi sve" ekrani za Home trake "Predloženo za tebe" i "U bioskopima sada".
+    object Suggested : Screen("browse/suggested")
+    object NowInCinemas : Screen("browse/now_in_cinemas")
 
     object Library : Screen("library")
     object Profile : Screen("profile")
@@ -101,7 +107,27 @@ fun MovieLensNavHost(
                 },
                 onNavigateToSearch = { navController.navigateBottomTab(Screen.Search.route) },
                 onNavigateToLibrary = { navController.navigateBottomTab(Screen.Library.route) },
-                onNavigateToProfile = { navController.navigateBottomTab(Screen.Profile.route) }
+                onNavigateToProfile = { navController.navigateBottomTab(Screen.Profile.route) },
+                onNavigateToSuggested = { navController.navigate(Screen.Suggested.route) },
+                onNavigateToNowInCinemas = { navController.navigate(Screen.NowInCinemas.route) }
+            )
+        }
+
+        composable(Screen.Suggested.route) {
+            SuggestedMoviesScreen(
+                onNavigateBack = { navController.navigateUp() },
+                onNavigateToDetail = { tmdbId: Int ->
+                    navController.navigate(Screen.MovieDetail.createRoute(tmdbId))
+                }
+            )
+        }
+
+        composable(Screen.NowInCinemas.route) {
+            NowInCinemasScreen(
+                onNavigateBack = { navController.navigateUp() },
+                onNavigateToDetail = { tmdbId: Int ->
+                    navController.navigate(Screen.MovieDetail.createRoute(tmdbId))
+                }
             )
         }
 

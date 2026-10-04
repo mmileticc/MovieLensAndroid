@@ -20,8 +20,10 @@ foundation = "1.11.2"
 material3 = "1.4.0"
 navigation = "2.8.6"
 googleServices = "4.3.15"
+youtubePlayer = "13.0.0"
 
 [libraries]
+youtube-player-core = { group = "com.pierfrancescosoffritti.androidyoutubeplayer", name = "core", version.ref = "youtubePlayer" }
 
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }

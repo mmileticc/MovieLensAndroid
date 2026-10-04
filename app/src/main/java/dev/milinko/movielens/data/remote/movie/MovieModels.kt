@@ -21,7 +21,12 @@ data class MovieSearchResult(
     @SerializedName("vote_average")
     val voteAverage: Double = 0.0,
     @SerializedName("overview")
-    val overview: String? = null
+    val overview: String? = null,
+    // Nova polja su NAMERNO nullable: Gson zaobilazi Kotlin podrazumevane vrednosti kad klasa nema
+    // konstruktor bez argumenata, pa bi polje koje stariji backend ne šalje bilo null uprkos
+    // non-null tipu. Čitati sa .orEmpty().
+    @SerializedName("genre_ids")
+    val genreIds: List<Int>? = null
 )
 
 // Movie Detail - za detaljan prikaz
@@ -53,7 +58,29 @@ data class MovieDetail(
     @SerializedName("imdb_rating")
     val imdbRating: Double? = null,
     @SerializedName("rotten_tomatoes")
-    val rottenTomatoes: String? = null
+    val rottenTomatoes: String? = null,
+    // "Istraži više" sekcija - nullable iz istog razloga kao MovieSearchResult.genreIds.
+    @SerializedName("imdb_id")
+    val imdbId: String? = null,
+    @SerializedName("videos")
+    val videos: List<MovieVideo>? = null,
+    @SerializedName("backdrops")
+    val backdrops: List<String>? = null
+)
+
+// YouTube trejler/teaser - `key` je YouTube video ID.
+data class MovieVideo(
+    @SerializedName("key")
+    val key: String,
+    @SerializedName("name")
+    val name: String? = null,
+    @SerializedName("type")
+    val type: String? = null
+)
+
+data class GenreListResponse(
+    @SerializedName("genres")
+    val genres: List<Genre> = emptyList()
 )
 
 data class Genre(
@@ -194,7 +221,18 @@ data class NowInCinemasMovie(
     @SerializedName("vote_average")
     val voteAverage: Double = 0.0,
     @SerializedName("cinemas")
-    val cinemas: List<String> = emptyList()
+    val cinemas: List<String> = emptyList(),
+    // Polja za "U bioskopima" ekran - nullable iz istog razloga kao MovieSearchResult.genreIds.
+    @SerializedName("genres")
+    val genres: List<Genre>? = null,
+    @SerializedName("release_date")
+    val releaseDate: String? = null,
+    @SerializedName("overview")
+    val overview: String? = null,
+    @SerializedName("runtime")
+    val runtime: Int? = null,
+    @SerializedName("is_upcoming")
+    val isUpcoming: Boolean? = null
 )
 
 data class NowInCinemasResponse(
