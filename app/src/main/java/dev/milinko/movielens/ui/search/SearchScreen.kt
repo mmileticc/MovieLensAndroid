@@ -3,8 +3,10 @@ package dev.milinko.movielens.ui.search
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -49,6 +51,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -82,6 +85,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
@@ -97,6 +101,8 @@ import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 import dev.milinko.movielens.ui.auth.AuthViewModel
 import dev.milinko.movielens.ui.components.AppBottomNavigationBar
 import dev.milinko.movielens.ui.components.BottomNavTab
+import dev.milinko.movielens.ui.components.EmptyStateCard
+import dev.milinko.movielens.ui.components.ErrorCard
 import dev.milinko.movielens.ui.components.ExpandableMatchCard
 import dev.milinko.movielens.ui.components.GenreChip
 import dev.milinko.movielens.ui.components.MovieListRow
@@ -168,12 +174,98 @@ fun SearchScreen(
         }
     }
 
+    val activity = LocalActivity.current
+    var showCameraSettingsDialog by remember { mutableStateOf(false) }
+    var showScanSignInDialog by remember { mutableStateOf(false) }
+    var showCinemaModeImageDialog by remember { mutableStateOf(false) }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { granted ->
-            if (granted) openCamera()
+            if (granted) {
+                openCamera()
+            } else {
+                // Ranije se odbijena dozvola tiho ignorisala - posle "ne pitaj ponovo" dugme je
+                // izgledalo pokvareno. Kad sistem više neće pitati (rationale = false posle
+                // odbijanja), nudimo podešavanja; inače kratko objašnjenje + alternativa (galerija).
+                val permanentlyDenied = activity != null &&
+                    !ActivityCompat.shouldShowRequestPermissionRationale(activity, android.Manifest.permission.CAMERA)
+                if (permanentlyDenied) {
+                    showCameraSettingsDialog = true
+                } else {
+                    Toast.makeText(context, context.getString(R.string.search_camera_permission_denied), Toast.LENGTH_LONG).show()
+                }
+            }
         }
     )
+
+    // "Pokušaj ponovo" na kartici greške - ponavlja ono što je korisnik poslednje pokrenuo.
+    val retryLastSearch: () -> Unit = {
+        if (uiState.selectedImageUri != null) {
+            requireScanAuthOrProceed { viewModel.detectImage() }
+        } else {
+            viewModel.searchMovies()
+        }
+    }
+
+    if (showScanSignInDialog) {
+        AlertDialog(
+            onDismissRequest = { showScanSignInDialog = false },
+            title = { Text(stringResource(R.string.search_scan_signin_dialog_title)) },
+            text = { Text(stringResource(R.string.search_scan_signin_dialog_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showScanSignInDialog = false
+                    onRequireSignIn()
+                }) { Text(stringResource(R.string.profile_sign_in)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showScanSignInDialog = false }) {
+                    Text(stringResource(R.string.profile_remove_cancel))
+                }
+            }
+        )
+    }
+
+    if (showCinemaModeImageDialog) {
+        AlertDialog(
+            onDismissRequest = { showCinemaModeImageDialog = false },
+            title = { Text(stringResource(R.string.search_image_cinema_mode_dialog_title)) },
+            text = { Text(stringResource(R.string.search_image_cinema_mode_dialog_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCinemaModeImageDialog = false
+                    viewModel.setCinemaMode(false)
+                }) { Text(stringResource(R.string.search_image_cinema_mode_switch)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCinemaModeImageDialog = false }) {
+                    Text(stringResource(R.string.profile_remove_cancel))
+                }
+            }
+        )
+    }
+
+    if (showCameraSettingsDialog) {
+        AlertDialog(
+            onDismissRequest = { showCameraSettingsDialog = false },
+            title = { Text(stringResource(R.string.search_camera_settings_dialog_title)) },
+            text = { Text(stringResource(R.string.search_camera_settings_dialog_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCameraSettingsDialog = false
+                    context.startActivity(
+                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                    )
+                }) { Text(stringResource(R.string.search_camera_settings_open)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCameraSettingsDialog = false }) {
+                    Text(stringResource(R.string.profile_remove_cancel))
+                }
+            }
+        )
+    }
 
     Scaffold(
         bottomBar = {
@@ -206,6 +298,21 @@ fun SearchScreen(
                             requireScanAuthOrProceed { viewModel.detectImage() }
                         } else {
                             viewModel.searchMovies()
+                        }
+                    },
+                    canOpenImageMenu = {
+                        when {
+                            uiState.isCinemaMode -> {
+                                showCinemaModeImageDialog = true
+                                false
+                            }
+                            // Prijava PRE biranja slike - ranije se saznavalo tek na slanju, posle
+                            // biranja/slikanja (4+ dodira uzalud).
+                            !authViewModel.isAlreadySignedIn() -> {
+                                showScanSignInDialog = true
+                                false
+                            }
+                            else -> true
                         }
                     },
                     onGalleryClick = {
@@ -352,22 +459,18 @@ fun SearchScreen(
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                    TextButton(onClick = retryLastSearch) {
+                                        Text(stringResource(R.string.state_retry))
+                                    }
                                 }
                             }
                         }
                     } else {
-                        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = stringResource(R.string.error_generic_title),
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                // Faza B bugfix - `?:` umesto `!!` (isti razlog kao MovieDetailScreen).
-                                Text(uiState.error ?: stringResource(R.string.error_generic_title), style = MaterialTheme.typography.bodyMedium)
-                            }
-                        }
+                        // Faza B bugfix - `?:` umesto `!!` (isti razlog kao MovieDetailScreen).
+                        ErrorCard(
+                            message = uiState.error ?: stringResource(R.string.error_generic_title),
+                            onRetry = retryLastSearch
+                        )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                 }
@@ -375,6 +478,10 @@ fun SearchScreen(
 
             HorizontalPager(
                 state = pagerState,
+                // UX dorada (oktobar 2026): mod se menja SAMO preko SearchModeToggle-a. Svajp je
+                // ranije menjao mod usput (npr. pri skrolovanju rezultata), brišući rezultate i
+                // izabranu sliku bez upozorenja.
+                userScrollEnabled = false,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -385,6 +492,7 @@ fun SearchScreen(
                         recentSearches = recentSearches,
                         onRecentQueryClick = { viewModel.selectRecentQuery(it) },
                         onRecentQueryRemove = { viewModel.removeRecentQuery(it) },
+                        onClearAllRecent = { viewModel.clearRecentQueries() },
                         onNavigateToDetail = onNavigateToDetail,
                         onClearVision = { viewModel.clearResults() },
                         onRecordHistory = { viewModel.recordCurrentQueryInHistory() }
@@ -392,7 +500,8 @@ fun SearchScreen(
                 } else {
                     CinemaResultsPage(
                         uiState = uiState,
-                        onNavigateToDetail = onNavigateToDetail
+                        onNavigateToDetail = onNavigateToDetail,
+                        onRetryCatalog = viewModel::retryCinemaCatalog
                     )
                 }
             }
@@ -412,6 +521,7 @@ private fun TextSearchResultsPage(
     recentSearches: List<String>,
     onRecentQueryClick: (String) -> Unit,
     onRecentQueryRemove: (String) -> Unit,
+    onClearAllRecent: () -> Unit,
     onNavigateToDetail: (Int) -> Unit,
     onClearVision: () -> Unit,
     onRecordHistory: () -> Unit
@@ -467,7 +577,20 @@ private fun TextSearchResultsPage(
                     message = stringResource(R.string.search_empty_state_message),
                     recentSearches = recentSearches,
                     onRecentQueryClick = onRecentQueryClick,
-                    onRecentQueryRemove = onRecentQueryRemove
+                    onRecentQueryRemove = onRecentQueryRemove,
+                    onClearAllRecent = onClearAllRecent
+                )
+            }
+        } else if (uiState.visionResult == null && uiState.error == null && !uiState.isSearching &&
+            uiState.searchQuery.trim().length >= 2
+        ) {
+            // UX dorada (oktobar 2026): ranije je stranica tad ostajala potpuno prazna - nije se
+            // razlikovalo "nema rezultata" od "još se učitava" ili "nešto je puklo".
+            item {
+                EmptyStateCard(
+                    title = stringResource(R.string.search_no_results_title, uiState.searchQuery.trim()),
+                    description = stringResource(R.string.search_no_results_message),
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
         }
@@ -486,14 +609,25 @@ private fun TextSearchResultsPage(
 @Composable
 private fun CinemaResultsPage(
     uiState: SearchUiState,
-    onNavigateToDetail: (Int) -> Unit
+    onNavigateToDetail: (Int) -> Unit,
+    onRetryCatalog: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
     ) {
-        if (uiState.cinemaResults.isNotEmpty()) {
+        if (uiState.cinemaCatalogError != null && uiState.cinemaResults.isEmpty()) {
+            // Repertoar nije učitan - filter po nazivu nema nad čime da radi; ranije je ovo
+            // izgledalo kao "Nema poklapanja po nazivu".
+            item {
+                ErrorCard(
+                    message = uiState.cinemaCatalogError,
+                    onRetry = onRetryCatalog,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        } else if (uiState.cinemaResults.isNotEmpty()) {
             items(uiState.cinemaResults, key = { it.tmdbId }) { movie ->
                 MovieListRow(
                     title = movie.title,
@@ -553,7 +687,8 @@ private fun SearchEmptyState(
     message: String,
     recentSearches: List<String>,
     onRecentQueryClick: (String) -> Unit,
-    onRecentQueryRemove: (String) -> Unit
+    onRecentQueryRemove: (String) -> Unit,
+    onClearAllRecent: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -563,12 +698,22 @@ private fun SearchEmptyState(
     ) {
         if (recentSearches.isNotEmpty()) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = stringResource(R.string.search_recent_title),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 10.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.search_recent_title),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onClearAllRecent) {
+                        Text(stringResource(R.string.search_recent_clear_all))
+                    }
+                }
                 // FlowRow bi bio idealan ovde, ali projekat ga još ne koristi nigde - obična
                 // Column od Row-ova (2 po redu) je dovoljno dobra za najviše 8 stavki
                 // (RecentSearchesStore.MAX_ITEMS), bez uvođenja novog layout obrasca samo za ovo.
@@ -756,7 +901,7 @@ private fun RecentSearchChip(
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), MaterialTheme.shapes.small)
             .clickable(onClick = onClick)
-            .padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            .padding(start = 12.dp, end = 0.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
@@ -774,11 +919,12 @@ private fun RecentSearchChip(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false)
         )
-        IconButton(onClick = onRemove, modifier = Modifier.size(24.dp)) {
+        // 40dp meta (ranije 24dp sa ikonicom od 12dp - teško se pogađalo prstom).
+        IconButton(onClick = onRemove, modifier = Modifier.size(40.dp)) {
             Icon(
                 imageVector = Icons.Default.Close,
                 contentDescription = stringResource(R.string.search_recent_remove_content_description),
-                modifier = Modifier.size(12.dp),
+                modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -843,6 +989,9 @@ private fun SearchInputBar(
     isAnalyzingImage: Boolean,
     isCinemaMode: Boolean,
     onSubmit: () -> Unit,
+    // Pita roditelja da li sme da otvori meni Galerija/Kamera - roditelj sam prikazuje objašnjenje
+    // ako ne sme (prijava potrebna / "U bioskopima" mod) umesto sive, "pokvarene" ikonice.
+    canOpenImageMenu: () -> Boolean,
     onGalleryClick: () -> Unit,
     onCameraClick: () -> Unit
 ) {
@@ -858,11 +1007,11 @@ private fun SearchInputBar(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box {
-            // Faza D - pretraga slikom (Gemini vision) postoji samo u tekstualnom modu, dugme se
-            // onemogućava (ne skriva - manja skokovita promena layout-a) u "U bioskopima" modu.
+            // Faza D - pretraga slikom (Gemini vision) postoji samo u tekstualnom modu. UX dorada
+            // (oktobar 2026): u "U bioskopima" modu dugme više nije onemogućeno bez objašnjenja -
+            // samo je prigušeno, a klik objašnjava zašto i nudi prelazak (videti canOpenImageMenu).
             IconButton(
-                onClick = { showImageSourceMenu = true },
-                enabled = !isCinemaMode,
+                onClick = { if (canOpenImageMenu()) showImageSourceMenu = true },
                 modifier = Modifier
                     .size(40.dp)
                     .clip(MaterialTheme.shapes.small)
@@ -871,14 +1020,21 @@ private fun SearchInputBar(
                 Icon(
                     imageVector = Icons.Default.CameraAlt,
                     contentDescription = stringResource(R.string.search_image_attach_content_description),
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
+                    tint = if (isCinemaMode) {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
                 )
             }
-            PremiumBadge(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = 4.dp, y = (-4).dp)
-            )
+            if (!isCinemaMode) {
+                PremiumBadge(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 4.dp, y = (-4).dp)
+                )
+            }
             DropdownMenu(
                 expanded = showImageSourceMenu,
                 onDismissRequest = { showImageSourceMenu = false }

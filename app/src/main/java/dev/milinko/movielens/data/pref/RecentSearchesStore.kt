@@ -71,4 +71,9 @@ class RecentSearchesStore @Inject constructor(
         prefs.edit { putString(key(scopeId), gson.toJson(updated)) }
         return updated
     }
+
+    fun clearQueries(scopeId: String): List<String> {
+        prefs.edit { remove(key(scopeId)) }
+        return emptyList()
+    }
 }

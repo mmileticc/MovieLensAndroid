@@ -42,6 +42,8 @@ data class ProfileUiState(
     val friendSearchQuery: String = "",
     val friendSearchResults: List<UserSearchResult> = emptyList(),
     val isSearchingFriends: Boolean = false,
+    // Neuspela pretraga korisnika - bez ovoga je pad mreže izgledao kao "nema rezultata za X".
+    val friendSearchError: String? = null,
     val friendActionError: String? = null,
     val isLoading: Boolean = false,
     val error: String? = null,
@@ -139,28 +141,32 @@ class ProfileViewModel @Inject constructor(
         friendSearchJob?.cancel()
         val trimmed = query.trim()
         if (trimmed.length < MIN_FRIEND_QUERY_LENGTH) {
-            _uiState.value = _uiState.value.copy(friendSearchResults = emptyList(), isSearchingFriends = false)
+            _uiState.value = _uiState.value.copy(friendSearchResults = emptyList(), isSearchingFriends = false, friendSearchError = null)
             return
         }
 
         friendSearchJob = viewModelScope.launch {
             delay(FRIEND_SEARCH_DEBOUNCE_MS)
-            _uiState.value = _uiState.value.copy(isSearchingFriends = true)
+            _uiState.value = _uiState.value.copy(isSearchingFriends = true, friendSearchError = null)
             userRepository.searchUsers(trimmed)
                 .onSuccess { results ->
                     _uiState.value = _uiState.value.copy(isSearchingFriends = false, friendSearchResults = results)
                 }
-                .onFailure {
-                    // Tiho - CancellationException (otkazana pretraga zbog novog kucanja) se ne
-                    // prikazuje kao greška, isti razlog kao kod SearchViewModel/safeApiCall.
-                    _uiState.value = _uiState.value.copy(isSearchingFriends = false)
+                .onFailure { e ->
+                    // CancellationException (otkazana pretraga zbog novog kucanja) ne stiže ovde -
+                    // safeApiCall je propušta dalje; ovo je prava greška (mreža/server).
+                    _uiState.value = _uiState.value.copy(
+                        isSearchingFriends = false,
+                        friendSearchResults = emptyList(),
+                        friendSearchError = dev.milinko.movielens.util.friendlyMessage(e, "Pretraga korisnika nije uspela")
+                    )
                 }
         }
     }
 
     fun clearFriendSearch() {
         friendSearchJob?.cancel()
-        _uiState.value = _uiState.value.copy(friendSearchQuery = "", friendSearchResults = emptyList(), isSearchingFriends = false)
+        _uiState.value = _uiState.value.copy(friendSearchQuery = "", friendSearchResults = emptyList(), isSearchingFriends = false, friendSearchError = null)
     }
 
     /**
@@ -295,6 +301,11 @@ class ProfileViewModel @Inject constructor(
                     userRepository.getFriends(userId).onSuccess { friends ->
                         _uiState.value = _uiState.value.copy(friends = friends)
                     }
+                    // Prihvatanje je moguće i direktno iz rezultata pretrage - osvežava status u
+                    // tim redovima ("Prihvati" -> "Već ste prijatelji").
+                    refreshFriendSearchResults()
+                    // Osvežava keš dolaznih zahteva - iz njega čita bedž u donjoj navigaciji.
+                    userRepository.getPendingFriendRequests(userId)
                 }
                 .onFailure { e ->
                     // Bugfix (E1.3) - RANIJE se stavka vraćala nazad u pendingRequests
@@ -320,6 +331,8 @@ class ProfileViewModel @Inject constructor(
                 .onSuccess {
                     // Dorada (2. septembar 2026) - videti napomenu u acceptFriendRequest().
                     userRepository.updateCachedFriendshipStatus(userId, requesterId, "NONE")
+                    // Osvežava keš dolaznih zahteva - iz njega čita bedž u donjoj navigaciji.
+                    userRepository.getPendingFriendRequests(userId)
                 }
                 .onFailure { e ->
                     Log.w("ProfileViewModel", "rejectFriendRequest nije uspeo za requesterId=$requesterId (tiho, ne prikazuje se korisniku): ${e.message}")
@@ -516,9 +529,15 @@ class ProfileViewModel @Inject constructor(
                     sessionManager.updateCachedIdentity(fresh.username, fresh.avatar)
                 }
 
+                // Svaki poziv vraća Result (ne baca izuzetak), pa catch ispod ne hvata pad mreže -
+                // greška se izvodi iz rezultata. Prikazuje se ako ni profil ni prijatelji nisu
+                // stigli; podaci iz Room keša (ako postoje) ostaju vidljivi ispod poruke.
+                val loadError = profileResult.exceptionOrNull()
+                    ?.takeIf { friendsResult.isFailure }
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isRefreshingFriends = false,
+                    error = loadError?.let { dev.milinko.movielens.util.friendlyMessage(it, "Profil trenutno ne može da se učita") },
                     userProfile = profileResult.getOrNull() ?: _uiState.value.userProfile,
                     friends = friendsResult.getOrNull() ?: _uiState.value.friends,
                     friendActivity = activityResult.getOrNull() ?: _uiState.value.friendActivity,
@@ -536,6 +555,11 @@ class ProfileViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /** "Pokušaj ponovo" na kartici greške - zaobilazi guard "već učitano" u loadProfile. */
+    fun retry() {
+        loadProfile(forceRefresh = true)
     }
 
     /** Swipe-down na Prijatelji tabu - videti napomenu na loadProfile(forceRefresh). */

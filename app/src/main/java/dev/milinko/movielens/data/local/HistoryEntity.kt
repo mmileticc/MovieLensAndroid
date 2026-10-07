@@ -13,5 +13,9 @@ data class HistoryEntity(
     // Kratak tekstualni komentar uz ocenu (opcion) - videti HistoryItem.review.
     val review: String? = null,
     val watchedAt: Long,
-    val duration: Int = 0
+    val duration: Int = 0,
+    // Filteri Biblioteke - videti WatchlistEntity.
+    val genresJson: String? = null,
+    val releaseYear: Int? = null,
+    val voteAverage: Double? = null
 )

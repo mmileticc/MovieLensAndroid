@@ -15,7 +15,8 @@ import androidx.room.RoomDatabase
     entities = [WatchlistEntity::class, HistoryEntity::class, GenericCacheEntity::class],
     // v3 (16. avgust 2026, Faza C) - dodat GenericCacheEntity. Nema Migration klase jer je ovo čist
     // keš (uvek se ponovo puni sa servera) - videti fallbackToDestructiveMigration u DatabaseModule.kt.
-    version = 3,
+    // v4 (oktobar 2026) - genresJson/releaseYear/voteAverage na watchlist/history (filteri Biblioteke).
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

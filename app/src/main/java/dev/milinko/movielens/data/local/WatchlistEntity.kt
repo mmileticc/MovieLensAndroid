@@ -14,5 +14,10 @@ data class WatchlistEntity(
     val title: String,
     val posterPath: String?,
     val addedAt: Long,
-    val priority: Int = 0
+    val priority: Int = 0,
+    // Filteri Biblioteke (UX dorada oktobar 2026). Žanrovi kao JSON (Gson) - mala lista, ne
+    // vredi posebna tabela/TypeConverter samo za prikaz i filtriranje.
+    val genresJson: String? = null,
+    val releaseYear: Int? = null,
+    val voteAverage: Double? = null
 )

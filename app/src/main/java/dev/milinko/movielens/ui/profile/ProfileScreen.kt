@@ -30,9 +30,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -80,6 +83,7 @@ import dev.milinko.movielens.ui.components.AppBottomNavigationBar
 import dev.milinko.movielens.ui.components.AppButton
 import dev.milinko.movielens.ui.components.AppButtonVariant
 import dev.milinko.movielens.ui.components.BottomNavTab
+import dev.milinko.movielens.ui.components.ErrorCard
 import dev.milinko.movielens.ui.components.ExpandableMatchCard
 import dev.milinko.movielens.ui.components.GenreChip
 import dev.milinko.movielens.ui.components.MovieListRow
@@ -111,6 +115,11 @@ fun ProfileScreen(
     // isti obrazac kao friendPendingRemoval - odbijanje zahteva za prijateljstvo nema pravi "undo"
     // (druga strana bi morala opet da pošalje zahtev), pa se traži potvrda pre same akcije.
     var requestPendingRejection by remember { mutableStateOf<PendingRequest?>(null) }
+    // Otkazivanje poslatog zahteva - isto nepovratno kao odbijanje (druga strana bi morala opet da
+    // dobije zahtev), pa ista potvrda. Par (id, ime za poruku).
+    var sentRequestPendingCancel by remember { mutableStateOf<Pair<String, String?>?>(null) }
+    // Odjava briše ceo back stack i vraća na prijavu - lako se slučajno pritisne u gornjoj traci.
+    var showSignOutConfirm by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
@@ -161,13 +170,29 @@ fun ProfileScreen(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (isSignedIn) {
-                        TextButton(
-                            onClick = {
-                                authViewModel.signOut()
-                                onSignOut()
-                            }
-                        ) {
+                        TextButton(onClick = { showSignOutConfirm = true }) {
                             Text(stringResource(R.string.profile_sign_out), color = MaterialTheme.colorScheme.error)
+                        }
+                        if (showSignOutConfirm) {
+                            AlertDialog(
+                                onDismissRequest = { showSignOutConfirm = false },
+                                title = { Text(stringResource(R.string.profile_sign_out_dialog_title)) },
+                                text = { Text(stringResource(R.string.profile_sign_out_dialog_message)) },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        showSignOutConfirm = false
+                                        authViewModel.signOut()
+                                        onSignOut()
+                                    }) {
+                                        Text(stringResource(R.string.profile_sign_out), color = MaterialTheme.colorScheme.error)
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showSignOutConfirm = false }) {
+                                        Text(stringResource(R.string.profile_remove_cancel))
+                                    }
+                                }
+                            )
                         }
                     } else {
                         TextButton(onClick = onNavigateToSignIn) {
@@ -226,6 +251,9 @@ fun ProfileScreen(
                 // u LazyColumn svake tab stranice (SettingsTabContent/FriendsTabContent) - sad se
                 // skroluju zajedno sa ostatkom sadržaja i mogu da se sakriju, a expandable sekcija je
                 // deo prave skrolujuće liste. Samo tab red ostaje fiksno prikačen iznad pagera.
+                // UX dorada (oktobar 2026): "Prijatelji" je prvi tab - to je ono zbog čega se korisnik
+                // vraća na Profil (novi zahtevi, aktivnost), a "Moj profil" (izmena profila, ukus,
+                // podešavanja) je ređa radnja. Ranije je podrazumevano bio tab Podešavanja.
                 SecondaryTabRow(
                     selectedTabIndex = pagerState.currentPage,
                     modifier = Modifier.fillMaxWidth()
@@ -233,12 +261,23 @@ fun ProfileScreen(
                     Tab(
                         selected = pagerState.currentPage == 0,
                         onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                        text = { Text(stringResource(R.string.profile_tab_settings)) }
+                        text = { Text(stringResource(R.string.profile_tab_friends)) }
                     )
                     Tab(
                         selected = pagerState.currentPage == 1,
                         onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
-                        text = { Text(stringResource(R.string.profile_tab_friends)) }
+                        text = { Text(stringResource(R.string.profile_tab_settings)) }
+                    )
+                }
+
+                // Greška učitavanja profila/prijatelja - iznad oba taba, sa "Pokušaj ponovo". Ranije
+                // se uiState.error postavljao ali nigde nije prikazivao (pad mreže je izgledao kao
+                // "nemaš prijatelja").
+                uiState.error?.let { message ->
+                    ErrorCard(
+                        message = message,
+                        onRetry = viewModel::retry,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
 
@@ -247,17 +286,16 @@ fun ProfileScreen(
                     modifier = Modifier.weight(1f)
                 ) { page ->
                     when (page) {
-                        0 -> SettingsTabContent(uiState, sessionUser, viewModel, onSignOut)
-                        1 -> FriendsTabContent(
+                        0 -> FriendsTabContent(
                             uiState = uiState,
-                            sessionUser = sessionUser,
                             viewModel = viewModel,
                             onNavigateToFriendProfile = onNavigateToFriendProfile,
                             onNavigateToDetail = onNavigateToDetail,
                             onRemoveFriend = { friendPendingRemoval = it },
                             onRejectRequest = { requestPendingRejection = it },
-                            onCancelSentRequest = { viewModel.cancelFriendRequest(it) }
+                            onCancelSentRequest = { id, name -> sentRequestPendingCancel = id to name }
                         )
+                        1 -> SettingsTabContent(uiState, sessionUser, viewModel, onSignOut)
                     }
                 }
             }
@@ -278,6 +316,34 @@ fun ProfileScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { friendPendingRemoval = null }) {
+                        Text(stringResource(R.string.profile_remove_cancel))
+                    }
+                }
+            )
+        }
+
+        sentRequestPendingCancel?.let { (targetId, targetName) ->
+            AlertDialog(
+                onDismissRequest = { sentRequestPendingCancel = null },
+                title = { Text(stringResource(R.string.profile_cancel_request_dialog_title)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.profile_cancel_request_dialog_message,
+                            targetName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.profile_default_username)
+                        )
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.cancelFriendRequest(targetId)
+                        sentRequestPendingCancel = null
+                    }) {
+                        Text(stringResource(R.string.profile_cancel_request), color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { sentRequestPendingCancel = null }) {
                         Text(stringResource(R.string.profile_remove_cancel))
                     }
                 }
@@ -362,13 +428,12 @@ private fun SettingsTabContent(
 @Composable
 private fun FriendsTabContent(
     uiState: ProfileUiState,
-    sessionUser: SessionUserInfo?,
     viewModel: ProfileViewModel,
     onNavigateToFriendProfile: (String) -> Unit,
     onNavigateToDetail: (Int) -> Unit,
     onRemoveFriend: (FriendInfo) -> Unit,
     onRejectRequest: (PendingRequest) -> Unit,
-    onCancelSentRequest: (String) -> Unit
+    onCancelSentRequest: (id: String, name: String?) -> Unit
 ) {
     // Bugfix (E1.4, 2. septembar 2026, feedback testera - "lista prijatelja se ne ažurira odmah,
     // nema pull-down") - swipe-down gest kao dodatna sigurnosna mreža uz automatski refresh posle
@@ -379,34 +444,9 @@ private fun FriendsTabContent(
         modifier = Modifier.fillMaxSize()
     ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        item {
-            // Faza 7 dorada #3 - isti header/taste profile kao na Podešavanja tabu, sad deo
-            // skrolujuće liste umesto fiksnog prostora iznad tab reda.
-            val fullProfile = uiState.userProfile
-            if (fullProfile != null) {
-                ProfileHeader(fullProfile)
-            } else if (sessionUser != null) {
-                SessionIdentityHeader(sessionUser)
-            }
-        }
-        if (uiState.tasteProfile.isNotEmpty()) {
-            item {
-                TasteProfileSection(uiState.tasteProfile)
-            }
-        }
-        item {
-            FriendSearchSection(
-                query = uiState.friendSearchQuery,
-                isSearching = uiState.isSearchingFriends,
-                results = uiState.friendSearchResults,
-                inFlightIds = uiState.friendActionInFlightIds,
-                onQueryChange = viewModel::setFriendSearchQuery,
-                onAdd = viewModel::sendFriendRequest,
-                onCancelRequest = viewModel::cancelFriendRequest,
-                onOpenProfile = onNavigateToFriendProfile
-            )
-        }
-
+        // UX dorada (oktobar 2026): zaglavlje profila i "Tvoj ukus" su samo na tabu "Moj profil" -
+        // ovde su ranije bili duplirani i gurali pretragu ~250dp niže. Dolazni zahtevi su PRVI
+        // (ranije ispod pretrage, pa ih je kucanje u pretragu guralo van ekrana).
         if (uiState.pendingRequests.isNotEmpty()) {
             item {
                 SectionHeader(
@@ -424,6 +464,21 @@ private fun FriendsTabContent(
             }
         }
 
+        item {
+            FriendSearchSection(
+                query = uiState.friendSearchQuery,
+                isSearching = uiState.isSearchingFriends,
+                error = uiState.friendSearchError,
+                results = uiState.friendSearchResults,
+                inFlightIds = uiState.friendActionInFlightIds,
+                onQueryChange = viewModel::setFriendSearchQuery,
+                onAdd = viewModel::sendFriendRequest,
+                onAccept = viewModel::acceptFriendRequest,
+                onCancelRequest = onCancelSentRequest,
+                onOpenProfile = onNavigateToFriendProfile
+            )
+        }
+
         // Korisnički zahtev (2. septembar 2026, "da mi budu vidljivi izlistani poslati zahtevi
         // kao sto su mi izlistani prijatelji, a ne samo da kad ponovo pretrazim osobu vidim da
         // sam mu vec poslao zahtev") - odvojena sekcija, analogno prijateljima/primljenim
@@ -438,7 +493,7 @@ private fun FriendsTabContent(
             items(uiState.sentRequests, key = { "sent-${it.id}" }) { request ->
                 SentRequestCard(
                     request = request,
-                    onCancelClick = { onCancelSentRequest(request.id) },
+                    onCancelClick = { onCancelSentRequest(request.id, request.username) },
                     onOpenProfile = { onNavigateToFriendProfile(request.id) }
                 )
             }
@@ -1035,8 +1090,25 @@ private fun FriendCard(
                     }
                 }
             }
-            TextButton(onClick = onRemove) {
-                Text(stringResource(R.string.profile_remove_confirm), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
+            // UX dorada (oktobar 2026): "Ukloni" je ranije stajalo kao vidljivo crveno dugme odmah
+            // pored klikabilne kartice - lako se promaši. Sad je iza menija (⋮); potvrda ostaje.
+            var menuExpanded by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = stringResource(R.string.profile_friend_options_content_description, friend.username)
+                    )
+                }
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.profile_remove_friend_menu), color = MaterialTheme.colorScheme.error) },
+                        onClick = {
+                            menuExpanded = false
+                            onRemove()
+                        }
+                    )
+                }
             }
         }
     }
@@ -1188,11 +1260,13 @@ private fun CompactGenreAffinityCard(affinity: GenreAffinity) {
 private fun FriendSearchSection(
     query: String,
     isSearching: Boolean,
+    error: String?,
     results: List<UserSearchResult>,
     inFlightIds: Set<String>,
     onQueryChange: (String) -> Unit,
     onAdd: (String) -> Unit,
-    onCancelRequest: (String) -> Unit,
+    onAccept: (String) -> Unit,
+    onCancelRequest: (id: String, name: String?) -> Unit,
     onOpenProfile: (String) -> Unit
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -1217,7 +1291,8 @@ private fun FriendSearchSection(
                         result = result,
                         isActionInFlight = result.id in inFlightIds,
                         onAdd = { onAdd(result.id) },
-                        onCancelRequest = { onCancelRequest(result.id) },
+                        onAccept = { onAccept(result.id) },
+                        onCancelRequest = { onCancelRequest(result.id, result.username) },
                         // Bugfix (E1.5, 2. septembar 2026, feedback testera - "nemogućnost pregleda
                         // profila pre slanja zahteva") - RANIJE klik nije radio dok status nije
                         // ACCEPTED. FriendProfileScreen sad prikazuje ograničen preview za bilo koji
@@ -1227,6 +1302,14 @@ private fun FriendSearchSection(
                     )
                 }
             }
+        } else if (error != null && !isSearching) {
+            // Pad mreže ne sme da izgleda kao "nema korisnika sa tim imenom".
+            Text(
+                text = error,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 8.dp)
+            )
         } else if (!isSearching && query.trim().length >= 2) {
             Text(
                 text = stringResource(R.string.profile_search_no_results, query),
@@ -1243,6 +1326,7 @@ private fun UserSearchResultRow(
     result: UserSearchResult,
     isActionInFlight: Boolean,
     onAdd: () -> Unit,
+    onAccept: () -> Unit,
     onCancelRequest: () -> Unit,
     onClick: () -> Unit
 ) {
@@ -1273,10 +1357,10 @@ private fun UserSearchResultRow(
                 "PENDING_SENT" -> TextButton(onClick = onCancelRequest, enabled = !isActionInFlight) {
                     Text(stringResource(R.string.profile_cancel_request), color = MaterialTheme.colorScheme.error)
                 }
-                // Bugfix (2. septembar 2026) - videti napomenu uz profile_pending_received_badge
-                // u strings.xml - cela kartica (ElevatedCard iznad) je već klikabilna (onClick),
-                // vodi na profil te osobe gde se zahtev sad stvarno može prihvatiti/odbiti.
-                "PENDING_RECEIVED" -> AppButton(text = stringResource(R.string.profile_pending_received_badge), onClick = {}, variant = AppButtonVariant.Secondary, enabled = false)
+                // UX dorada (oktobar 2026): ranije onemogućeno dugme "Poslao ti je zahtev" koje je
+                // izgledalo pokvareno - sad pravo "Prihvati" (odbijanje i dalje ide preko profila
+                // ili kartice zahteva na vrhu taba, gde postoji potvrda).
+                "PENDING_RECEIVED" -> AppButton(text = stringResource(R.string.profile_accept_request), onClick = onAccept, variant = AppButtonVariant.Primary, enabled = !isActionInFlight)
                 "ACCEPTED" -> AppButton(text = stringResource(R.string.profile_already_friends), onClick = {}, variant = AppButtonVariant.Secondary, enabled = false)
                 else -> AppButton(text = stringResource(R.string.profile_add_friend), onClick = onAdd, variant = AppButtonVariant.Primary, enabled = !isActionInFlight)
             }

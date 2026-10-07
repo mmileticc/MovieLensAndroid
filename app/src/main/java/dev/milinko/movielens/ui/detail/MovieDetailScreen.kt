@@ -91,6 +91,9 @@ import dev.milinko.movielens.ui.components.YouTubeTrailerPlayer
 /** Koliko bioskopa se uvek prikazuje pre "Prikaži još N" - videti dorada posle Faze 6 feedback-a. */
 private const val ALWAYS_VISIBLE_SHOWTIMES = 3
 
+// Opis filma se skraćuje na ovoliko redova uz "Prikaži više".
+private const val OVERVIEW_COLLAPSED_LINES = 5
+
 // E2.2 dorada (3. septembar 2026) - mora se poklapati sa MovieDetailViewModel.COMMENTS_PAGE_SIZE
 // (privatna tamo, pa se ovde ponavlja isti broj - isti obrazac kao ALWAYS_VISIBLE_SHOWTIMES iznad).
 // Koristi se samo za "Prikaži manje" prag (kad je vidljivo više od jedne stranice).
@@ -444,6 +447,40 @@ fun MovieDetailScreen(
                     }
                 }
 
+                // UX dorada (oktobar 2026): opis je odmah ispod ocena/dugmadi - ranije je bio tek posle
+                // komentara i bioskopskih termina, pa je korisnik morao da prođe kroz njih da bi
+                // saznao o čemu je film. Dug opis se skraćuje (isti obrazac kao biografija glumca).
+                movie.overview?.takeIf { it.isNotBlank() }?.let { overview ->
+                    item {
+                        var overviewExpanded by remember { mutableStateOf(false) }
+                        var overviewOverflows by remember { mutableStateOf(false) }
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            SectionHeader(
+                                title = stringResource(R.string.movie_detail_overview_header),
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            Text(
+                                text = overview,
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = if (overviewExpanded) Int.MAX_VALUE else OVERVIEW_COLLAPSED_LINES,
+                                overflow = TextOverflow.Ellipsis,
+                                onTextLayout = { result ->
+                                    if (!overviewExpanded) overviewOverflows = result.hasVisualOverflow
+                                }
+                            )
+                            if (overviewOverflows || overviewExpanded) {
+                                TextButton(onClick = { overviewExpanded = !overviewExpanded }) {
+                                    Text(
+                                        stringResource(
+                                            if (overviewExpanded) R.string.actor_detail_show_less else R.string.actor_detail_show_more
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // "Istraži više" - trejler pušten u aplikaciji (sekcija se ne prikazuje bez videa).
                 val videos = movie.videos.orEmpty()
                 if (videos.isNotEmpty()) {
@@ -456,17 +493,6 @@ fun MovieDetailScreen(
                             YouTubeTrailerPlayer(videos = videos)
                         }
                     }
-                }
-
-                // E2.2 dorada (3. septembar 2026) - javni komentari, zamenjuju stari privatan
-                // "komentar uz ocenu" koji je bio u item-u iznad (i dalje sadrži samo ocenu).
-                item {
-                    CommentsSection(
-                        tmdbId = tmdbId,
-                        uiState = uiState,
-                        viewModel = viewModel,
-                        onRequireSignIn = onRequireSignIn
-                    )
                 }
 
                 if (movie.showtimes.isNotEmpty()) {
@@ -523,16 +549,6 @@ fun MovieDetailScreen(
                     }
                 }
 
-                item {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        SectionHeader(
-                            title = stringResource(R.string.movie_detail_overview_header),
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                        movie.overview?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
-                    }
-                }
-
                 val backdrops = movie.backdrops.orEmpty()
                 if (backdrops.isNotEmpty()) {
                     item {
@@ -578,6 +594,17 @@ fun MovieDetailScreen(
                             }
                         }
                     }
+                }
+
+                // E2.2 dorada (3. septembar 2026) - javni komentari. UX dorada (oktobar 2026): na kraju
+                // ekrana, posle informacija o filmu (opis, trejler, bioskopi, slike, glumci).
+                item {
+                    CommentsSection(
+                        tmdbId = tmdbId,
+                        uiState = uiState,
+                        viewModel = viewModel,
+                        onRequireSignIn = onRequireSignIn
+                    )
                 }
 
                 item {

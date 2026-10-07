@@ -171,7 +171,14 @@ data class WatchlistItem(
     @SerializedName("added_at")
     val addedAt: Long,
     @SerializedName("priority")
-    val priority: Int = 0
+    val priority: Int = 0,
+    // Za filtere/sortiranje Biblioteke - nullable iz istog Gson razloga kao MovieSearchResult.genreIds.
+    @SerializedName("genres")
+    val genres: List<Genre>? = null,
+    @SerializedName("release_year")
+    val releaseYear: Int? = null,
+    @SerializedName("vote_average")
+    val voteAverage: Double? = null
 )
 
 data class WatchlistResponse(
@@ -195,7 +202,13 @@ data class HistoryItem(
     @SerializedName("watched_at")
     val watchedAt: Long,
     @SerializedName("duration")
-    val duration: Int = 0
+    val duration: Int = 0,
+    @SerializedName("genres")
+    val genres: List<Genre>? = null,
+    @SerializedName("release_year")
+    val releaseYear: Int? = null,
+    @SerializedName("vote_average")
+    val voteAverage: Double? = null
 )
 
 data class HistoryResponse(

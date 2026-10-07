@@ -97,6 +97,14 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Google deo prijave nije uspeo (pre nego što dođemo do backend-a) - ranije se to samo
+     * logovalo, pa bi se Google prozor zatvorio i ništa vidljivo se ne bi desilo.
+     */
+    fun reportGoogleSignInFailure(message: String) {
+        _uiState.value = AuthUiState.Error(message)
+    }
+
     fun signOut() {
         authRepo.signOut()
         sessionManager.clearSession()

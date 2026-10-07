@@ -55,6 +55,9 @@ data class SearchUiState(
     // embedding troška - isti podaci kao Home "U bioskopima sada" traka) čim se uđe u "U
     // bioskopima" mod - lokalni filter iznad radi nad ovom listom, ne nad mrežom.
     val allCinemaMovies: List<NowInCinemasMovie> = emptyList(),
+    // Repertoar (za filter po nazivu u "U bioskopima" modu) nije mogao da se učita - bez ovoga je
+    // svaka pretraga tada pokazivala "Nema poklapanja po nazivu", kao da filma nema.
+    val cinemaCatalogError: String? = null,
     // Faza D dorada (korisnički zahtev za poređenje Gemini vs. lokalni MiniLM embedding) - bira koji
     // embedding provajder backend koristi za "U bioskopima" semantičku pretragu. Podrazumevano
     // Gemini (isti kvalitet kao pre ove dorade). Vidljivo samo u isCinemaMode - videti SearchScreen.
@@ -146,7 +149,10 @@ class SearchViewModel @Inject constructor(
      * Faza D (17. avgust 2026, predlog mentora Marka) - prebacuje između obične tekstualne
      * pretrage (ceo TMDB katalog) i semantičke pretrage svedene na filmove trenutno na repertoaru
      * bioskopa. Čisti rezultate OBA moda pri prebacivanju - sprečava da se stari rezultati
-     * drugačijeg tipa/obima vide ispod novog moda dok korisnik ne pretraži ponovo.
+     * drugačijeg tipa/obima vide ispod novog moda.
+     *
+     * UX dorada (oktobar 2026): uneti tekst se odmah ponovo pretražuje u novom modu - ranije je
+     * ostajao upit iznad prazne stranice, pa je izgledalo da pretraga nije uspela.
      */
     fun setCinemaMode(enabled: Boolean) {
         if (_uiState.value.isCinemaMode == enabled) return
@@ -174,7 +180,11 @@ class SearchViewModel @Inject constructor(
         if (enabled && _uiState.value.allCinemaMovies.isEmpty()) {
             loadCinemaCatalog()
         }
+        setSearchQuery(_uiState.value.searchQuery)
     }
+
+    /** "Pokušaj ponovo" kad repertoar za "U bioskopima" mod nije učitan. */
+    fun retryCinemaCatalog() = loadCinemaCatalog()
 
     private var cinemaCatalogJob: Job? = null
 
@@ -188,7 +198,12 @@ class SearchViewModel @Inject constructor(
     private fun loadCinemaCatalog() {
         cinemaCatalogJob?.cancel()
         cinemaCatalogJob = viewModelScope.launch {
-            movieRepository.getNowInCinemas().onSuccess { movies ->
+            _uiState.value = _uiState.value.copy(cinemaCatalogError = null)
+            movieRepository.getNowInCinemas().onFailure { e ->
+                _uiState.value = _uiState.value.copy(
+                    cinemaCatalogError = dev.milinko.movielens.util.friendlyMessage(e, "Repertoar bioskopa trenutno nije dostupan")
+                )
+            }.onSuccess { movies ->
                 _uiState.value = _uiState.value.copy(allCinemaMovies = movies)
                 // Ako je korisnik već nešto ukucao dok se katalog učitavao, primeni filter odmah
                 // umesto da čeka sledeći karakter.
@@ -266,6 +281,10 @@ class SearchViewModel @Inject constructor(
 
     fun removeRecentQuery(query: String) {
         _recentSearches.value = recentSearchesStore.removeQuery(recentSearchesScopeId, query)
+    }
+
+    fun clearRecentQueries() {
+        _recentSearches.value = recentSearchesStore.clearQueries(recentSearchesScopeId)
     }
 
     /**

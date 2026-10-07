@@ -454,10 +454,7 @@ fun BrowseStateContent(
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                ErrorCard(message = error)
-                TextButton(onClick = onRetry, modifier = Modifier.padding(top = 8.dp)) {
-                    Text(stringResource(R.string.movie_detail_retry))
-                }
+                ErrorCard(message = error, onRetry = onRetry)
             }
             movies.isEmpty() -> Column(
                 modifier = Modifier

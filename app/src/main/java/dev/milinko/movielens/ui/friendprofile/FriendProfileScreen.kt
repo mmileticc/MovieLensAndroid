@@ -17,7 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -47,6 +47,7 @@ import dev.milinko.movielens.R
 import dev.milinko.movielens.data.remote.user.FriendProfileMovie
 import dev.milinko.movielens.ui.components.AppButton
 import dev.milinko.movielens.ui.components.AppButtonVariant
+import dev.milinko.movielens.ui.components.ErrorCard
 import dev.milinko.movielens.ui.components.GenreChip
 import dev.milinko.movielens.ui.components.MovieListRow
 import dev.milinko.movielens.ui.components.RemoteAvatarImage
@@ -69,6 +70,8 @@ fun FriendProfileScreen(
     // Bugfix (2. septembar 2026) - potvrda pre odbijanja, isti obrazac/stringovi kao
     // ProfileScreen (PendingRequestCard) - dosledna UX na oba mesta gde se zahtev može odbiti.
     var showRejectConfirm by remember { mutableStateOf(false) }
+    // Otkazivanje poslatog zahteva - ista potvrda kao na Profile ekranu.
+    var showCancelConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.loadProfile()
@@ -85,7 +88,7 @@ fun FriendProfileScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onNavigateBack) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.action_back))
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
                 Text(
                     text = uiState.profile?.username ?: stringResource(R.string.friend_profile_default_title),
@@ -115,7 +118,7 @@ fun FriendProfileScreen(
                         )
                         "PENDING_SENT" -> AppButton(
                             text = stringResource(R.string.profile_cancel_request),
-                            onClick = { viewModel.cancelFriendRequest() },
+                            onClick = { showCancelConfirm = true },
                             variant = AppButtonVariant.Secondary,
                             enabled = !uiState.isRequestActionInFlight,
                             modifier = Modifier.fillMaxWidth()
@@ -170,12 +173,12 @@ fun FriendProfileScreen(
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
                 uiState.error != null && uiState.profile == null -> {
-                    Text(
-                        text = uiState.error ?: stringResource(R.string.error_generic_title),
+                    ErrorCard(
+                        message = uiState.error ?: stringResource(R.string.error_generic_title),
+                        onRetry = viewModel::loadProfile,
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .padding(24.dp),
-                        color = MaterialTheme.colorScheme.error
+                            .padding(24.dp)
                     )
                 }
                 uiState.profile != null -> {
@@ -304,6 +307,28 @@ fun FriendProfileScreen(
                 }
             }
         }
+    }
+
+    if (showCancelConfirm) {
+        val username = uiState.profile?.username?.takeIf { it.isNotBlank() } ?: stringResource(R.string.profile_default_username)
+        AlertDialog(
+            onDismissRequest = { showCancelConfirm = false },
+            title = { Text(stringResource(R.string.profile_cancel_request_dialog_title)) },
+            text = { Text(stringResource(R.string.profile_cancel_request_dialog_message, username)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCancelConfirm = false
+                    viewModel.cancelFriendRequest()
+                }) {
+                    Text(stringResource(R.string.profile_cancel_request), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelConfirm = false }) {
+                    Text(stringResource(R.string.profile_remove_cancel))
+                }
+            }
+        )
     }
 
     // Bugfix (2. septembar 2026) - potvrda pre odbijanja, isti stringovi kao PendingRequestCard

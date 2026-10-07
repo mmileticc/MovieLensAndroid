@@ -32,6 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
 import com.google.android.gms.common.api.ApiException
 import dev.milinko.movielens.R
 import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
@@ -96,9 +97,14 @@ fun SignInScreen(
                     viewModel.finishGoogleSignIn(idToken)
                 } else {
                     Log.e("SignIn", "Google idToken is null")
+                    viewModel.reportGoogleSignInFailure(context.getString(R.string.sign_in_google_failed))
                 }
             } catch (e: ApiException) {
                 Log.e("SignIn", "Google sign-in failed: ${e.statusCode}", e)
+                // 12501 = korisnik je sam zatvorio Google prozor - to nije greška, ne prikazujemo ništa.
+                if (e.statusCode != GoogleSignInStatusCodes.SIGN_IN_CANCELLED) {
+                    viewModel.reportGoogleSignInFailure(context.getString(R.string.sign_in_google_failed))
+                }
             }
         }
     }

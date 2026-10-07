@@ -22,7 +22,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
@@ -54,6 +56,8 @@ import coil.request.ImageRequest
 import dev.milinko.movielens.R
 import dev.milinko.movielens.data.remote.user.MovieSuggestion
 import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
+import dev.milinko.movielens.ui.components.EmptyStateCard
+import dev.milinko.movielens.ui.components.ErrorCard
 import dev.milinko.movielens.ui.theme.MlPosterCornerRadius
 
 /**
@@ -144,24 +148,36 @@ fun MovieNightScreen(
                     uiState.isLoading -> {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     }
+                    // Greška i prazno stanje su u skrolujućoj koloni - bez toga pull-to-refresh nije
+                    // radio baš u tim stanjima (PullToRefreshBox traži skrolujući sadržaj).
                     uiState.error != null -> {
-                        Text(
-                            text = uiState.error ?: stringResource(R.string.movie_night_error_generic),
+                        Column(
                             modifier = Modifier
-                                .align(Alignment.Center)
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
                                 .padding(24.dp),
-                            color = MaterialTheme.colorScheme.error
-                        )
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            ErrorCard(
+                                message = uiState.error ?: stringResource(R.string.movie_night_error_generic),
+                                onRetry = viewModel::loadSuggestions
+                            )
+                        }
                     }
                     uiState.suggestions.isEmpty() -> {
-                        Text(
-                            text = stringResource(R.string.movie_night_empty_state),
+                        Column(
                             modifier = Modifier
-                                .align(Alignment.Center)
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
                                 .padding(24.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            EmptyStateCard(
+                                title = stringResource(R.string.movie_night_empty_state),
+                                actionText = stringResource(R.string.state_retry),
+                                onAction = viewModel::refreshSuggestions
+                            )
+                        }
                     }
                     else -> {
                         LazyColumn(modifier = Modifier.fillMaxSize()) {

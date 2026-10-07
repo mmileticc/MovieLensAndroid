@@ -24,7 +24,7 @@
     <string name="error_transient_title">Trenutno nedostupno</string>
 
     <!-- Faza 3 redizajna - AppBottomNavigationBar -->
-    <string name="nav_home">Home</string>
+    <string name="nav_home">Početna</string>
     <string name="nav_search">Pretraga</string>
     <string name="nav_library">Biblioteka</string>
     <string name="nav_profile">Profil</string>
@@ -48,11 +48,11 @@
     <string name="home_scroll_to_top_content_description">Nazad na vrh</string>
 
     <!-- Faza 5 redizajna - MovieDetailScreen -->
-    <string name="movie_detail_top_bar_title">Film detalji</string>
-    <string name="movie_detail_retry">Pokušaj ponovno</string>
-    <string name="movie_detail_watchlist_add">Watchlist</string>
-    <string name="movie_detail_watchlist_added">U watchlisti</string>
-    <string name="movie_detail_watchlist_signin_toast">Prijavi se da bi koristio watchlistu</string>
+    <string name="movie_detail_top_bar_title">Detalji filma</string>
+    <string name="movie_detail_retry">Pokušaj ponovo</string>
+    <string name="movie_detail_watchlist_add">Za gledanje</string>
+    <string name="movie_detail_watchlist_added">Na listi</string>
+    <string name="movie_detail_watchlist_signin_toast">Prijavi se da bi sačuvao film za gledanje</string>
     <string name="movie_detail_mark_watched">Označi kao odgledano</string>
     <string name="movie_detail_watched">Odgledano</string>
     <string name="movie_detail_watched_signin_toast">Prijavi se da bi označio film kao odgledan</string>
@@ -102,7 +102,7 @@
 
     <!-- E2.3 (2. septembar 2026) - ActorDetailScreen -->
     <string name="actor_detail_top_bar_title">Glumac</string>
-    <string name="actor_detail_retry">Pokušaj ponovno</string>
+    <string name="actor_detail_retry">Pokušaj ponovo</string>
     <string name="actor_detail_biography_header">Biografija</string>
     <string name="actor_detail_biography_empty">Biografija nije dostupna.</string>
     <string name="actor_detail_show_more">Prikaži više</string>
@@ -125,7 +125,7 @@
     <string name="search_image_remove_content_description">Ukloni sliku</string>
     <string name="search_submit_content_description">Pretraži</string>
     <string name="search_camera_error">Nije moguće otvoriti kameru. Pokušaj ponovo.</string>
-    <string name="search_signin_required_toast">Za skeniranje slike moraš prvo da se uloguješ.</string>
+    <string name="search_signin_required_toast">Za skeniranje slike moraš prvo da se prijaviš.</string>
     <string name="search_empty_state_title">Pronađi svoj sledeći film</string>
     <string name="search_empty_state_message">Ukucaj naslov ili pretraži pomoću slike.</string>
     <!-- Faza D (17. avgust 2026, predlog mentora Marka) - semantička pretraga svedena na filmove
@@ -161,15 +161,15 @@
 
     <!-- Faza 7 redizajna - LibraryScreen -->
     <string name="library_top_bar_title">Biblioteka</string>
-    <string name="library_sign_in_required">Uloguj se da vidiš svoju biblioteku</string>
+    <string name="library_sign_in_required">Prijavi se da vidiš svoju biblioteku</string>
     <!-- Dorada 17. avgust 2026 - deljeni SignInRequiredState prikaz (videti i profile_sign_in_required_*) -->
     <string name="library_sign_in_required_message">Prati svoju listu za gledanje i istoriju odgledanih filmova.</string>
-    <string name="library_tab_watchlist">Watchlist</string>
-    <string name="library_tab_history">Istorija</string>
+    <string name="library_tab_watchlist">Za gledanje</string>
+    <string name="library_tab_history">Odgledano</string>
     <string name="library_watchlist_priority">Prioritet: %1$d</string>
-    <string name="library_watchlist_empty_title">Watchlist je prazna</string>
+    <string name="library_watchlist_empty_title">Lista za gledanje je prazna</string>
     <string name="library_watchlist_empty_message">Dodaj filmove koje planiraš da pogledaš.</string>
-    <string name="library_history_empty_title">Nema istorije</string>
+    <string name="library_history_empty_title">Još nema odgledanih filmova</string>
     <string name="library_history_empty_message">Filmovi koje označiš kao odgledane pojaviće se ovde.</string>
     <string name="library_remove_content_description">Ukloni</string>
     <string name="library_rating_edit">Izmeni</string>
@@ -188,7 +188,7 @@
     <string name="profile_stat_friends">Prijatelji</string>
     <string name="profile_favorite_genres">Omiljeni žanrovi: %1$s</string>
     <string name="profile_default_username">Korisnik</string>
-    <string name="profile_tab_settings">Podešavanja</string>
+    <string name="profile_tab_settings">Moj profil</string>
     <string name="profile_tab_friends">Prijatelji</string>
     <string name="profile_taste_title">Tvoj ukus</string>
     <string name="profile_taste_rating_count">%1$s/10 (%2$d)</string>
@@ -249,7 +249,7 @@
     <!-- Faza 7 redizajna - MovieNightScreen -->
     <string name="movie_night_top_bar_title">Predlozi za zajedničko gledanje</string>
     <string name="movie_night_refresh_content_description">Osveži predloge</string>
-    <string name="movie_night_error_generic">Greška</string>
+    <string name="movie_night_error_generic">Predlozi trenutno nisu dostupni</string>
     <string name="movie_night_empty_state">Nema predloga za sada. Trebalo bi da oboje ocenite još koji film iz istog žanra da bismo imali na osnovu čega pametno da predložimo.</string>
     <string name="movie_night_your_match_label">Ti</string>
     <string name="movie_night_friend_match_label">Prijatelj</string>
@@ -263,7 +263,7 @@
     <!-- E1.5 dorada (2. septembar 2026) - ograničen preview profila pre prihvaćenog prijateljstva. -->
     <string name="friend_profile_common_genres_header">Zajednička interesovanja</string>
     <string name="friend_profile_locked_note">Postanite prijatelji da vidite listu odgledanih filmova.</string>
-    <string name="friend_profile_pending_received_note">Ovaj korisnik ti je poslao zahtev za prijateljstvo - prihvati ga sa Profil ekrana.</string>
+    <string name="friend_profile_pending_received_note">Ovaj korisnik ti je poslao zahtev za prijateljstvo - odgovori dugmićima na dnu ekrana.</string>
 
     <!-- "Vidi sve" ekrani (Predloženo za tebe / U bioskopima) -->
     <string name="home_see_all">Vidi sve</string>
@@ -292,4 +292,53 @@
     <string name="movie_detail_open_youtube">Otvori na YouTube-u</string>
     <string name="movie_detail_trailer_not_embeddable">Ovaj trejler ne može da se pusti u aplikaciji.</string>
     <string name="movie_detail_images_header">Slike</string>
+
+    <!-- UX dorada (oktobar 2026) - zajednička stanja greške/praznog stanja (StateCards.kt) -->
+    <string name="state_error_title">Nešto nije u redu</string>
+    <string name="state_retry">Pokušaj ponovo</string>
+
+    <!-- UX dorada - Profil: potvrde, prihvatanje iz pretrage, meni prijatelja -->
+    <string name="profile_sign_out_dialog_title">Odjaviti se?</string>
+    <string name="profile_sign_out_dialog_message">Biće potrebno da se ponovo prijaviš Google nalogom da bi video svoju biblioteku i prijatelje.</string>
+    <string name="profile_cancel_request_dialog_title">Otkazati zahtev?</string>
+    <string name="profile_cancel_request_dialog_message">Zahtev za prijateljstvo korisniku %1$s biće povučen.</string>
+    <string name="profile_accept_request">Prihvati</string>
+    <string name="profile_friend_options_content_description">Opcije za %1$s</string>
+    <string name="profile_remove_friend_menu">Ukloni iz prijatelja</string>
+
+    <!-- UX dorada - prijava -->
+    <string name="sign_in_google_failed">Prijava preko Google naloga nije uspela. Pokušaj ponovo.</string>
+
+    <!-- UX dorada - Biblioteka: filteri, sortiranje, "Poništi", potvrde -->
+    <string name="library_removed_snackbar">Uklonjeno: %1$s</string>
+    <string name="library_undo">Poništi</string>
+    <string name="library_rating_saved">Ocena sačuvana</string>
+    <string name="library_rating_failed">Ocena nije sačuvana. Proveri internet i pokušaj ponovo.</string>
+    <string name="library_remove_failed">Film nije uklonjen sa liste. Proveri internet i pokušaj ponovo.</string>
+    <string name="library_find_movies">Pronađi filmove</string>
+    <string name="library_sort_added">Po datumu dodavanja</string>
+    <string name="library_sort_watched">Po datumu gledanja</string>
+    <string name="library_sort_my_rating">Po mojoj oceni</string>
+    <string name="library_sort_tmdb_rating">Po TMDB oceni</string>
+    <string name="library_sort_title">Po nazivu</string>
+    <string name="library_sort_year">Po godini</string>
+    <string name="library_min_rating_chip">Moja %1$d+</string>
+    <string name="library_tmdb_rating">TMDB %1$s</string>
+    <string name="library_my_rating">Moja ocena %1$s/10</string>
+    <string name="library_not_rated">Bez ocene</string>
+    <string name="library_rating_edit_content_description">Izmeni ocenu</string>
+
+    <!-- UX dorada - Pretraga -->
+    <string name="search_no_results_title">Nema rezultata za \"%1$s\"</string>
+    <string name="search_no_results_message">Proveri naziv ili probaj pretragu slikom.</string>
+    <string name="search_recent_clear_all">Obriši sve</string>
+    <string name="search_scan_signin_dialog_title">Potrebna je prijava</string>
+    <string name="search_scan_signin_dialog_message">Prepoznavanje filma sa slike radi samo za prijavljene korisnike. Prijava traje par sekundi preko Google naloga.</string>
+    <string name="search_image_cinema_mode_dialog_title">Pretraga slikom</string>
+    <string name="search_image_cinema_mode_dialog_message">Prepoznavanje filma sa slike radi u režimu \"Sve filmove\".</string>
+    <string name="search_image_cinema_mode_switch">Pređi na Sve filmove</string>
+    <string name="search_camera_permission_denied">Bez dozvole za kameru i dalje možeš da izabereš sliku iz galerije.</string>
+    <string name="search_camera_settings_dialog_title">Kamera je isključena</string>
+    <string name="search_camera_settings_dialog_message">Dozvola za kameru je odbijena. Uključi je u podešavanjima aplikacije da bi slikao poster ili ekran.</string>
+    <string name="search_camera_settings_open">Podešavanja</string>
 </resources>

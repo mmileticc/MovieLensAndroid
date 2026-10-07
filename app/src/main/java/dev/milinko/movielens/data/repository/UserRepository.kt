@@ -19,6 +19,7 @@ import dev.milinko.movielens.data.remote.user.FriendInfo
 import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.data.remote.user.MovieSuggestion
 import dev.milinko.movielens.data.remote.user.MovieNightResponse
+import dev.milinko.movielens.data.remote.movie.Genre
 import dev.milinko.movielens.data.remote.movie.WatchlistItem
 import dev.milinko.movielens.data.remote.movie.HistoryItem
 import dev.milinko.movielens.util.safeApiCall
@@ -138,12 +139,28 @@ private fun Response<*>.parseErrorMessage(fallback: String): String {
     }
 }
 
+// Žanrovi watchlist/history stavki se u Room čuvaju kao JSON string (videti WatchlistEntity).
+private val genreListType = object : TypeToken<List<Genre>>() {}.type
+
+private fun List<Genre>?.toGenresJson(): String? = this?.let { Gson().toJson(it) }
+
+private fun String?.toGenres(): List<Genre>? = this?.let {
+    try {
+        Gson().fromJson<List<Genre>>(it, genreListType)
+    } catch (e: Exception) {
+        null
+    }
+}
+
 private fun WatchlistEntity.toDomain() = WatchlistItem(
     tmdbId = tmdbId,
     title = title,
     posterPath = posterPath,
     addedAt = addedAt,
-    priority = priority
+    priority = priority,
+    genres = genresJson.toGenres(),
+    releaseYear = releaseYear,
+    voteAverage = voteAverage
 )
 
 private fun WatchlistItem.toEntity(userId: String) = WatchlistEntity(
@@ -152,7 +169,10 @@ private fun WatchlistItem.toEntity(userId: String) = WatchlistEntity(
     title = title,
     posterPath = posterPath,
     addedAt = addedAt,
-    priority = priority
+    priority = priority,
+    genresJson = genres.toGenresJson(),
+    releaseYear = releaseYear,
+    voteAverage = voteAverage
 )
 
 private fun HistoryEntity.toDomain() = HistoryItem(
@@ -162,7 +182,10 @@ private fun HistoryEntity.toDomain() = HistoryItem(
     userRating = userRating,
     review = review,
     watchedAt = watchedAt,
-    duration = duration
+    duration = duration,
+    genres = genresJson.toGenres(),
+    releaseYear = releaseYear,
+    voteAverage = voteAverage
 )
 
 private fun HistoryItem.toEntity(userId: String) = HistoryEntity(
@@ -173,7 +196,10 @@ private fun HistoryItem.toEntity(userId: String) = HistoryEntity(
     userRating = userRating,
     review = review,
     watchedAt = watchedAt,
-    duration = duration
+    duration = duration,
+    genresJson = genres.toGenresJson(),
+    releaseYear = releaseYear,
+    voteAverage = voteAverage
 )
 
 @Singleton
