@@ -38,6 +38,9 @@ data class MovieDetailUiState(
     // samo vraća vidljivi broj na COMMENTS_PAGE_SIZE, bez brisanja već učitanih iz memorije.
     val comments: List<MovieComment> = emptyList(),
     val commentsVisibleCount: Int = 0,
+    // Tekst komentara koji server nije prihvatio - ekran ga vraća u polje i javlja poruku
+    // (optimistična objava, videti postComment).
+    val failedCommentText: String? = null,
     val commentsHasMoreOnServer: Boolean = false,
     val isLoadingComments: Boolean = false,
     val isLoadingMoreComments: Boolean = false,
@@ -118,7 +121,7 @@ class MovieDetailViewModel @Inject constructor(
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri učitavanju filma")
+                        error = dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_load_movie)
                     )
                 }
 
@@ -315,28 +318,64 @@ class MovieDetailViewModel @Inject constructor(
      * pokrenut, false ako korisnik nije ulogovan ili je tekst prazan.
      */
     fun postComment(tmdbId: Int, body: String): Boolean {
-        if (sessionManager.getUserId() == null) return false
+        val userId = sessionManager.getUserId() ?: return false
         val trimmed = body.trim()
         if (trimmed.isEmpty()) return false
+
+        // UX dorada (oktobar 2026): komentar se prikazuje ODMAH (privremeni, negativan id dok server
+        // ne dodeli pravi). Ranije se pojavljivao tek posle mreže, a pri grešci je tiho nestajao
+        // zajedno sa tekstom.
+        val tempId = nextTempCommentId--
+        val optimistic = MovieComment(
+            id = tempId,
+            userId = userId,
+            username = sessionManager.getUsername() ?: "",
+            avatarUrl = sessionManager.getAvatarUrl(),
+            body = trimmed,
+            createdAt = System.currentTimeMillis(),
+            isOwn = true
+        )
+        _uiState.value = _uiState.value.let { state ->
+            state.copy(
+                comments = listOf(optimistic) + state.comments,
+                commentsVisibleCount = state.commentsVisibleCount + 1,
+                failedCommentText = null
+            )
+        }
 
         viewModelScope.launch {
             movieRepository.addComment(tmdbId, trimmed)
                 .onSuccess { comment ->
-                    val state = _uiState.value
-                    _uiState.value = state.copy(
-                        comments = listOf(comment) + state.comments,
-                        commentsVisibleCount = state.commentsVisibleCount + 1
-                    )
+                    _uiState.value = _uiState.value.let { state ->
+                        state.copy(comments = state.comments.map { if (it.id == tempId) comment else it })
+                    }
                 }
                 .onFailure { e ->
-                    Log.w("MovieDetailViewModel", "postComment nije uspeo (tiho, ne prikazuje se korisniku): ${e.message}")
+                    Log.w("MovieDetailViewModel", "postComment nije uspeo, vraćam tekst u polje: ${e.message}")
+                    _uiState.value = _uiState.value.let { state ->
+                        state.copy(
+                            comments = state.comments.filterNot { it.id == tempId },
+                            commentsVisibleCount = (state.commentsVisibleCount - 1).coerceAtLeast(0),
+                            failedCommentText = trimmed
+                        )
+                    }
                 }
         }
         return true
     }
 
+    /** Ekran je vratio neuspeli tekst u polje i prikazao poruku. */
+    fun consumeFailedComment() {
+        _uiState.value = _uiState.value.copy(failedCommentText = null)
+    }
+
+    // Privremeni (lokalni) id-jevi optimističnih komentara - negativni da se ne sudare sa pravim.
+    private var nextTempCommentId = -1
+
     /** Briše sopstveni komentar (optimistički, uz rollback ako mreža odbije). */
     fun deleteComment(commentId: Int) {
+        // Komentar još nije stigao do servera (privremeni id) - nema šta da se briše tamo.
+        if (commentId < 0) return
         val state = _uiState.value
         val index = state.comments.indexOfFirst { it.id == commentId }
         if (index == -1) return
@@ -365,6 +404,7 @@ class MovieDetailViewModel @Inject constructor(
      * su nezavisni resursi, za razliku od historyJob/watchlistJob slučaja.
      */
     fun toggleCommentLike(commentId: Int) {
+        if (commentId < 0) return // privremeni komentar, još nije na serveru
         val state = _uiState.value
         val comment = state.comments.firstOrNull { it.id == commentId } ?: return
         val optimisticLiked = !comment.likedByMe

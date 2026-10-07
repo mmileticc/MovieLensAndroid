@@ -38,6 +38,8 @@ private data class LibraryRawState(
     // Stavke uklonjene sa liste za gledanje koje čekaju da istekne "Poništi" snackbar - sakrivene
     // iz prikaza, ali se mrežni poziv šalje tek kad korisnik ne poništi (videti requestRemove).
     val pendingRemovalIds: Set<Int> = emptySet(),
+    // Isto za tab "Odgledano" (uklanjanje briše i ocenu - isti red na backendu).
+    val pendingHistoryRemovalIds: Set<Int> = emptySet(),
     val query: String = "",
     val selectedGenreIds: Set<Int> = emptySet(),
     val watchlistSort: WatchlistSort = WatchlistSort.ADDED,
@@ -72,6 +74,8 @@ data class LibraryUiState(
 sealed class LibraryEvent {
     /** Prikaži "Uklonjeno · Poništi" snackbar za ovu stavku. */
     data class WatchlistItemRemoved(val tmdbId: Int, val title: String) : LibraryEvent()
+    /** Prikaži "Uklonjeno iz odgledanih · Poništi" snackbar. */
+    data class HistoryItemRemoved(val tmdbId: Int, val title: String) : LibraryEvent()
     data class Message(@StringRes val messageRes: Int) : LibraryEvent()
 }
 
@@ -178,7 +182,7 @@ class LibraryViewModel @Inject constructor(
                     // tad je ekran nije čitao). Kad keš postoji, lista ostaje vidljiva ispod poruke -
                     // korisnik zna da gleda možda zastarele podatke i može da pokuša ponovo.
                     error = firstException?.let { e ->
-                        dev.milinko.movielens.util.friendlyMessage(e, "Biblioteka trenutno ne može da se osveži")
+                        dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_library_refresh)
                     }
                 )
             }
@@ -263,9 +267,39 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    // --- Uklanjanje iz "Odgledano", sa "Poništi" (isti mehanizam kao lista za gledanje) ---
+
+    private val historyRemovalJobs = mutableMapOf<Int, Job>()
+
+    fun requestRemoveFromHistory(item: HistoryItem) {
+        raw.update { it.copy(pendingHistoryRemovalIds = it.pendingHistoryRemovalIds + item.tmdbId) }
+        _events.tryEmit(LibraryEvent.HistoryItemRemoved(item.tmdbId, item.title))
+    }
+
+    fun undoRemoveFromHistory(tmdbId: Int) {
+        if (historyRemovalJobs.containsKey(tmdbId)) return
+        raw.update { it.copy(pendingHistoryRemovalIds = it.pendingHistoryRemovalIds - tmdbId) }
+    }
+
+    fun commitRemoveFromHistory(tmdbId: Int) {
+        val userId = sessionManager.getUserId() ?: return
+        if (tmdbId !in raw.value.pendingHistoryRemovalIds || historyRemovalJobs.containsKey(tmdbId)) return
+
+        historyRemovalJobs[tmdbId] = viewModelScope.launch {
+            userRepository.removeFromHistory(userId, tmdbId)
+                .onFailure { e ->
+                    Log.w("LibraryViewModel", "removeFromHistory nije uspeo: ${e.message}")
+                    _events.tryEmit(LibraryEvent.Message(R.string.library_remove_failed))
+                }
+            raw.update { it.copy(pendingHistoryRemovalIds = it.pendingHistoryRemovalIds - tmdbId) }
+            historyRemovalJobs.remove(tmdbId)
+        }
+    }
+
     /** Korisnik napušta ekran pre isteka snackbar-a - uklanjanje koje nije poništeno se izvršava. */
     fun commitAllPendingRemovals() {
         raw.value.pendingRemovalIds.forEach { commitRemove(it) }
+        raw.value.pendingHistoryRemovalIds.forEach { commitRemoveFromHistory(it) }
     }
 
     // --- Izvođenje UI stanja ---
@@ -288,7 +322,8 @@ class LibraryViewModel @Inject constructor(
                 }
             }
 
-        val filteredHistory = history
+        val visibleHistory = history.filter { it.tmdbId !in pendingHistoryRemovalIds }
+        val filteredHistory = visibleHistory
             .filter { matches(it.title, it.genres) }
             .filter { item -> minMyRating == null || item.userRating >= minMyRating }
             .let { list ->
@@ -300,7 +335,7 @@ class LibraryViewModel @Inject constructor(
                 }
             }
 
-        val availableGenres = (visibleWatchlist.flatMap { it.genres.orEmpty() } + history.flatMap { it.genres.orEmpty() })
+        val availableGenres = (visibleWatchlist.flatMap { it.genres.orEmpty() } + visibleHistory.flatMap { it.genres.orEmpty() })
             .distinctBy { it.id }
             .sortedBy { it.name }
 
@@ -308,7 +343,7 @@ class LibraryViewModel @Inject constructor(
             watchlist = filteredWatchlist,
             history = filteredHistory,
             watchlistTotal = visibleWatchlist.size,
-            historyTotal = history.size,
+            historyTotal = visibleHistory.size,
             availableGenres = availableGenres,
             query = query,
             selectedGenreIds = selectedGenreIds,

@@ -1,5 +1,6 @@
 package dev.milinko.movielens
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,6 +13,7 @@ import dev.milinko.movielens.data.pref.ThemePreferences
 import dev.milinko.movielens.navigation.MovieLensNavHost
 import dev.milinko.movielens.navigation.Screen
 import dev.milinko.movielens.ui.theme.MovieLensTheme
+import dev.milinko.movielens.util.AppLocale
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -21,6 +23,12 @@ class MainActivity : ComponentActivity() {
     // pri pokretanju aktivnosti (videti ThemePreferences.kt).
     @Inject
     lateinit var themePreferences: ThemePreferences
+
+    // Jezik aplikacije (srpski/engleski) - ceo UI ove aktivnosti čita resurse iz ovog konteksta.
+    // Promena jezika u Podešavanjima radi recreate() aktivnosti (videti AppLocale).
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocale.wrap(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

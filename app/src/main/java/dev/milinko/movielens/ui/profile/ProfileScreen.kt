@@ -2,6 +2,7 @@ package dev.milinko.movielens.ui.profile
 
 import android.annotation.SuppressLint
 import android.widget.Toast
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -46,6 +47,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
@@ -71,6 +75,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.milinko.movielens.R
+import dev.milinko.movielens.util.AppLanguageOption
+import dev.milinko.movielens.util.AppLocale
 import dev.milinko.movielens.util.DevSettings
 import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.data.remote.user.FriendInfo
@@ -94,6 +100,9 @@ import dev.milinko.movielens.ui.components.SignInRequiredState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+// Isto ograničenje kao BIO_MAX_LENGTH na backendu (db/UsersTable.kt).
+private const val BIO_MAX_LENGTH = 160
 
 @Composable
 fun ProfileScreen(
@@ -402,7 +411,8 @@ private fun SettingsTabContent(
             EditableProfileHeader(
                 uiState = uiState,
                 sessionUser = sessionUser,
-                onSave = { username, bio, avatar -> viewModel.updateProfile(username, bio, avatar) }
+                onSave = { username, bio, avatar -> viewModel.updateProfile(username, bio, avatar) },
+                onDiscardFailedDraft = viewModel::discardFailedProfileDraft
             )
         }
         if (uiState.tasteProfile.isNotEmpty()) {
@@ -694,7 +704,8 @@ private fun StatItem(value: String, label: String) {
 private fun EditableProfileHeader(
     uiState: ProfileUiState,
     sessionUser: SessionUserInfo?,
-    onSave: (username: String, bio: String?, newAvatarDataUri: String?) -> Unit
+    onSave: (username: String, bio: String?, newAvatarDataUri: String?) -> Unit,
+    onDiscardFailedDraft: () -> Unit
 ) {
     val fullProfile = uiState.userProfile
     val rawDefaultUsername = fullProfile?.username ?: sessionUser?.username ?: ""
@@ -706,12 +717,22 @@ private fun EditableProfileHeader(
     val displayEmail = fullProfile?.email ?: sessionUser?.email
 
     var isEditing by remember { mutableStateOf(false) }
-    var username by remember(fullProfile?.userId, isEditing) { mutableStateOf(initialUsername) }
-    var bio by remember(fullProfile?.userId, isEditing) { mutableStateOf(initialBio) }
+    var showDiscardConfirm by remember { mutableStateOf(false) }
+    // Unos koji server nije prihvatio (optimistično čuvanje, videti ProfileViewModel.updateProfile) -
+    // forma se sama ponovo otvara sa njim umesto sa starim vrednostima.
+    val failedDraft = uiState.failedProfileDraft
+    var username by remember(fullProfile?.userId, isEditing, failedDraft) {
+        mutableStateOf(failedDraft?.username ?: initialUsername)
+    }
+    var bio by remember(fullProfile?.userId, isEditing, failedDraft) {
+        mutableStateOf(failedDraft?.let { it.bio.orEmpty() } ?: initialBio)
+    }
 
     // Slika izabrana OVOG puta (data URI, već kompresovana) - null dok korisnik ne izabere novu
     // sliku, u kom slučaju se šalje trenutna (initialAvatar) nepromenjena (videti ViewModel.updateProfile).
-    var pickedAvatarDataUri by remember(fullProfile?.userId, isEditing) { mutableStateOf<String?>(null) }
+    var pickedAvatarDataUri by remember(fullProfile?.userId, isEditing, failedDraft) {
+        mutableStateOf(failedDraft?.avatarDataUri)
+    }
     var isCompressingAvatar by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -736,14 +757,10 @@ private fun EditableProfileHeader(
         }
     )
 
-    // Vrati se u read-only prikaz čim se čuvanje uspešno završi (bez greške) - korisnik ne mora
-    // sam da zatvara edit mod posle uspešnog Sačuvaj klika.
-    var wasSaving by remember { mutableStateOf(false) }
-    LaunchedEffect(uiState.isSavingProfile) {
-        if (wasSaving && !uiState.isSavingProfile && uiState.editProfileError == null) {
-            isEditing = false
-        }
-        wasSaving = uiState.isSavingProfile
+    // Optimistično čuvanje: forma se zatvara odmah na "Sačuvaj" (videti dugme ispod); ako server
+    // posle odbije izmenu, ovde se ponovo otvara sa korisnikovim unosom i porukom o grešci.
+    LaunchedEffect(failedDraft) {
+        if (failedDraft != null) isEditing = true
     }
 
     Column(
@@ -804,23 +821,50 @@ private fun EditableProfileHeader(
                 }
             }
 
+            // UX dorada (oktobar 2026): provera korisničkog imena dok se kuca, sa konkretnim razlogom
+            // ispod polja (ranije tek posle slanja na server, kao jedna opšta poruka ispod forme).
+            val usernameProblem = dev.milinko.movielens.util.validateUsername(username.trim())
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text(stringResource(R.string.profile_username_label)) },
-                supportingText = { Text(stringResource(R.string.profile_username_helper)) },
+                isError = usernameProblem != null,
+                supportingText = {
+                    Text(
+                        stringResource(
+                            when (usernameProblem) {
+                                null -> R.string.profile_username_helper
+                                dev.milinko.movielens.util.UsernameProblem.TOO_SHORT -> R.string.profile_username_too_short
+                                dev.milinko.movielens.util.UsernameProblem.TOO_LONG -> R.string.profile_username_too_long
+                                dev.milinko.movielens.util.UsernameProblem.INVALID_CHARACTERS -> R.string.profile_username_invalid_chars
+                            }
+                        )
+                    )
+                },
                 singleLine = true
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // take(BIO_MAX_LENGTH) umesto odbacivanja celog unosa - i nalepljen duži tekst se skrati,
+            // a brojač postaje crven na maksimumu (ranije je kucanje samo tiho prestajalo da radi).
+            val bioAtLimit = bio.length >= BIO_MAX_LENGTH
             OutlinedTextField(
                 value = bio,
-                onValueChange = { if (it.length <= 160) bio = it },
+                onValueChange = { bio = it.take(BIO_MAX_LENGTH) },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text(stringResource(R.string.profile_bio_label)) },
-                supportingText = { Text(stringResource(R.string.profile_bio_helper, bio.length)) },
+                supportingText = {
+                    Text(
+                        text = if (bioAtLimit) {
+                            stringResource(R.string.profile_bio_limit_reached, BIO_MAX_LENGTH)
+                        } else {
+                            stringResource(R.string.profile_bio_helper, bio.length)
+                        },
+                        color = if (bioAtLimit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
                 minLines = 2,
                 maxLines = 4
             )
@@ -842,38 +886,69 @@ private fun EditableProfileHeader(
             ) {
                 AppButton(
                     text = stringResource(R.string.profile_cancel_edit),
-                    onClick = { isEditing = false },
+                    onClick = {
+                        // Nesačuvane izmene (uklj. izabranu sliku) se ne bacaju bez pitanja.
+                        val hasChanges = username != initialUsername || bio != initialBio || pickedAvatarDataUri != null
+                        if (hasChanges) {
+                            showDiscardConfirm = true
+                        } else {
+                            onDiscardFailedDraft()
+                            isEditing = false
+                        }
+                    },
                     variant = AppButtonVariant.Secondary,
                     modifier = Modifier.weight(1f)
                 )
                 AppButton(
-                    text = stringResource(
-                        if (uiState.isSavingProfile) R.string.profile_saving else R.string.profile_save_changes
-                    ),
-                    onClick = { onSave(username.trim(), bio.trim().ifBlank { null }, pickedAvatarDataUri) },
-                    enabled = !uiState.isSavingProfile && !isCompressingAvatar && username.isNotBlank(),
+                    text = stringResource(R.string.profile_save_changes),
+                    onClick = {
+                        onSave(username.trim(), bio.trim().ifBlank { null }, pickedAvatarDataUri)
+                        isEditing = false
+                    },
+                    enabled = !isCompressingAvatar && usernameProblem == null,
                     modifier = Modifier.weight(1f)
+                )
+            }
+
+            if (showDiscardConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showDiscardConfirm = false },
+                    title = { Text(stringResource(R.string.profile_discard_dialog_title)) },
+                    text = { Text(stringResource(R.string.profile_discard_dialog_message)) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showDiscardConfirm = false
+                            onDiscardFailedDraft()
+                            isEditing = false
+                        }) {
+                            Text(stringResource(R.string.profile_discard_confirm), color = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDiscardConfirm = false }) {
+                            Text(stringResource(R.string.profile_discard_keep_editing))
+                        }
+                    }
                 )
             }
         } else {
             BorderedAvatar(avatarUrl = initialAvatar, fallbackLabel = initialUsername)
 
             Spacer(modifier = Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = fullProfile?.username?.takeIf { it.isNotBlank() }
+                    ?: initialUsername.ifBlank { null }
+                    ?: stringResource(R.string.profile_default_username),
+                style = MaterialTheme.typography.titleLarge
+            )
+            // Izmena je već prikazana (optimistično) - ovo samo diskretno kaže da sinhronizacija
+            // sa serverom još traje.
+            if (uiState.isSavingProfile) {
                 Text(
-                    text = fullProfile?.username?.takeIf { it.isNotBlank() }
-                        ?: initialUsername.ifBlank { null }
-                        ?: stringResource(R.string.profile_default_username),
-                    style = MaterialTheme.typography.titleLarge
+                    text = stringResource(R.string.profile_saving),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                IconButton(onClick = { isEditing = true }, modifier = Modifier.size(28.dp)) {
-                    Icon(
-                        Icons.Default.Edit,
-                        contentDescription = stringResource(R.string.profile_edit_section_title),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
             }
             displayEmail?.takeIf { it.isNotBlank() }?.let {
                 Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -909,9 +984,60 @@ private fun EditableProfileHeader(
                     )
                 }
             }
+
+            // UX dorada (oktobar 2026): jasno dugme umesto sitne olovke (18dp ikonica u 28dp meti)
+            // pored imena, koju je bilo teško i primetiti i pogoditi.
+            Spacer(modifier = Modifier.height(16.dp))
+            AppButton(
+                text = stringResource(R.string.profile_edit_section_title),
+                onClick = { isEditing = true },
+                variant = AppButtonVariant.Secondary,
+                leadingIcon = Icons.Default.Edit
+            )
         }
 
         HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
+    }
+}
+
+/**
+ * Izbor jezika aplikacije (oktobar 2026): Sistem (prati jezik telefona) / Srpski / English.
+ * Promena se čuva u AppLocale i odmah primenjuje ponovnim kreiranjem aktivnosti. Nazivi jezika
+ * su namerno uvek na svom jeziku ("Srpski", "English") - da ih korisnik prepozna i kad trenutni
+ * jezik aplikacije ne razume.
+ */
+@Composable
+private fun LanguageSetting() {
+    val context = LocalContext.current
+    val activity = LocalActivity.current
+    val selected = remember { AppLocale.getOption(context) }
+    val options = listOf(
+        AppLanguageOption.SYSTEM to stringResource(R.string.profile_language_system),
+        AppLanguageOption.SERBIAN to "Srpski",
+        AppLanguageOption.ENGLISH to "English"
+    )
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(stringResource(R.string.profile_language))
+            Spacer(modifier = Modifier.height(8.dp))
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                options.forEachIndexed { index, (option, label) ->
+                    SegmentedButton(
+                        selected = selected == option,
+                        onClick = {
+                            if (option != selected) {
+                                AppLocale.setOption(context, option)
+                                activity?.recreate()
+                            }
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                        icon = {}
+                    ) {
+                        Text(label, maxLines = 1)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -950,6 +1076,9 @@ private fun SettingsSection(
                 Switch(checked = isDarkMode, onCheckedChange = { viewModel.toggleDarkMode() })
             }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        LanguageSetting()
 
         Spacer(modifier = Modifier.height(16.dp))
         Text(

@@ -42,7 +42,7 @@ class ActorDetailViewModel @Inject constructor(
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = friendlyMessage(e, "Greška pri učitavanju glumca")
+                        error = friendlyMessage(e, dev.milinko.movielens.R.string.error_load_person)
                     )
                 }
         }

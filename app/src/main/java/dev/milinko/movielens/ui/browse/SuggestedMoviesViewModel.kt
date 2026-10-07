@@ -110,7 +110,7 @@ class SuggestedMoviesViewModel @Inject constructor(
                         it.copy(
                             isLoading = false,
                             isRefreshing = false,
-                            error = friendlyMessage(e, "Predlozi trenutno nisu dostupni")
+                            error = friendlyMessage(e, dev.milinko.movielens.R.string.error_suggestions_unavailable)
                         )
                     }
                 }

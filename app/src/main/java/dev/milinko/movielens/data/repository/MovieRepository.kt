@@ -71,7 +71,7 @@ class MovieRepositoryImpl @Inject constructor(
     override suspend fun getMovieDetail(tmdbId: Int, lat: Double?, lon: Double?): Result<MovieDetail> = safeApiCall {
         val response = movieApiService.getMovieDetail(tmdbId, lat, lon)
         if (response.isSuccessful) {
-            response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+            response.body() ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
         } else {
             throw HttpException(response)
         }
@@ -141,7 +141,7 @@ class MovieRepositoryImpl @Inject constructor(
     override suspend fun getPersonDetail(personId: Int): Result<PersonDetail> = safeApiCall {
         val response = movieApiService.getPersonDetail(personId)
         if (response.isSuccessful) {
-            response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+            response.body() ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
         } else {
             throw HttpException(response)
         }
@@ -159,7 +159,7 @@ class MovieRepositoryImpl @Inject constructor(
     override suspend fun addComment(tmdbId: Int, body: String): Result<MovieComment> = safeApiCall {
         val response = movieApiService.addComment(tmdbId, AddCommentRequest(body))
         if (response.isSuccessful) {
-            response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+            response.body() ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
         } else {
             throw HttpException(response)
         }
@@ -177,7 +177,7 @@ class MovieRepositoryImpl @Inject constructor(
     override suspend fun toggleCommentLike(commentId: Int): Result<LikeCommentResponse> = safeApiCall {
         val response = movieApiService.toggleCommentLike(commentId)
         if (response.isSuccessful) {
-            response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+            response.body() ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
         } else {
             throw HttpException(response)
         }

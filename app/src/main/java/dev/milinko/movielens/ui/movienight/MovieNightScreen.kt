@@ -1,36 +1,34 @@
 package dev.milinko.movielens.ui.movienight
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -41,14 +39,17 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
@@ -61,14 +62,14 @@ import dev.milinko.movielens.ui.components.ErrorCard
 import dev.milinko.movielens.ui.theme.MlPosterCornerRadius
 
 /**
- * Faza 7 redizajna (MOVIELENS_DESIGN_PLAN.md 2.7). Dokument doslovno traži da
- * `MovieSuggestionRow` postane `MoviePosterCard` - namerno odstupanje: `MoviePosterCard` je
- * vertikalna kartica (110x150 poster + naslov ispod), napravljena za horizontalne redove
- * (Home). Ovaj ekran je skrolujuća VERTIKALNA lista predloga sa dodatnim tekstom
- * (matchReason, dva match-procenta) koji ne staje ispod uskog vertikalnog postera bez da
- * kartica postane nezgrapno visoka. Zadržan je red-layout (poster levo, tekst desno), a
- * "lepši prikaz" iz dokumenta je ispunjen zamenom plain teksta "Ti: X% • Prijatelj: Y%" pravim
- * dvobojnim mini trakama napretka (accentPrimary za "Ti", accentSecondary za "Prijatelj").
+ * Predlozi za zajedničko gledanje sa prijateljem (Faza 7 redizajna, MOVIELENS_DESIGN_PLAN.md 2.7).
+ *
+ * UX dorada (oktobar 2026):
+ * - naslov sa imenom prijatelja i zaglavlje (poklapanje ukusa, "Ti / Prijatelj" za glavni
+ *   zajednički žanr) JEDNOM na vrhu - ranije su iste trake bile ponovljene u svakom redu;
+ * - zajednički žanrovi kao filter čipovi;
+ * - svaki predlog ima godinu, TMDB ocenu i razlog po filmu;
+ * - beskonačan skrol (strane se dodaju) umesto "Osveži" koje je menjalo celu listu.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,10 +80,6 @@ fun MovieNightScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    LaunchedEffect(Unit) {
-        viewModel.loadSuggestions()
-    }
-
     Scaffold(
         topBar = {
             Row(
@@ -90,51 +87,25 @@ fun MovieNightScreen(
                     .fillMaxWidth()
                     .statusBarsPadding()
                     .padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onNavigateBack) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.action_back))
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
                 Text(
-                    text = stringResource(R.string.movie_night_top_bar_title),
+                    text = uiState.friendUsername?.let { stringResource(R.string.movie_night_title_with_friend, it) }
+                        ?: stringResource(R.string.movie_night_top_bar_title),
                     style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                if (uiState.isRefreshing) {
-                    // Rotirajuća refresh ikonica dok se predlozi osvežavaju - vizuelna potvrda
-                    // da je akcija u toku, umesto da ikonica samo nestane i vrati se.
-                    val infiniteTransition = rememberInfiniteTransition(label = "refresh_rotation")
-                    val rotation by infiniteTransition.animateFloat(
-                        initialValue = 0f,
-                        targetValue = 360f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(durationMillis = 900, easing = LinearEasing)
-                        ),
-                        label = "refresh_rotation_value"
-                    )
-                    Icon(
-                        Icons.Default.Refresh,
-                        contentDescription = stringResource(R.string.movie_night_refresh_content_description),
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .size(24.dp)
-                            .rotate(rotation)
-                    )
-                } else {
-                    IconButton(onClick = { viewModel.refreshSuggestions() }, enabled = !uiState.isLoading) {
-                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.movie_night_refresh_content_description))
-                    }
-                }
             }
         }
     ) { paddingValues ->
-        // Swipe-down radi isto što i "Osveži predloge" dugme u top bar-u (rotira na sledeću TMDB
-        // stranicu, videti MovieNightViewModel.refreshSuggestions) - ista isRefreshing zastavica
-        // pokreće oba, samo dva različita "okidača" iste akcije.
         PullToRefreshBox(
             isRefreshing = uiState.isRefreshing,
-            onRefresh = { viewModel.refreshSuggestions() },
+            onRefresh = viewModel::refresh,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
@@ -145,7 +116,7 @@ fun MovieNightScreen(
                     .background(MaterialTheme.colorScheme.background)
             ) {
                 when {
-                    uiState.isLoading -> {
+                    uiState.isLoading && uiState.totalLoaded == 0 -> {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     }
                     // Greška i prazno stanje su u skrolujućoj koloni - bez toga pull-to-refresh nije
@@ -164,7 +135,7 @@ fun MovieNightScreen(
                             )
                         }
                     }
-                    uiState.suggestions.isEmpty() -> {
+                    uiState.totalLoaded == 0 -> {
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -175,18 +146,132 @@ fun MovieNightScreen(
                             EmptyStateCard(
                                 title = stringResource(R.string.movie_night_empty_state),
                                 actionText = stringResource(R.string.state_retry),
-                                onAction = viewModel::refreshSuggestions
+                                onAction = viewModel::refresh
                             )
                         }
                     }
-                    else -> {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(uiState.suggestions, key = { it.tmdbId }) { suggestion ->
-                                MovieSuggestionRow(suggestion = suggestion, onClick = { onNavigateToDetail(suggestion.tmdbId) })
-                            }
-                        }
+                    else -> SuggestionsList(
+                        uiState = uiState,
+                        onGenreSelected = viewModel::onGenreSelected,
+                        onLoadMore = viewModel::loadMore,
+                        onNavigateToDetail = onNavigateToDetail
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SuggestionsList(
+    uiState: MovieNightUiState,
+    onGenreSelected: (Int) -> Unit,
+    onLoadMore: () -> Unit,
+    onNavigateToDetail: (Int) -> Unit
+) {
+    val listState = rememberLazyListState()
+    // Isti obrazac beskonačnog skrola kao HomeScreen/BrowseMovieList.
+    val shouldLoadMore by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            info.totalItemsCount > 0 && last >= info.totalItemsCount - 3
+        }
+    }
+    LaunchedEffect(shouldLoadMore) {
+        if (shouldLoadMore) onLoadMore()
+    }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 16.dp)
+    ) {
+        item { MatchHeader(uiState) }
+
+        if (uiState.sharedGenres.isNotEmpty()) {
+            item {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                ) {
+                    items(uiState.sharedGenres, key = { it.id }) { genre ->
+                        FilterChip(
+                            selected = uiState.selectedGenreId == genre.id,
+                            onClick = { onGenreSelected(genre.id) },
+                            label = { Text(genre.name) }
+                        )
                     }
                 }
+            }
+        }
+
+        if (uiState.suggestions.isEmpty()) {
+            item {
+                EmptyStateCard(
+                    title = stringResource(R.string.browse_empty_filtered),
+                    description = stringResource(R.string.movie_night_filter_empty_hint),
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+        } else {
+            items(uiState.suggestions, key = { it.tmdbId }) { suggestion ->
+                MovieSuggestionRow(suggestion = suggestion, onClick = { onNavigateToDetail(suggestion.tmdbId) })
+            }
+        }
+
+        if (uiState.isLoadingMore) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
+            }
+        }
+    }
+}
+
+/** Zaglavlje: ukupno poklapanje ukusa + "Ti / Prijatelj" za glavni zajednički žanr (jednom, ne po redu). */
+@Composable
+private fun MatchHeader(uiState: MovieNightUiState) {
+    val primaryGenre = uiState.sharedGenres.firstOrNull()
+    if (uiState.matchScore == null && primaryGenre == null) return
+
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            uiState.matchScore?.let { score ->
+                Text(
+                    text = stringResource(R.string.movie_night_match_score, score.toInt()),
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+            if (primaryGenre != null && uiState.yourMatch != null && uiState.theirMatch != null) {
+                Text(
+                    text = stringResource(R.string.movie_night_genre_affinity, primaryGenre.name),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                )
+                MatchBar(
+                    label = stringResource(R.string.movie_night_your_match_label),
+                    percent = uiState.yourMatch,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                MatchBar(
+                    label = uiState.friendUsername ?: stringResource(R.string.movie_night_friend_match_label),
+                    percent = uiState.theirMatch,
+                    color = MaterialTheme.colorScheme.secondary
+                )
             }
         }
     }
@@ -208,18 +293,16 @@ private fun MovieSuggestionRow(suggestion: MovieSuggestion, onClick: () -> Unit)
         ) {
             Box(
                 modifier = Modifier
-                    .width(60.dp)
-                    .height(90.dp)
+                    .width(70.dp)
+                    .height(105.dp)
                     .clip(RoundedCornerShape(MlPosterCornerRadius))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 if (suggestion.posterPath != null) {
-                    // Lesson learned od Faze 2 (MoviePosterCard/MovieListRow bug) - AsyncImage mora
-                    // imati fillMaxSize() PRE clip() unutar sized Box-a, inače se renderuje sitno
-                    // i pinovano gore levo.
+                    // AsyncImage mora imati fillMaxSize() PRE clip() unutar sized Box-a (Faza 2 bug).
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data(tmdbPosterUrl(suggestion.posterPath, "w92"))
+                            .data(tmdbPosterUrl(suggestion.posterPath, "w185"))
                             .crossfade(true)
                             .build(),
                         contentDescription = suggestion.title,
@@ -236,31 +319,53 @@ private fun MovieSuggestionRow(suggestion: MovieSuggestion, onClick: () -> Unit)
                     .weight(1f)
                     .align(Alignment.CenterVertically)
             ) {
-                Text(suggestion.title, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = suggestion.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                YearAndRating(suggestion)
                 Text(
                     text = suggestion.matchReason,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                MatchBar(
-                    label = stringResource(R.string.movie_night_your_match_label),
-                    percent = suggestion.scores.yourMatch,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                MatchBar(
-                    label = stringResource(R.string.movie_night_friend_match_label),
-                    percent = suggestion.scores.theirMatch,
-                    color = MaterialTheme.colorScheme.secondary
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 6.dp)
                 )
             }
         }
     }
 }
 
-/** Mini traka napretka za jedan match-procenat (Ti/Prijatelj) - zamenjuje plain "%1$d%%" tekst. */
+/** "★ 7,8 · 2024" - delovi koji nedostaju se preskaču. */
+@Composable
+private fun YearAndRating(suggestion: MovieSuggestion) {
+    val year = suggestion.releaseDate?.take(4)?.takeIf { it.isNotBlank() }
+    val rating = suggestion.voteAverage?.takeIf { it > 0 }
+        ?.let { String.format(LocalLocale.current.platformLocale, "%.1f", it) }
+    if (year == null && rating == null) return
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(top = 4.dp)
+    ) {
+        if (rating != null) {
+            Icon(
+                Icons.Default.Star,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+        }
+        Text(
+            text = listOfNotNull(rating, year).joinToString(" · "),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** Mini traka napretka za jedan match-procenat (Ti/Prijatelj). */
 @Composable
 private fun MatchBar(label: String, percent: Float, color: androidx.compose.ui.graphics.Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -268,7 +373,9 @@ private fun MatchBar(label: String, percent: Float, color: androidx.compose.ui.g
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(52.dp)
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(72.dp)
         )
         LinearProgressIndicator(
             progress = { (percent / 100f).coerceIn(0f, 1f) },

@@ -201,7 +201,7 @@ class SearchViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(cinemaCatalogError = null)
             movieRepository.getNowInCinemas().onFailure { e ->
                 _uiState.value = _uiState.value.copy(
-                    cinemaCatalogError = dev.milinko.movielens.util.friendlyMessage(e, "Repertoar bioskopa trenutno nije dostupan")
+                    cinemaCatalogError = dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_cinemas_unavailable)
                 )
             }.onSuccess { movies ->
                 _uiState.value = _uiState.value.copy(allCinemaMovies = movies)
@@ -264,7 +264,7 @@ class SearchViewModel @Inject constructor(
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         isSearchingCinemas = false,
-                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri pretrazi"),
+                        error = dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_search),
                         isSoftError = false
                     )
                 }
@@ -315,7 +315,7 @@ class SearchViewModel @Inject constructor(
             .onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     isSearching = false,
-                    error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri pretrazi"),
+                    error = dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_search),
                     isSoftError = false
                 )
             }
@@ -354,7 +354,7 @@ class SearchViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isAnalyzingImage = false,
-                    error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri analizi slike"),
+                    error = dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_image_analysis),
                     isSoftError = false
                 )
             }

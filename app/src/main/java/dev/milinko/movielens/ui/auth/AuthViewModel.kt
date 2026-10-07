@@ -83,7 +83,7 @@ class AuthViewModel @Inject constructor(
                     )
                     _uiState.value = AuthUiState.SignedIn(user)
                 } else {
-                    _uiState.value = AuthUiState.Error("Backend nije vratio token. Pokušaj ponovo.")
+                    _uiState.value = AuthUiState.Error(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_sign_in_no_token))
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -92,7 +92,7 @@ class AuthViewModel @Inject constructor(
                 // Response<T>, pa Retrofit ovde direktno baca IOException (nema konekcije/timeout)
                 // ili HttpException (5xx sa backenda) - bez friendlyMessage() korisnik bi na Sign
                 // In ekranu video sirov tehnički tekst poput "timeout" umesto razumljive poruke.
-                _uiState.value = AuthUiState.Error(friendlyMessage(e, "Prijava nije uspela. Pokušaj ponovo."))
+                _uiState.value = AuthUiState.Error(friendlyMessage(e, dev.milinko.movielens.R.string.error_sign_in_failed))
             }
         }
     }

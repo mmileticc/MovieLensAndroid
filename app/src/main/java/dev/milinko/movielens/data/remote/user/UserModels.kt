@@ -230,7 +230,15 @@ data class MovieSuggestion(
     @SerializedName("match_reason")
     val matchReason: String, // "Both rated 8+", "Common genre", etc.
     @SerializedName("scores")
-    val scores: SuggestionScores = SuggestionScores()
+    val scores: SuggestionScores = SuggestionScores(),
+    // UX dorada (oktobar 2026) - nullable iz istog Gson razloga kao MovieSearchResult.genreIds
+    // (stariji backend ih ne šalje).
+    @SerializedName("release_date")
+    val releaseDate: String? = null,
+    @SerializedName("vote_average")
+    val voteAverage: Double? = null,
+    @SerializedName("genre_ids")
+    val genreIds: List<Int>? = null
 )
 
 data class SuggestionScores(
@@ -250,6 +258,13 @@ data class MovieNightResponse(
     // koja je upravo vraćena. Videti MovieNightViewModel.refreshSuggestions - ranije se umesto
     // ovoga koristio izmišljen fiksan broj stranica (5), pogrešan za većinu parova žanrova.
     @SerializedName("has_more")
-    val hasMore: Boolean = false
+    val hasMore: Boolean = false,
+    // Zaglavlje Movie Night ekrana (isto za sve predloge) - nullable, videti MovieSuggestion.
+    @SerializedName("friend_username")
+    val friendUsername: String? = null,
+    @SerializedName("shared_genres")
+    val sharedGenres: List<dev.milinko.movielens.data.remote.movie.Genre>? = null,
+    @SerializedName("match_score")
+    val matchScore: Float? = null
 )
 

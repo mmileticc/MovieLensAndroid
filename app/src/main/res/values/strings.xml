@@ -341,4 +341,65 @@
     <string name="search_camera_settings_dialog_title">Kamera je isključena</string>
     <string name="search_camera_settings_dialog_message">Dozvola za kameru je odbijena. Uključi je u podešavanjima aplikacije da bi slikao poster ili ekran.</string>
     <string name="search_camera_settings_open">Podešavanja</string>
+
+    <!-- UX dorada 2 (oktobar 2026) - Movie Night -->
+    <string name="movie_night_title_with_friend">Ti i %1$s</string>
+    <string name="movie_night_match_score">Poklapanje ukusa: %1$d%%</string>
+    <string name="movie_night_genre_affinity">Koliko volite žanr %1$s</string>
+    <string name="movie_night_filter_empty_hint">Skroluj do kraja liste da se učita još predloga.</string>
+
+    <!-- UX dorada 2 - uređivanje profila -->
+    <string name="profile_username_too_short">Prekratko - najmanje 3 karaktera.</string>
+    <string name="profile_username_too_long">Predugo - najviše 30 karaktera.</string>
+    <string name="profile_username_invalid_chars">Dozvoljena su samo slova bez kvačica, brojevi, tačka i donja crta.</string>
+    <string name="profile_bio_limit_reached">Dostignut je maksimum od %1$d karaktera.</string>
+    <string name="profile_discard_dialog_title">Odbaciti izmene?</string>
+    <string name="profile_discard_dialog_message">Izmene profila koje nisu sačuvane biće izgubljene.</string>
+    <string name="profile_discard_confirm">Odbaci</string>
+    <string name="profile_discard_keep_editing">Nastavi uređivanje</string>
+
+    <!-- UX dorada 2 - stranica glumca -->
+    <string name="actor_sort_popularity">Popularnost</string>
+    <string name="actor_sort_newest">Najnovije</string>
+    <string name="actor_sort_oldest">Najstarije</string>
+    <string name="actor_sort_rating">Ocena</string>
+    <string name="actor_detail_date_with_age">%1$s (%2$d god.)</string>
+
+    <!-- UX dorada 2 - uklanjanje iz odgledanih -->
+    <string name="library_removed_from_history_snackbar">Uklonjeno iz odgledanih: %1$s</string>
+    <string name="library_remove_from_history_content_description">Ukloni iz odgledanih</string>
+
+    <!-- Optimistično čuvanje - komentar koji server nije prihvatio -->
+    <string name="movie_detail_comment_post_failed">Komentar nije objavljen. Tekst je vraćen u polje - pokušaj ponovo.</string>
+
+    <!-- Jezik aplikacije (Podešavanja) -->
+    <string name="profile_language">Jezik</string>
+    <string name="profile_language_system">Sistem</string>
+
+    <!-- Poruke grešaka (FriendlyError.kt i ViewModel-i) -->
+    <string name="error_network">Nema internet konekcije ili server ne odgovara. Proveri vezu i pokušaj ponovo.</string>
+    <string name="error_forbidden">Nemaš dozvolu za ovu akciju - probaj da se ponovo prijaviš.</string>
+    <string name="error_not_found">Traženi podatak nije pronađen.</string>
+    <string name="error_server">Server trenutno ima problema. Pokušaj ponovo za koji trenutak.</string>
+    <string name="error_empty_response">Server je vratio prazan odgovor.</string>
+    <string name="error_image_prepare">Ne mogu da pripremim sliku za slanje.</string>
+    <string name="error_image_analysis_server">Greška servera pri analizi slike.</string>
+    <string name="error_image_analysis">Analiza slike nije uspela.</string>
+    <string name="error_sign_in_failed">Prijava nije uspela. Pokušaj ponovo.</string>
+    <string name="error_sign_in_no_token">Server nije vratio token. Pokušaj ponovo.</string>
+    <string name="error_load_person">Podaci o glumcu trenutno nisu dostupni.</string>
+    <string name="error_load_movie">Podaci o filmu trenutno nisu dostupni.</string>
+    <string name="error_load_profile">Profil trenutno ne može da se učita.</string>
+    <string name="error_profile_unavailable">Profil trenutno ne može da se učita.</string>
+    <string name="error_profile_not_saved">Profil nije sačuvan.</string>
+    <string name="error_cinemas_unavailable">Repertoar bioskopa trenutno nije dostupan.</string>
+    <string name="error_suggestions_unavailable">Predlozi trenutno nisu dostupni.</string>
+    <string name="error_library_refresh">Biblioteka trenutno ne može da se osveži.</string>
+    <string name="error_user_search">Pretraga korisnika nije uspela.</string>
+    <string name="error_accept_request">Zahtev nije prihvaćen. Pokušaj ponovo.</string>
+    <string name="error_reject_request">Zahtev nije odbijen. Pokušaj ponovo.</string>
+    <string name="error_cancel_request">Zahtev nije otkazan. Pokušaj ponovo.</string>
+    <string name="error_send_request">Zahtev za prijateljstvo nije poslat. Pokušaj ponovo.</string>
+    <string name="error_remove_friend">Prijatelj nije uklonjen. Pokušaj ponovo.</string>
+    <string name="error_search">Pretraga nije uspela.</string>
 </resources>

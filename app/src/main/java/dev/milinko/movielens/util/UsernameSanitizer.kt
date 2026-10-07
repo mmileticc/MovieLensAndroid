@@ -18,6 +18,23 @@ import java.text.Normalizer
  * transformacije ne menjaju ništa što već zadovoljava regex, pa je bezbedno pozvati i na
  * vrednost učitanu sa backenda, ne samo na sirovo Google ime.
  */
+/** Isto pravilo kao `USERNAME_REGEX` na backendu (`db/UsersTable.kt`). */
+private val USERNAME_REGEX = Regex("^[A-Za-z0-9_.]{3,30}$")
+
+/** Razlog zašto korisničko ime nije validno (za poruku ispod polja), ili null ako je validno. */
+enum class UsernameProblem { TOO_SHORT, TOO_LONG, INVALID_CHARACTERS }
+
+/**
+ * Provera na uređaju, pre slanja - ranije se nevalidno ime otkrivalo tek posle mrežnog poziva,
+ * kao jedna opšta poruka ispod forme. Backend i dalje radi istu proveru (i jedinstvenost).
+ */
+fun validateUsername(username: String): UsernameProblem? = when {
+    USERNAME_REGEX.matches(username) -> null
+    username.length < 3 -> UsernameProblem.TOO_SHORT
+    username.length > 30 -> UsernameProblem.TOO_LONG
+    else -> UsernameProblem.INVALID_CHARACTERS
+}
+
 fun sanitizeUsername(raw: String): String {
     var s = raw.trim()
         .replace("đ", "dj")

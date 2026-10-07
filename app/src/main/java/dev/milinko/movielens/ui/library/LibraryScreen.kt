@@ -113,6 +113,19 @@ fun LibraryScreen(
                         viewModel.commitRemove(event.tmdbId)
                     }
                 }
+                is LibraryEvent.HistoryItemRemoved -> coroutineScope.launch {
+                    snackbarHostState.currentSnackbarData?.dismiss()
+                    val result = snackbarHostState.showSnackbar(
+                        message = context.getString(R.string.library_removed_from_history_snackbar, event.title),
+                        actionLabel = context.getString(R.string.library_undo),
+                        duration = SnackbarDuration.Short
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        viewModel.undoRemoveFromHistory(event.tmdbId)
+                    } else {
+                        viewModel.commitRemoveFromHistory(event.tmdbId)
+                    }
+                }
                 is LibraryEvent.Message -> coroutineScope.launch {
                     snackbarHostState.currentSnackbarData?.dismiss()
                     snackbarHostState.showSnackbar(context.getString(event.messageRes))
@@ -282,7 +295,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LibraryContent(
                                 HistoryItemRow(
                                     item = item,
                                     onMovieClick = { onNavigateToDetail(item.tmdbId) },
-                                    onRate = { stars -> viewModel.rateMovie(item.tmdbId, stars) }
+                                    onRate = { stars -> viewModel.rateMovie(item.tmdbId, stars) },
+                                    onRemoveClick = { viewModel.requestRemoveFromHistory(item) }
                                 )
                             }
                             emptyFilterResult(uiState.history.isEmpty())
@@ -476,7 +490,8 @@ private fun WatchlistItemRow(
 private fun HistoryItemRow(
     item: HistoryItem,
     onMovieClick: () -> Unit,
-    onRate: (Int) -> Unit
+    onRate: (Int) -> Unit,
+    onRemoveClick: () -> Unit
 ) {
     var isEditingRating by remember { mutableStateOf(false) }
 
@@ -493,12 +508,23 @@ private fun HistoryItemRow(
             },
             onClick = onMovieClick,
             trailing = {
-                IconButton(onClick = { isEditingRating = !isEditingRating }) {
-                    Icon(
-                        Icons.Default.Edit,
-                        contentDescription = stringResource(R.string.library_rating_edit_content_description),
-                        tint = if (isEditingRating) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Row {
+                    IconButton(onClick = { isEditingRating = !isEditingRating }) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = stringResource(R.string.library_rating_edit_content_description),
+                            tint = if (isEditingRating) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    // Uklanjanje iz odgledanih (briše i ocenu) - sa "Poništi" snackbar-om, kao na
+                    // listi za gledanje. Ranije je bilo moguće samo sa detalja filma.
+                    IconButton(onClick = onRemoveClick) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.library_remove_from_history_content_description),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         )

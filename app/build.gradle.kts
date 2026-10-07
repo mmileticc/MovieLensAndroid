@@ -19,11 +19,22 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Nešifrovan HTTP (lokalni/LAN backend preko IpSettingsDialog-a) je dozvoljen SAMO u debug
+        // build-u - release (Play) ide isključivo na HTTPS (Render). Videti AndroidManifest.xml.
+        manifestPlaceholders["usesCleartextTraffic"] = "false"
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
+        }
         release {
-            isMinifyEnabled = false
+            // R8: manji APK i teže dekompajliranje. Pravila za Gson modele i YouTube plejer su u
+            // proguard-rules.pro - posle izmena tamo obavezno probati RELEASE build, ne samo debug.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

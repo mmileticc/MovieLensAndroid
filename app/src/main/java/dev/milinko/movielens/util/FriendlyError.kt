@@ -1,5 +1,7 @@
 package dev.milinko.movielens.util
 
+import androidx.annotation.StringRes
+import dev.milinko.movielens.R
 import retrofit2.HttpException
 import java.io.IOException
 
@@ -30,11 +32,12 @@ import java.io.IOException
  * pada na bezbedan `fallback` tekst koji poziva prosleđuje, nikad na sirovu poruku izuzetka.
  */
 fun friendlyMessage(e: Throwable, fallback: String): String = when (e) {
-    is IOException -> "Nema internet konekcije ili server ne odgovara. Proveri vezu i pokušaj ponovo."
+    // Tekstovi iz resursa preko AppLocale - jezik prati izbor u Podešavanjima (srpski/engleski).
+    is IOException -> AppLocale.string(R.string.error_network)
     is HttpException -> when (e.code()) {
-        401, 403 -> "Nemaš dozvolu za ovu akciju - probaj da se ponovo prijaviš."
-        404 -> "Traženi podatak nije pronađen."
-        in 500..599 -> "Server trenutno ima problema. Pokušaj ponovo za koji trenutak."
+        401, 403 -> AppLocale.string(R.string.error_forbidden)
+        404 -> AppLocale.string(R.string.error_not_found)
+        in 500..599 -> AppLocale.string(R.string.error_server)
         // Namerno NE `e.message` - za manje uobičajene kodove (400/409/422/429...) Retrofit-ov
         // HttpException.message() vraća kratak ali i dalje tehnički tekst (npr. "HTTP 429 Too
         // Many Requests") - fallback koji poziva prosleđuje je uvek smisleniji.
@@ -47,3 +50,7 @@ fun friendlyMessage(e: Throwable, fallback: String): String = when (e) {
     is TransientServiceException -> e.message ?: fallback
     else -> fallback
 }
+
+/** Isto kao gore, sa rezervnom porukom iz resursa (lokalizovanom) umesto fiksnog teksta. */
+fun friendlyMessage(e: Throwable, @StringRes fallbackRes: Int): String =
+    friendlyMessage(e, AppLocale.string(fallbackRes))

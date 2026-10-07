@@ -41,6 +41,15 @@ object NetworkModule {
         return OkHttpClient.Builder()
             .addInterceptor(dynamicBaseUrlInterceptor)
             .addInterceptor(authInterceptor)
+            // Jezik aplikacije - backend po njemu vraća poruke grešaka i tekstove (npr. razlog
+            // Movie Night predloga) na srpskom ili engleskom (videti Localization.kt na backendu).
+            .addInterceptor { chain ->
+                chain.proceed(
+                    chain.request().newBuilder()
+                        .header("Accept-Language", dev.milinko.movielens.util.AppLocale.currentTag())
+                        .build()
+                )
+            }
             .addInterceptor(loggingInterceptor)
             // Backend JWT traje 24h - kad istekne, ovo automatski osveži token (preko Firebase-a) i
             // ponovi zahtev umesto da zaštićeni pozivi tiho puknu 401 dok se korisnik ručno ne

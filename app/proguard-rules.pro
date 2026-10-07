@@ -1,21 +1,28 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# R8 pravila za release build (isMinifyEnabled = true u app/build.gradle.kts).
+# Retrofit, OkHttp, Room, Hilt, Coil, Firebase i Compose donose sopstvena (consumer) pravila -
+# ovde je samo ono što je specifično za ovu aplikaciju.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Bolji stack trace-ovi u Play Console-u (mapping.txt ih prevodi nazad u prava imena).
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# --- Gson ---
+# Svi JSON modeli (backend odgovori i Room/SharedPreferences keš koji ide preko Gson-a) se pune
+# refleksijom: R8 ne sme da preimenuje ni ukloni polja, inače parsiranje tiho vrati prazne/null
+# vrednosti samo u release build-u.
+-keep class dev.milinko.movielens.data.remote.** { *; }
+-keep class dev.milinko.movielens.data.auth.** { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Generički tipovi (TypeToken<List<...>> u UserRepository/RecentSearchesStore) traže Signature.
+-keepattributes Signature, InnerClasses, EnclosingMethod, *Annotation*
+-keep class com.google.gson.reflect.TypeToken { *; }
+-keep class * extends com.google.gson.reflect.TypeToken
+-keepclassmembers,allowobfuscation class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
+
+# --- WebView JavaScript most (YouTube plejer za trejlere) ---
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+-keep class com.pierfrancescosoffritti.androidyoutubeplayer.** { *; }

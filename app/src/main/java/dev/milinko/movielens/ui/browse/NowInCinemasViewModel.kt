@@ -86,7 +86,7 @@ class NowInCinemasViewModel @Inject constructor(
                         it.copy(
                             isLoading = false,
                             isRefreshing = false,
-                            error = friendlyMessage(e, "Repertoar trenutno nije dostupan")
+                            error = friendlyMessage(e, dev.milinko.movielens.R.string.error_cinemas_unavailable)
                         )
                     }
                 }

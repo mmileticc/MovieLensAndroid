@@ -914,6 +914,14 @@ private fun CommentsSection(
         )
 
         var commentText by remember { mutableStateOf("") }
+        // Server nije prihvatio komentar (optimistična objava) - tekst se vraća u polje.
+        LaunchedEffect(uiState.failedCommentText) {
+            uiState.failedCommentText?.let { failed ->
+                if (commentText.isBlank()) commentText = failed
+                Toast.makeText(context, context.getString(R.string.movie_detail_comment_post_failed), Toast.LENGTH_LONG).show()
+                viewModel.consumeFailedComment()
+            }
+        }
         OutlinedTextField(
             value = commentText,
             onValueChange = { if (it.length <= 1000) commentText = it },

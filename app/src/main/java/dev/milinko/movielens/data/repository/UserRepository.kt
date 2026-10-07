@@ -116,7 +116,8 @@ interface UserRepository {
     // Dorada (25. avgust 2026, korisnička žalba "za neke prijatelje se predlozi ponavljaju posle
     // 3-4 ekrana") - vraća ceo MovieNightResponse (ne samo listu) da MovieNightViewModel dobije i
     // `hasMore` (da li TMDB ima još stranica) umesto ranijeg izmišljenog fiksnog broja stranica.
-    suspend fun getMovieNightSuggestions(userId: String, friendId: String, page: Int = 1): Result<MovieNightResponse>
+    // forceRefresh = zaobiđi memorijski/Room keš (pull-to-refresh i tiho osvežavanje prve strane).
+    suspend fun getMovieNightSuggestions(userId: String, friendId: String, page: Int = 1, forceRefresh: Boolean = false): Result<MovieNightResponse>
 
     /**
      * Učitava movienight-suggestions unapred (npr. čim se otvori profil prijatelja) i drži ih u
@@ -290,7 +291,7 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun getUserProfile(userId: String): Result<UserProfile> = safeApiCall {
         val response = userApiService.getUserProfile(userId)
         if (response.isSuccessful) {
-            val profile = response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+            val profile = response.body() ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
             genericCacheDao.put(GenericCacheEntity(profileCacheKey(userId), cacheGson.toJson(profile)))
             profile
         } else {
@@ -301,7 +302,7 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun updateUserProfile(userId: String, profile: UserProfile): Result<UserProfile> = safeApiCall {
         val response = userApiService.updateUserProfile(userId, profile)
         if (response.isSuccessful) {
-            val updated = response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+            val updated = response.body() ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
             // Faza C - i ovde upisujemo u keš (ne samo GET), da observeCachedUserProfile odmah
             // odražava izmenu, bez čekanja na sledeći loadProfile() network refresh.
             genericCacheDao.put(GenericCacheEntity(profileCacheKey(userId), cacheGson.toJson(updated)))
@@ -334,7 +335,7 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun addToWatchlist(userId: String, tmdbId: Int): Result<WatchlistItem> = safeApiCall {
         val response = userApiService.addToWatchlist(userId, mapOf("tmdbId" to tmdbId))
         if (response.isSuccessful) {
-            val item = response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+            val item = response.body() ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
             watchlistDao.insert(item.toEntity(userId))
             item
         } else {
@@ -370,7 +371,7 @@ class UserRepositoryImpl @Inject constructor(
         // ima podrazumevanu vrednost null za oba, pa je to ekvivalentno izostavljanju polja.
         val response = userApiService.addToHistory(userId, AddToHistoryBody(tmdbId, rating, review, duration))
         if (response.isSuccessful) {
-            val item = response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+            val item = response.body() ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
             historyDao.insert(item.toEntity(userId))
             item
         } else {
@@ -381,7 +382,7 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun updateHistoryItem(userId: String, tmdbId: Int, rating: Double?, review: String?): Result<HistoryItem> = safeApiCall {
         val response = userApiService.updateHistoryItem(userId, tmdbId, UpdateHistoryBody(rating, review))
         if (response.isSuccessful) {
-            val item = response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+            val item = response.body() ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
             historyDao.insert(item.toEntity(userId))
             item
         } else if (response.code() == 404) {
@@ -392,7 +393,7 @@ class UserRepositoryImpl @Inject constructor(
             // probamo POST kao fallback umesto da odmah prijavimo grešku korisniku.
             val addResponse = userApiService.addToHistory(userId, AddToHistoryBody(tmdbId, rating, review, null))
             if (addResponse.isSuccessful) {
-                val item = addResponse.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+                val item = addResponse.body() ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
                 historyDao.insert(item.toEntity(userId))
                 item
             } else {
@@ -485,7 +486,7 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun getFriendProfile(userId: String, friendId: String): Result<FriendProfileResponse> = safeApiCall {
         val response = userApiService.getFriendProfile(userId, friendId)
         if (response.isSuccessful) {
-            val profile = response.body() ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+            val profile = response.body() ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
             genericCacheDao.put(GenericCacheEntity(friendProfileCacheKey(userId, friendId), cacheGson.toJson(profile)))
             profile
         } else {
@@ -527,16 +528,15 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getMovieNightSuggestions(userId: String, friendId: String, page: Int): Result<MovieNightResponse> {
-        // page je deo ključa - "Osveži predloge" traži sledeću stranu pod drugim ključem, pa
-        // prirodno zaobilazi keš (stvaran mrežni poziv) bez posebnog "forceRefresh" parametra.
+    override suspend fun getMovieNightSuggestions(userId: String, friendId: String, page: Int, forceRefresh: Boolean): Result<MovieNightResponse> {
+        // page je deo ključa - svaka strana se kešira posebno.
         val cacheKey = "$userId:$friendId:$page"
-        movieNightCache[cacheKey]?.let { return Result.success(it) }
+        if (!forceRefresh) movieNightCache[cacheKey]?.let { return Result.success(it) }
 
         // Faza C - drugi nivo keša u Room-u (memorija se prazni na svaki restart procesa/app-a,
         // Room ostaje) - ako postoji, ubaci i nazad u memoriju da sledeći poziti u istoj sesiji
         // budu instant bez ponovnog Room čitanja.
-        genericCacheDao.get(movieNightCacheKey(userId, friendId, page))?.jsonPayload?.let { json ->
+        if (!forceRefresh) genericCacheDao.get(movieNightCacheKey(userId, friendId, page))?.jsonPayload?.let { json ->
             val cached = runCatching {
                 cacheGson.fromJson(json, MovieNightResponse::class.java)
             }.getOrNull()

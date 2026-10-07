@@ -56,7 +56,7 @@ class VisionRepositoryImpl @Inject constructor(
             // bug-a kao RemoteAvatarImage.kt (E2.5) - fix je isti princip, samo `withContext`
             // umesto `LaunchedEffect`, pošto ovo NIJE pozivano direktno iz kompozicije.
             val file = withContext(Dispatchers.IO) { getFileFromUri(imageUri) }
-                ?: throw IllegalStateException("Ne mogu pripremiti sliku za upload.")
+                ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_image_prepare))
 
             // Fajl je posle kompresije uvek JPEG (compressBitmapToFile), bez obzira na originalni
             // format ulazne slike - ne treba više nagađanje MIME tipa iz content resolver-a.
@@ -66,7 +66,7 @@ class VisionRepositoryImpl @Inject constructor(
             val response = visionApi.detect(body)
             if (response.isSuccessful) {
                 return response.body()
-                    ?: throw IllegalStateException("Server je vratio prazan odgovor.")
+                    ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
             }
 
             // Bugfix (2. septembar 2026, korisnički izveštaj - "pukla mi je greška za Gemini
@@ -96,7 +96,7 @@ class VisionRepositoryImpl @Inject constructor(
                     "Prepoznavanje slike je trenutno preopterećeno (previše zahteva odjednom). Pokušaj ponovo za par trenutaka."
                 )
             }
-            throw IllegalStateException(dev.milinko.movielens.util.friendlyMessage(e, "Greška servera pri analizi slike."), e)
+            throw IllegalStateException(dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_image_analysis_server), e)
         } catch (e: Exception) {
             throw IllegalStateException(e.toUserFacingMessage(), e)
         }

@@ -50,6 +50,8 @@ data class ProfileUiState(
     // Uređivanje profila (username/bio) - Faza 7 redizajna, MOVIELENS_DESIGN_PLAN.md.
     val isSavingProfile: Boolean = false,
     val editProfileError: String? = null,
+    // Unos koji server nije prihvatio - forma se ponovo otvara sa njim (videti updateProfile).
+    val failedProfileDraft: ProfileDraft? = null,
     // Bugfix (E1.4, 2. septembar 2026, feedback testera - "lista prijatelja se ne ažurira odmah
     // posle prihvatanja, mora da se promeni ekran ili zatvori app") - odvojeno od `isLoading`
     // (koje pokriva prvi ikad ulazak na ekran) - swipe-down gest na Prijatelji tabu.
@@ -61,6 +63,13 @@ data class ProfileUiState(
     // sporom Render backendu, što je ranije otkazivalo prethodni mrežni poziv usred leta i
     // rasinhronizovalo klijent/server (videti FriendProfileViewModel za detaljno objašnjenje).
     val friendActionInFlightIds: Set<String> = emptySet()
+)
+
+/** Vrednosti iz forme za uređivanje profila koje server nije prihvatio. */
+data class ProfileDraft(
+    val username: String,
+    val bio: String?,
+    val avatarDataUri: String?
 )
 
 /**
@@ -158,7 +167,7 @@ class ProfileViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         isSearchingFriends = false,
                         friendSearchResults = emptyList(),
-                        friendSearchError = dev.milinko.movielens.util.friendlyMessage(e, "Pretraga korisnika nije uspela")
+                        friendSearchError = dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_user_search)
                     )
                 }
         }
@@ -242,7 +251,7 @@ class ProfileViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     friendSearchResults = previousResults,
                     sentRequests = previousSent,
-                    friendActionError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri otkazivanju zahteva")
+                    friendActionError = dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_cancel_request)
                 )
                 userRepository.updateCachedFriendshipStatus(userId, targetUserId, "PENDING_SENT")
             }
@@ -274,7 +283,7 @@ class ProfileViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     friendSearchResults = previousResults,
                     sentRequests = previousSent,
-                    friendActionError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri slanju zahteva za prijateljstvo")
+                    friendActionError = dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_send_request)
                 )
                 userRepository.updateCachedFriendshipStatus(userId, targetUserId, "NONE")
             }
@@ -348,7 +357,7 @@ class ProfileViewModel @Inject constructor(
             userRepository.removeFriend(userId, friendId).onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     friends = previousFriends,
-                    friendActionError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri uklanjanju prijatelja")
+                    friendActionError = dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_remove_friend)
                 )
             }
         }
@@ -382,25 +391,40 @@ class ProfileViewModel @Inject constructor(
             avatar = newAvatarDataUri ?: base.avatar
         )
 
+        // UX dorada (oktobar 2026): optimistično čuvanje - nove vrednosti se prikazuju ODMAH (forma
+        // se zatvara bez čekanja servera), a sinhronizacija ide u pozadini. Ako server odbije
+        // (npr. korisničko ime je zauzeto), vraća se prethodno stanje i forma se ponovo otvara sa
+        // onim što je korisnik uneo + porukom (failedProfileDraft), pa ništa ne mora da kuca ponovo.
+        val previousProfile = current
+        val previousUsername = sessionManager.getUsername()
+        val previousAvatar = sessionManager.getAvatarUrl()
+
+        _uiState.value = _uiState.value.copy(
+            userProfile = body,
+            isSavingProfile = true,
+            editProfileError = null,
+            failedProfileDraft = null
+        )
+        sessionManager.updateCachedIdentity(body.username, body.avatar)
+        refreshSessionUser()
+
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isSavingProfile = true, editProfileError = null)
             userRepository.updateUserProfile(userId, body)
                 .onSuccess { updated ->
                     _uiState.value = _uiState.value.copy(isSavingProfile = false, userProfile = updated)
-                    // Bugfix (16. avgust 2026, korisnička žalba: pogrešna/stara slika na svom
-                    // profilu dok se sveži podatak ne učita) - SessionManager keš (avatarUrl,
-                    // username) se ranije upisivao SAMO pri loginu i nikad posle nije osvežavan,
-                    // pa je EditableProfileHeader-ov fallback (dok fullProfile još nije stigao sa
-                    // mreže) prikazivao trajno zastarelu sliku. Sad se keš odmah osveži posle
-                    // uspešnog čuvanja, pa je fallback tačan i pri sledećem otvaranju ekrana.
+                    // Server može da normalizuje vrednosti (npr. URL avatara posle upload-a) - keš
+                    // identiteta se usklađuje sa onim što je stvarno sačuvano.
                     sessionManager.updateCachedIdentity(updated.username, updated.avatar)
                     refreshSessionUser()
-                    _events.emit(ProfileUiEvent.ShowMessage("Profil je sačuvan."))
                 }
                 .onFailure { e ->
+                    sessionManager.updateCachedIdentity(previousUsername, previousAvatar)
+                    refreshSessionUser()
                     _uiState.value = _uiState.value.copy(
                         isSavingProfile = false,
-                        editProfileError = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri čuvanju profila")
+                        userProfile = previousProfile,
+                        editProfileError = dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_profile_not_saved),
+                        failedProfileDraft = ProfileDraft(username, bio, newAvatarDataUri)
                     )
                 }
         }
@@ -408,6 +432,11 @@ class ProfileViewModel @Inject constructor(
 
     fun consumeEditProfileError() {
         _uiState.value = _uiState.value.copy(editProfileError = null)
+    }
+
+    /** Korisnik je otkazao ponovno uređivanje posle neuspelog čuvanja. */
+    fun discardFailedProfileDraft() {
+        _uiState.value = _uiState.value.copy(failedProfileDraft = null, editProfileError = null)
     }
 
     private fun refreshRoutesState() {
@@ -537,7 +566,7 @@ class ProfileViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isRefreshingFriends = false,
-                    error = loadError?.let { dev.milinko.movielens.util.friendlyMessage(it, "Profil trenutno ne može da se učita") },
+                    error = loadError?.let { dev.milinko.movielens.util.friendlyMessage(it, dev.milinko.movielens.R.string.error_profile_unavailable) },
                     userProfile = profileResult.getOrNull() ?: _uiState.value.userProfile,
                     friends = friendsResult.getOrNull() ?: _uiState.value.friends,
                     friendActivity = activityResult.getOrNull() ?: _uiState.value.friendActivity,
@@ -551,7 +580,7 @@ class ProfileViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isRefreshingFriends = false,
-                    error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri učitavanju profila")
+                    error = dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_load_profile)
                 )
             }
         }

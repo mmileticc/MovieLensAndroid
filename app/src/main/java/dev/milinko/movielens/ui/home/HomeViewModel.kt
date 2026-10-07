@@ -119,7 +119,7 @@ class HomeViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri analizi slike")
+                    error = dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_image_analysis)
                 )
             }
         }

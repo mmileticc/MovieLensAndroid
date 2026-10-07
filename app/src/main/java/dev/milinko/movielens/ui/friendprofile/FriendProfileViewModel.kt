@@ -61,7 +61,7 @@ class FriendProfileViewModel @Inject constructor(
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri učitavanju profila")
+                        error = dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_load_profile)
                     )
                 }
         }
@@ -167,7 +167,7 @@ class FriendProfileViewModel @Inject constructor(
                     Log.w("FriendProfileViewModel", "acceptFriendRequest nije uspeo: ${e.message}")
                     _uiState.value = _uiState.value.copy(
                         isRequestActionInFlight = false,
-                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri prihvatanju zahteva")
+                        error = dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_accept_request)
                     )
                 }
         }
@@ -189,7 +189,7 @@ class FriendProfileViewModel @Inject constructor(
                     Log.w("FriendProfileViewModel", "rejectFriendRequest nije uspeo: ${e.message}")
                     _uiState.value = _uiState.value.copy(
                         isRequestActionInFlight = false,
-                        error = dev.milinko.movielens.util.friendlyMessage(e, "Greška pri odbijanju zahteva")
+                        error = dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_reject_request)
                     )
                 }
         }
