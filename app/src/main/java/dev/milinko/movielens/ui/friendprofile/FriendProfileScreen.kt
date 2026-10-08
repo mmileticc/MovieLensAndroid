@@ -30,7 +30,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.milinko.movielens.R
 import dev.milinko.movielens.data.remote.user.FriendProfileMovie
 import dev.milinko.movielens.ui.components.AppButton
@@ -66,7 +66,7 @@ fun FriendProfileScreen(
     onNavigateToDetail: (Int) -> Unit,
     onNavigateToMovieNight: (String) -> Unit = {}
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // Bugfix (2. septembar 2026) - potvrda pre odbijanja, isti obrazac/stringovi kao
     // ProfileScreen (PendingRequestCard) - dosledna UX na oba mesta gde se zahtev može odbiti.
     var showRejectConfirm by remember { mutableStateOf(false) }

@@ -58,7 +58,12 @@ fun ExpandableMatchCard(
                 .fillMaxWidth()
                 .then(
                     if (headerTogglesExpansion && expandedContent != null) {
-                        Modifier.clickable(onClick = onToggleExpanded)
+                        Modifier.clickable(
+                            onClickLabel = stringResource(
+                                if (expanded) R.string.expandable_card_collapse else R.string.expandable_card_expand
+                            ),
+                            onClick = onToggleExpanded
+                        )
                     } else {
                         Modifier
                     }

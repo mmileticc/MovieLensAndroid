@@ -23,11 +23,25 @@ android {
         // Nešifrovan HTTP (lokalni/LAN backend preko IpSettingsDialog-a) je dozvoljen SAMO u debug
         // build-u - release (Play) ide isključivo na HTTPS (Render). Videti AndroidManifest.xml.
         manifestPlaceholders["usesCleartextTraffic"] = "false"
+
+        // Developerski UI (izbor backend rute). Uključen samo u debug-u - videti DevSettings.kt.
+        buildConfigField("boolean", "SHOW_DEV_SETTINGS", "false")
+        // Gemini/Lokalno prekidač na Search-u; ima smisla samo uz backend sa ENABLE_LOCAL_EMBEDDING=true.
+        buildConfigField("boolean", "SHOW_LOCAL_EMBEDDING_OPTION", "false")
     }
 
     buildTypes {
         debug {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
+            buildConfigField("boolean", "SHOW_DEV_SETTINGS", "true")
+        }
+        // APK za spoljne testere: potpisan debug ključem (instalira se bez keystore-a, kao debug),
+        // ali bez developerskog UI-ja i samo preko HTTPS-a. Pravi se sa ./gradlew assembleBeta.
+        create("beta") {
+            initWith(getByName("debug"))
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
+            buildConfigField("boolean", "SHOW_DEV_SETTINGS", "false")
+            matchingFallbacks += listOf("debug")
         }
         release {
             // R8: manji APK i teže dekompajliranje. Pravila za Gson modele i YouTube plejer su u
@@ -62,6 +76,7 @@ android {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

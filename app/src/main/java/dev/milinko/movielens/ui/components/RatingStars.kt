@@ -13,8 +13,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import dev.milinko.movielens.R
+import kotlin.math.roundToInt
 
 /**
  * Red od 10 zvezdica (1-10 skala, ista kao backend) - tap na zvezdicu N postavlja ocenu N.
@@ -28,7 +35,22 @@ import dev.milinko.movielens.R
  */
 @Composable
 fun RatingStars(rating: Int, onRate: (Int) -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier = modifier) {
+    // Za čitač ekrana ceo red je jedan klizač ("Ocena, 7 od 10", menja se prevlačenjem gore/dole)
+    // umesto 10 malih dugmadi - 10 dodirnih ciljeva od 48dp ne bi stalo u širinu ekrana.
+    val label = stringResource(R.string.rating_stars_label)
+    val state = if (rating in 1..10) stringResource(R.string.rating_stars_state, rating) else stringResource(R.string.rating_stars_not_rated)
+    Row(
+        modifier = modifier.clearAndSetSemantics {
+            contentDescription = label
+            stateDescription = state
+            progressBarRangeInfo = ProgressBarRangeInfo(rating.coerceIn(0, 10).toFloat(), 0f..10f, steps = 9)
+            setProgress { value ->
+                val newRating = value.roundToInt().coerceIn(1, 10)
+                if (newRating != rating) onRate(newRating)
+                true
+            }
+        }
+    ) {
         for (i in 1..10) {
             // Ikonica je namerno manja od dodirnog cilja (Box 32dp) - 10 zvezdica u redu bi inače
             // bilo skoro nemoguće precizno pogoditi (svaka bi imala samo ~22dp bez razmaka).

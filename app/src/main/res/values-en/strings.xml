@@ -6,6 +6,10 @@
     <string name="app_name">Movienee</string>
 
     <string name="rating_stars_content_description">Rate %1$d</string>
+    <string name="rating_stars_label">Rating</string>
+    <string name="rating_stars_state">%1$d of 10</string>
+    <string name="rating_stars_not_rated">Not rated</string>
+    <string name="movie_detail_backdrop_content_description">Still from the movie, tap to enlarge</string>
     <string name="premium_badge_content_description">Premium feature</string>
     <string name="expandable_card_expand">Show details</string>
     <string name="expandable_card_collapse">Hide details</string>

@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
@@ -55,8 +56,8 @@ fun SignInScreen(
     onDismiss: () -> Unit = {},
     viewModel: AuthViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val backgroundPosters by viewModel.backgroundPosters.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val backgroundPosters by viewModel.backgroundPosters.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // Navigate when signed in
@@ -206,8 +207,8 @@ fun SignInScreen(
         }
 
         if (showBackendDialog) {
-            val baseUrl by viewModel.baseUrl.collectAsState()
-            val savedRoutes by viewModel.savedRoutes.collectAsState()
+            val baseUrl by viewModel.baseUrl.collectAsStateWithLifecycle()
+            val savedRoutes by viewModel.savedRoutes.collectAsStateWithLifecycle()
             SettingsDialog(
                 currentUrl = baseUrl,
                 savedRoutes = savedRoutes,

@@ -36,12 +36,31 @@ class TokenAuthenticator @Inject constructor(
     private val sessionManager: SessionManager
 ) : Authenticator {
 
+    private val refreshLock = Any()
+
     override fun authenticate(route: Route?, response: Response): Request? {
         // Ne pokušavaj ako korisnik nikad nije bio prijavljen, i ne pokušavaj više od jednom po
         // originalnom zahtevu (sprečava beskonačnu petlju ako je refresh i dalje neuspešan).
         if (sessionManager.getAppToken() == null) return null
         if (responseCount(response) > 1) return null
 
+        val failedToken = response.request.header("Authorization")?.removePrefix("Bearer ")
+
+        // Više paralelnih zahteva (npr. Home učitava nekoliko lista odjednom) može da dobije 401
+        // istovremeno. Samo prvi osvežava token; ostali čekaju na lock i, pošto je token u
+        // međuvremenu već zamenjen, samo ponove zahtev sa novim umesto da svaki radi svoj refresh.
+        synchronized(refreshLock) {
+            val currentToken = sessionManager.getAppToken() ?: return null
+            if (currentToken != failedToken) {
+                return response.request.newBuilder()
+                    .header("Authorization", "Bearer $currentToken")
+                    .build()
+            }
+            return refreshAndRetry(response)
+        }
+    }
+
+    private fun refreshAndRetry(response: Response): Request? {
         return runBlocking {
             try {
                 val firebaseIdToken = authRepository.getFirebaseIdToken(forceRefresh = true) ?: return@runBlocking null

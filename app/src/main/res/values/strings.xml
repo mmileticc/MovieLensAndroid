@@ -10,6 +10,10 @@
          sav novi/dodirnut tekst ide u ovaj fajl, radi buduće višejezičnosti (videti
          MOVIELENS_DESIGN_PLAN.md 5.1). -->
     <string name="rating_stars_content_description">Oceni sa %1$d</string>
+    <string name="rating_stars_label">Ocena</string>
+    <string name="rating_stars_state">%1$d od 10</string>
+    <string name="rating_stars_not_rated">Nije ocenjeno</string>
+    <string name="movie_detail_backdrop_content_description">Slika iz filma, dodirni za uvećanje</string>
     <string name="premium_badge_content_description">Premium funkcija</string>
     <string name="expandable_card_expand">Prikaži detalje</string>
     <string name="expandable_card_collapse">Sakrij detalje</string>

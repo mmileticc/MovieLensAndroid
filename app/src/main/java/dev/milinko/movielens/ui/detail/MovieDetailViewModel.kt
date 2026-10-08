@@ -436,10 +436,8 @@ class MovieDetailViewModel @Inject constructor(
     }
 
     companion object {
-        // Dorada (3. septembar 2026) - smanjeno sa 10 na 3, videti napomenu uz istoimenu konstantu
-        // u MovieDetailScreen.kt (mora ostati identično - "Prikaži više/manje" se pojavljivalo
-        // samo kad ima preko 10 komentara, do tada nevidljivo).
-        private const val COMMENTS_PAGE_SIZE = 3
+        // Komentari se učitavaju i otkrivaju po 3; isti prag koristi i "Prikaži manje" na ekranu.
+        internal const val COMMENTS_PAGE_SIZE = 3
     }
 }
 

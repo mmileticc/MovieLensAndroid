@@ -5,8 +5,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
 import dev.milinko.movielens.data.pref.ThemePreferences
@@ -38,7 +38,7 @@ class MainActivity : ComponentActivity() {
         val startDestination = Screen.Home.route
 
         setContent {
-            val isDarkMode by themePreferences.isDarkMode.collectAsState()
+            val isDarkMode by themePreferences.isDarkMode.collectAsStateWithLifecycle()
             MovieLensTheme(darkTheme = isDarkMode) {
                 val navController = rememberNavController()
                 MovieLensNavHost(
