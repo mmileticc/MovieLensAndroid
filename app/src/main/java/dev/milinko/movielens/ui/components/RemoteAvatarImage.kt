@@ -15,6 +15,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import dev.milinko.movielens.data.pref.UrlStorage
 import dev.milinko.movielens.data.remote.image.DataUriImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -73,8 +74,15 @@ fun RemoteAvatarImage(
             )
         }
     } else {
+        val context = LocalContext.current
+        // Avatari koje je korisnik sam postavio stižu kao putanja na backendu
+        // (/api/users/{id}/avatar?v=...) kad server nema podešen PUBLIC_BASE_URL - dopunjuje se
+        // trenutno izabranim backendom.
+        val resolvedUrl = remember(url) {
+            if (url != null && url.startsWith("/")) UrlStorage.readBaseUrl(context).trimEnd('/') + url else url
+        }
         AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current).data(url).crossfade(true).build(),
+            model = ImageRequest.Builder(context).data(resolvedUrl).crossfade(true).build(),
             contentDescription = contentDescription,
             modifier = modifier,
             contentScale = contentScale

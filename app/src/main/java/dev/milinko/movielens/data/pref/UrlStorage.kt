@@ -11,9 +11,10 @@ import androidx.core.content.edit
 class UrlStorage @Inject constructor(
     @ApplicationContext context: Context
 ) {
-    private val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     companion object {
+        private const val PREFS_NAME = "app_prefs"
         private const val KEY_BASE_URL = "base_url"
         private const val KEY_SAVED_ROUTES = "saved_routes"
         // Dorada (1. septembar 2026, priprema APK-a za spoljne testere) - RANIJE "http://10.0.2.2:8080/"
@@ -22,6 +23,13 @@ class UrlStorage @Inject constructor(
         // pravi hostovan backend (Render) da app radi "iz kutije" bez ručnog podešavanja rute.
         private const val DEFAULT_URL = "https://movielensbackendktor.onrender.com/"
         private const val MAX_SAVED_ROUTES = 6
+
+        /**
+         * Za mesta van Hilt grafa (npr. composable koji prikazuje avatar) - čita istu vrednost kao
+         * [getBaseUrl].
+         */
+        fun readBaseUrl(context: Context): String =
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_BASE_URL, DEFAULT_URL) ?: DEFAULT_URL
     }
 
     fun getBaseUrl(): String {
