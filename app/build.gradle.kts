@@ -52,6 +52,11 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        // android.util.Log i slični pozivi u ViewModel-ima vraćaju podrazumevanu vrednost u JVM
+        // unit testovima umesto da bace "Method ... not mocked".
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -98,6 +103,9 @@ dependencies {
     implementation(libs.youtube.player.core)
 
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockk)
+    testImplementation(libs.turbine)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
