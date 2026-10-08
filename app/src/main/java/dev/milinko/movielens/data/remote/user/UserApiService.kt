@@ -165,4 +165,11 @@ interface UserApiService {
         @Query("token") token: String,
         @Header("Authorization") authorization: String
     ): Response<Unit>
+
+    // Slanje filma prijatelju (stiže mu kao push obaveštenje).
+    @POST("api/users/{userId}/share")
+    suspend fun shareMovie(
+        @Path("userId") userId: String,
+        @Body body: ShareMovieBody
+    ): Response<Unit>
 }

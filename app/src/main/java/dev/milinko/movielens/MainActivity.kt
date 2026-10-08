@@ -53,7 +53,7 @@ class MainActivity : ComponentActivity() {
 
         // App is usable without login; auth is required only for scan action.
         val startDestination = Screen.Home.route
-        pendingRoute.value = intent?.getStringExtra(PushNotifier.EXTRA_OPEN_ROUTE)
+        pendingRoute.value = intent?.let(::routeFromIntent)
 
         setContent {
             val isDarkMode by themePreferences.isDarkMode.collectAsStateWithLifecycle()
@@ -86,6 +86,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        intent.getStringExtra(PushNotifier.EXTRA_OPEN_ROUTE)?.let { pendingRoute.value = it }
+        routeFromIntent(intent)?.let { pendingRoute.value = it }
+    }
+
+    /** Ruta iz dodirnutog obaveštenja ili iz podeljenog linka https://<host>/m/{tmdbId}. */
+    private fun routeFromIntent(intent: Intent): String? {
+        intent.getStringExtra(PushNotifier.EXTRA_OPEN_ROUTE)?.let { return it }
+        val uri = intent.data ?: return null
+        if (intent.action != Intent.ACTION_VIEW) return null
+        val segments = uri.pathSegments
+        val tmdbId = if (segments.size == 2 && segments[0] == "m") segments[1].toIntOrNull() else null
+        return tmdbId?.let { Screen.MovieDetail.createRoute(it) }
     }
 }

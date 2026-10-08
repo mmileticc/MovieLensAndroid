@@ -8,6 +8,7 @@ import dev.milinko.movielens.data.location.LocationHelper
 import dev.milinko.movielens.data.pref.SessionManager
 import dev.milinko.movielens.data.remote.movie.MovieComment
 import dev.milinko.movielens.data.remote.movie.MovieDetail
+import dev.milinko.movielens.data.remote.user.FriendInfo
 import dev.milinko.movielens.data.remote.user.FriendWatched
 import dev.milinko.movielens.data.repository.MovieRepository
 import dev.milinko.movielens.data.repository.UserRepository
@@ -46,6 +47,10 @@ data class MovieDetailUiState(
     val isLoadingMoreComments: Boolean = false,
     // Gost vidi komentare, ali umesto polja za unos dobija poziv na prijavu.
     val isSignedIn: Boolean = false,
+    // "Pošalji prijatelju" - lista prijatelja se učitava tek kad se dijalog otvori.
+    val shareFriends: List<FriendInfo> = emptyList(),
+    val isLoadingShareFriends: Boolean = false,
+    val isSendingShare: Boolean = false,
     // Bugfix (E1.2, 2. septembar 2026) - RANIJE watchlistError/historyError polja koja su se
     // prikazivala kao Toast ("Update history failed: 404" iz test feedback-a). Uklonjena namerno -
     // watchlist/watched/ocena greške se sad samo tiho loguju (Log.w), nikad ne prekidaju korisnika,
@@ -439,6 +444,30 @@ class MovieDetailViewModel @Inject constructor(
                 }
         }
         return true
+    }
+
+    /** Prijatelji za dijalog "Pošalji prijatelju": prvo iz keša (odmah), pa osveženo sa mreže. */
+    fun loadShareFriends() {
+        val userId = sessionManager.getUserId() ?: return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingShareFriends = true)
+            val cached = userRepository.observeCachedFriends(userId).first()
+            if (cached.isNotEmpty()) _uiState.value = _uiState.value.copy(shareFriends = cached)
+            userRepository.getFriends(userId).onSuccess { friends ->
+                _uiState.value = _uiState.value.copy(shareFriends = friends)
+            }
+            _uiState.value = _uiState.value.copy(isLoadingShareFriends = false)
+        }
+    }
+
+    fun shareWithFriend(tmdbId: Int, friendId: String, note: String?, onResult: (Boolean) -> Unit) {
+        val userId = sessionManager.getUserId() ?: return onResult(false)
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSendingShare = true)
+            val result = userRepository.shareMovie(userId, friendId, tmdbId, note)
+            _uiState.value = _uiState.value.copy(isSendingShare = false)
+            onResult(result.isSuccess)
+        }
     }
 
     companion object {

@@ -28,6 +28,12 @@ android {
         buildConfigField("boolean", "SHOW_DEV_SETTINGS", "false")
         // Gemini/Lokalno prekidač na Search-u; ima smisla samo uz backend sa ENABLE_LOCAL_EMBEDDING=true.
         buildConfigField("boolean", "SHOW_LOCAL_EMBEDDING_OPTION", "false")
+
+        // Linkovi za deljenje filma (https://<host>/m/{tmdbId}) uvek vode na javni server, i kad
+        // je aplikacija u debug-u prebačena na lokalni backend. Isti host otvara aplikaciju (App Links).
+        val shareHost = "movielensbackendktor.onrender.com"
+        buildConfigField("String", "SHARE_BASE_URL", "\"https://$shareHost\"")
+        manifestPlaceholders["shareHost"] = shareHost
     }
 
     buildTypes {

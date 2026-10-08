@@ -439,4 +439,15 @@
     <string name="notif_permission_message">Javićemo ti kad ti neko pošalje zahtev za prijateljstvo, lajkuje komentar ili preporuči film, i kad film sa tvoje liste stigne u bioskope. Vrste obaveštenja menjaš u Profil → Podešavanja.</string>
     <string name="notif_permission_allow">Uključi</string>
     <string name="notif_permission_later">Ne sada</string>
+    <!-- Deljenje filma -->
+    <string name="share_menu_link">Podeli link</string>
+    <string name="share_menu_friend">Pošalji prijatelju</string>
+    <string name="share_friend_dialog_title">Pošalji „%1$s“</string>
+    <string name="share_friend_no_friends">Još nemaš prijatelje. Dodaj ih na tabu Prijatelji.</string>
+    <string name="share_friend_note_label">Poruka (opciono)</string>
+    <string name="share_friend_send">Pošalji</string>
+    <string name="share_friend_sent">Film je poslat</string>
+    <string name="share_friend_failed">Slanje nije uspelo, pokušaj ponovo</string>
+    <string name="share_friend_signin_toast">Prijavi se da bi slao filmove prijateljima</string>
+    <string name="notif_movie_shared_body_with_note">%1$s ti preporučuje „%2$s“: %3$s</string>
 </resources>

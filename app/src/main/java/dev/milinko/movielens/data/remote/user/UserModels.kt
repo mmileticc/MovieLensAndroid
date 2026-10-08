@@ -272,3 +272,12 @@ data class DeviceTokenBody(
     @SerializedName("token")
     val token: String
 )
+
+data class ShareMovieBody(
+    @SerializedName("friendId")
+    val friendId: String,
+    @SerializedName("tmdbId")
+    val tmdbId: Int,
+    @SerializedName("note")
+    val note: String? = null
+)

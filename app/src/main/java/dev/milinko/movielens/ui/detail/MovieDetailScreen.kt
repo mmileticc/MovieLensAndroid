@@ -39,6 +39,8 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -72,6 +74,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import dev.milinko.movielens.BuildConfig
 import dev.milinko.movielens.R
 import dev.milinko.movielens.data.remote.movie.CastMember
 import dev.milinko.movielens.data.remote.movie.MovieComment
@@ -155,25 +158,66 @@ fun MovieDetailScreen(
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
-                // Share dugme (16. avgust 2026) - deli naslov + TMDB link preko standardnog Android
-                // Share Intent-a. Onemogućeno dok se detalji filma ne učitaju (treba nam naslov).
+                // Deljenje: link ka stranici filma (otvara aplikaciju ako je instalirana) preko
+                // sistemskog Share menija, ili slanje prijatelju unutar aplikacije (push obaveštenje).
+                // Onemogućeno dok se detalji filma ne učitaju (treba nam naslov).
                 val movieForShare = uiState.movieDetail
-                IconButton(
-                    onClick = {
-                        val shareText = context.getString(
-                            R.string.movie_detail_share_text,
-                            movieForShare?.title.orEmpty(),
-                            "https://www.themoviedb.org/movie/$tmdbId"
+                var shareMenuExpanded by remember { mutableStateOf(false) }
+                var showShareWithFriend by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { shareMenuExpanded = true }, enabled = movieForShare != null) {
+                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.movie_detail_share_content_description))
+                    }
+                    DropdownMenu(expanded = shareMenuExpanded, onDismissRequest = { shareMenuExpanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.share_menu_link)) },
+                            onClick = {
+                                shareMenuExpanded = false
+                                val shareText = context.getString(
+                                    R.string.movie_detail_share_text,
+                                    movieForShare?.title.orEmpty(),
+                                    "${BuildConfig.SHARE_BASE_URL}/m/$tmdbId"
+                                )
+                                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, shareText)
+                                }
+                                context.startActivity(Intent.createChooser(sendIntent, null))
+                            }
                         )
-                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, shareText)
-                        }
-                        context.startActivity(Intent.createChooser(sendIntent, null))
-                    },
-                    enabled = movieForShare != null
-                ) {
-                    Icon(Icons.Default.Share, contentDescription = stringResource(R.string.movie_detail_share_content_description))
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.share_menu_friend)) },
+                            onClick = {
+                                shareMenuExpanded = false
+                                if (!uiState.isSignedIn) {
+                                    Toast.makeText(context, context.getString(R.string.share_friend_signin_toast), Toast.LENGTH_SHORT).show()
+                                    onRequireSignIn()
+                                } else {
+                                    viewModel.loadShareFriends()
+                                    showShareWithFriend = true
+                                }
+                            }
+                        )
+                    }
+                }
+                if (showShareWithFriend && movieForShare != null) {
+                    ShareWithFriendDialog(
+                        movieTitle = movieForShare.title,
+                        friends = uiState.shareFriends,
+                        isLoadingFriends = uiState.isLoadingShareFriends,
+                        isSending = uiState.isSendingShare,
+                        onSend = { friendId, note ->
+                            viewModel.shareWithFriend(tmdbId, friendId, note) { success ->
+                                if (success) showShareWithFriend = false
+                                Toast.makeText(
+                                    context,
+                                    context.getString(if (success) R.string.share_friend_sent else R.string.share_friend_failed),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
+                        onDismiss = { showShareWithFriend = false }
+                    )
                 }
             }
         }

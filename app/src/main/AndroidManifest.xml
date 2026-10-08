@@ -60,6 +60,14 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Podeljeni linkovi filmova otvaraju aplikaciju direktno (verifikacija preko
+                 https://<host>/.well-known/assetlinks.json na backendu). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="${shareHost}" android:pathPrefix="/m/" />
+            </intent-filter>
         </activity>
     </application>
 

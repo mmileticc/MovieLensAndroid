@@ -11,6 +11,7 @@ import dev.milinko.movielens.data.remote.user.FriendActionBody
 import dev.milinko.movielens.data.remote.user.FriendProfileResponse
 import dev.milinko.movielens.data.remote.user.GenreAffinity
 import dev.milinko.movielens.data.remote.user.PendingRequest
+import dev.milinko.movielens.data.remote.user.ShareMovieBody
 import dev.milinko.movielens.data.remote.user.UpdateHistoryBody
 import dev.milinko.movielens.data.remote.user.UserApiService
 import dev.milinko.movielens.data.remote.user.UserProfile
@@ -112,6 +113,8 @@ interface UserRepository {
     suspend fun getTasteProfile(userId: String): Result<List<GenreAffinity>>
 
     suspend fun getFriendActivity(userId: String): Result<List<FriendActivity>>
+
+    suspend fun shareMovie(userId: String, friendId: String, tmdbId: Int, note: String?): Result<Unit>
 
     // Dorada (25. avgust 2026, korisnička žalba "za neke prijatelje se predlozi ponavljaju posle
     // 3-4 ekrana") - vraća ceo MovieNightResponse (ne samo listu) da MovieNightViewModel dobije i
@@ -451,6 +454,13 @@ class UserRepositoryImpl @Inject constructor(
             genericCacheDao.put(GenericCacheEntity(friendsCacheKey(userId), cacheGson.toJson(friends)))
             friends
         } else {
+            throw HttpException(response)
+        }
+    }
+
+    override suspend fun shareMovie(userId: String, friendId: String, tmdbId: Int, note: String?): Result<Unit> = safeApiCall {
+        val response = userApiService.shareMovie(userId, ShareMovieBody(friendId, tmdbId, note))
+        if (!response.isSuccessful) {
             throw HttpException(response)
         }
     }

@@ -100,7 +100,9 @@ object PushNotifier {
             PushType.MOVIE_SHARED -> Content(
                 CHANNEL_FRIENDS,
                 AppLocale.string(R.string.notif_movie_shared_title),
-                AppLocale.string(R.string.notif_movie_shared_body, actor, movieTitle ?: ""),
+                data["note"]?.takeIf { it.isNotBlank() }
+                    ?.let { AppLocale.string(R.string.notif_movie_shared_body_with_note, actor, movieTitle ?: "", it) }
+                    ?: AppLocale.string(R.string.notif_movie_shared_body, actor, movieTitle ?: ""),
                 tmdbId?.let { Screen.MovieDetail.createRoute(it) } ?: return null
             )
             PushType.WATCHLIST_IN_CINEMA -> Content(

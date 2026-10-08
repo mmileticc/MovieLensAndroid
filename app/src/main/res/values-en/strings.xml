@@ -373,4 +373,15 @@
     <string name="notif_permission_message">We will let you know when someone sends you a friend request, likes your comment or recommends a movie, and when a movie from your watchlist reaches cinemas. You can choose which ones in Profile → Settings.</string>
     <string name="notif_permission_allow">Turn on</string>
     <string name="notif_permission_later">Not now</string>
+    <!-- Deljenje filma -->
+    <string name="share_menu_link">Share link</string>
+    <string name="share_menu_friend">Send to a friend</string>
+    <string name="share_friend_dialog_title">Send \"%1$s\"</string>
+    <string name="share_friend_no_friends">You have no friends yet. Add them on the Friends tab.</string>
+    <string name="share_friend_note_label">Message (optional)</string>
+    <string name="share_friend_send">Send</string>
+    <string name="share_friend_sent">Movie sent</string>
+    <string name="share_friend_failed">Sending failed, please try again</string>
+    <string name="share_friend_signin_toast">Sign in to send movies to friends</string>
+    <string name="notif_movie_shared_body_with_note">%1$s recommends \"%2$s\": %3$s</string>
 </resources>
