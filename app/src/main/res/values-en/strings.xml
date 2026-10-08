@@ -315,6 +315,7 @@
     <string name="error_forbidden">You don\'t have permission for this - try signing in again.</string>
     <string name="error_not_found">The requested item wasn\'t found.</string>
     <string name="error_server">The server is having problems right now. Please try again in a moment.</string>
+    <string name="error_too_many_requests">Too many requests in a short time. Please try again in a minute.</string>
     <string name="error_empty_response">The server returned an empty response.</string>
     <string name="error_image_prepare">Couldn\'t prepare the image for upload.</string>
     <string name="error_image_analysis_server">Server error while analyzing the image.</string>

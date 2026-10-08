@@ -381,6 +381,7 @@
     <string name="error_forbidden">Nemaš dozvolu za ovu akciju - probaj da se ponovo prijaviš.</string>
     <string name="error_not_found">Traženi podatak nije pronađen.</string>
     <string name="error_server">Server trenutno ima problema. Pokušaj ponovo za koji trenutak.</string>
+    <string name="error_too_many_requests">Previše zahteva za kratko vreme. Pokušaj ponovo za minut.</string>
     <string name="error_empty_response">Server je vratio prazan odgovor.</string>
     <string name="error_image_prepare">Ne mogu da pripremim sliku za slanje.</string>
     <string name="error_image_analysis_server">Greška servera pri analizi slike.</string>

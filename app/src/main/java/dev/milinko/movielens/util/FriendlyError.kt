@@ -37,10 +37,11 @@ fun friendlyMessage(e: Throwable, fallback: String): String = when (e) {
     is HttpException -> when (e.code()) {
         401, 403 -> AppLocale.string(R.string.error_forbidden)
         404 -> AppLocale.string(R.string.error_not_found)
+        429 -> AppLocale.string(R.string.error_too_many_requests)
         in 500..599 -> AppLocale.string(R.string.error_server)
-        // Namerno NE `e.message` - za manje uobičajene kodove (400/409/422/429...) Retrofit-ov
-        // HttpException.message() vraća kratak ali i dalje tehnički tekst (npr. "HTTP 429 Too
-        // Many Requests") - fallback koji poziva prosleđuje je uvek smisleniji.
+        // Namerno NE `e.message` - za manje uobičajene kodove (400/409/422...) Retrofit-ov
+        // HttpException.message() vraća kratak ali i dalje tehnički tekst (npr. "HTTP 409
+        // Conflict") - fallback koji poziva prosleđuje je uvek smisleniji.
         else -> fallback
     }
     // Ovi tipovi se koriste ISKLJUČIVO za poruke koje app sam namerno piše (videti
