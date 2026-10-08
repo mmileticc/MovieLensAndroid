@@ -32,6 +32,11 @@
     <string name="nav_search">Pretraga</string>
     <string name="nav_library">Biblioteka</string>
     <string name="nav_profile">Profil</string>
+    <string name="nav_friends">Prijatelji</string>
+    <string name="friends_top_bar_title">Prijatelji</string>
+    <string name="friends_sign_in_required_title">Prijavi se da vidiš prijatelje</string>
+    <string name="friends_sign_in_required_message">Dodaj prijatelje, prati šta gledaju i nađite film za zajedničko veče.</string>
+    <string name="home_section_friends_watching">Prijatelji gledaju</string>
 
     <!-- Faza 4 redizajna - SignInScreen -->
     <string name="sign_in_tagline">Otkrij, skeniraj i deli filmove\nsa prijateljima</string>
@@ -85,6 +90,8 @@
     <string name="movie_detail_comment_label">Napiši komentar…</string>
     <string name="movie_detail_post_comment">Objavi</string>
     <string name="movie_detail_comment_post_signin_toast">Prijavi se da bi komentarisao</string>
+    <string name="movie_detail_comment_signin_button">Prijavi se da komentarišeš</string>
+    <string name="movie_detail_comment_like_signin_toast">Prijavi se da bi lajkovao komentar</string>
     <string name="movie_detail_comments_empty">Još nema komentara. Budi prvi!</string>
     <string name="movie_detail_comments_show_more">Prikaži više</string>
     <string name="movie_detail_comments_show_less">Prikaži manje</string>

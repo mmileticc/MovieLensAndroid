@@ -80,6 +80,7 @@ fun LibraryScreen(
     onNavigateToHome: () -> Unit,
     onNavigateToSearch: () -> Unit,
     onNavigateToProfile: () -> Unit,
+    onNavigateToFriends: () -> Unit = {},
     onNavigateToSignIn: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -160,6 +161,7 @@ fun LibraryScreen(
                         BottomNavTab.HOME -> onNavigateToHome()
                         BottomNavTab.SEARCH -> onNavigateToSearch()
                         BottomNavTab.LIBRARY -> {}
+                        BottomNavTab.FRIENDS -> onNavigateToFriends()
                         BottomNavTab.PROFILE -> onNavigateToProfile()
                     }
                 }

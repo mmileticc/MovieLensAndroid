@@ -119,6 +119,7 @@ fun SearchScreen(
     onNavigateBack: () -> Unit,
     onNavigateToLibrary: () -> Unit,
     onNavigateToProfile: () -> Unit,
+    onNavigateToFriends: () -> Unit = {},
     onRequireSignIn: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -336,6 +337,7 @@ fun SearchScreen(
                             BottomNavTab.HOME -> onNavigateBack()
                             BottomNavTab.SEARCH -> {}
                             BottomNavTab.LIBRARY -> onNavigateToLibrary()
+                            BottomNavTab.FRIENDS -> onNavigateToFriends()
                             BottomNavTab.PROFILE -> onNavigateToProfile()
                         }
                     }

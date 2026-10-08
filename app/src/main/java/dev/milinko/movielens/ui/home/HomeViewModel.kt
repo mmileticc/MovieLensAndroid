@@ -7,6 +7,7 @@ import dev.milinko.movielens.data.pref.SessionManager
 import dev.milinko.movielens.data.remote.movie.MovieSearchResult
 import dev.milinko.movielens.data.remote.movie.NowInCinemasMovie
 import dev.milinko.movielens.data.remote.movie.WatchlistItem
+import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.data.repository.MovieRepository
 import dev.milinko.movielens.data.repository.UserRepository
 import dev.milinko.movielens.data.repository.VisionRepository
@@ -43,6 +44,9 @@ data class HomeUiState(
     // "Nastavi da gledaš" - iz Room keša (isti izvor kao Library, Faza 3.5), prazno ako korisnik
     // nije ulogovan ili nema ništa na watchlisti.
     val watchlistPreview: List<WatchlistItem> = emptyList(),
+    // "Prijatelji gledaju" - poslednji filmovi koje su prijatelji odgledali/ocenili (keš aktivnosti,
+    // isti kao na ekranu Prijatelji). Prazno za gosta ili korisnika bez prijatelja - traka se ne prikazuje.
+    val friendsActivity: List<FriendActivity> = emptyList(),
     // Swipe-down (pull-to-refresh) na Home ekranu - odvojeno od isTrendingLoading da ne prikazuje
     // duplirane spinnere (PullToRefreshBox ima sopstveni indikator preko ovog flag-a).
     val isRefreshing: Boolean = false,
@@ -71,6 +75,7 @@ class HomeViewModel @Inject constructor(
     private companion object {
         const val MAX_PERSONALIZED_PAGE = 5
         const val HOME_NOW_IN_CINEMAS_LIMIT = 20
+        const val HOME_FRIENDS_ACTIVITY_LIMIT = 10
     }
 
     init {
@@ -78,6 +83,7 @@ class HomeViewModel @Inject constructor(
         loadPersonalizedMovies()
         loadNowInCinemas()
         observeWatchlistPreview()
+        observeFriendsActivity()
     }
 
     /**
@@ -225,6 +231,25 @@ class HomeViewModel @Inject constructor(
         }
         viewModelScope.launch {
             userRepository.getWatchlist(userId)
+        }
+    }
+
+    private fun observeFriendsActivity() {
+        val userId = sessionManager.getUserId() ?: return
+        viewModelScope.launch {
+            userRepository.observeCachedFriendActivity(userId).collect { activity ->
+                // Jedna kartica po filmu (najsvežija aktivnost), da isti film ne zauzme celu traku
+                // kad ga je pogledalo više prijatelja.
+                _uiState.value = _uiState.value.copy(
+                    friendsActivity = activity
+                        .sortedByDescending { it.timestamp }
+                        .distinctBy { it.tmdbId }
+                        .take(HOME_FRIENDS_ACTIVITY_LIMIT)
+                )
+            }
+        }
+        viewModelScope.launch {
+            userRepository.getFriendActivity(userId)
         }
     }
 

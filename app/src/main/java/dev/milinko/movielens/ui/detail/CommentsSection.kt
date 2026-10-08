@@ -121,7 +121,14 @@ internal fun CommentsSection(
                 viewModel.consumeFailedComment()
             }
         }
-        OutlinedTextField(
+        if (!uiState.isSignedIn) {
+            AppButton(
+                text = stringResource(R.string.movie_detail_comment_signin_button),
+                variant = AppButtonVariant.Secondary,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onRequireSignIn
+            )
+        } else OutlinedTextField(
             value = commentText,
             onValueChange = { if (it.length <= 1000) commentText = it },
             modifier = Modifier.fillMaxWidth(),
@@ -173,7 +180,12 @@ internal fun CommentsSection(
                 uiState.comments.take(uiState.commentsVisibleCount).forEach { comment ->
                     CommentCard(
                         comment = comment,
-                        onLikeClick = { viewModel.toggleCommentLike(comment.id) },
+                        onLikeClick = {
+                            if (!viewModel.toggleCommentLike(comment.id)) {
+                                Toast.makeText(context, context.getString(R.string.movie_detail_comment_like_signin_toast), Toast.LENGTH_SHORT).show()
+                                onRequireSignIn()
+                            }
+                        },
                         onDeleteClick = { commentPendingDeletion = comment }
                     )
                 }

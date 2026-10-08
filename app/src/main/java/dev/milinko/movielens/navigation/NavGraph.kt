@@ -17,6 +17,7 @@ import dev.milinko.movielens.ui.friendprofile.FriendProfileScreen
 import dev.milinko.movielens.ui.home.HomeScreen
 import dev.milinko.movielens.ui.library.LibraryScreen
 import dev.milinko.movielens.ui.movienight.MovieNightScreen
+import dev.milinko.movielens.ui.profile.FriendsScreen
 import dev.milinko.movielens.ui.profile.ProfileScreen
 import dev.milinko.movielens.ui.search.SearchScreen
 
@@ -43,6 +44,7 @@ sealed class Screen(val route: String) {
 
     object Library : Screen("library")
     object Profile : Screen("profile")
+    object Friends : Screen("friends")
     object FriendProfile : Screen("friend_profile/{friendId}") {
         fun createRoute(friendId: String) = "friend_profile/$friendId"
     }
@@ -108,6 +110,7 @@ fun MovieLensNavHost(
                 onNavigateToSearch = { navController.navigateBottomTab(Screen.Search.route) },
                 onNavigateToLibrary = { navController.navigateBottomTab(Screen.Library.route) },
                 onNavigateToProfile = { navController.navigateBottomTab(Screen.Profile.route) },
+                onNavigateToFriends = { navController.navigateBottomTab(Screen.Friends.route) },
                 onNavigateToSuggested = { navController.navigate(Screen.Suggested.route) },
                 onNavigateToNowInCinemas = { navController.navigate(Screen.NowInCinemas.route) }
             )
@@ -133,12 +136,12 @@ fun MovieLensNavHost(
 
         composable(Screen.Search.route) {
             SearchScreen(
-                hiltViewModel(),
-                { tmdbId: Int -> navController.navigate(Screen.MovieDetail.createRoute(tmdbId)) },
-                { navController.navigateBottomTab(Screen.Home.route) },
-                { navController.navigateBottomTab(Screen.Library.route) },
-                { navController.navigateBottomTab(Screen.Profile.route) },
-                { navController.navigate(Screen.SignIn.createRoute(Screen.Search.route)) }
+                onNavigateToDetail = { tmdbId: Int -> navController.navigate(Screen.MovieDetail.createRoute(tmdbId)) },
+                onNavigateBack = { navController.navigateBottomTab(Screen.Home.route) },
+                onNavigateToLibrary = { navController.navigateBottomTab(Screen.Library.route) },
+                onNavigateToProfile = { navController.navigateBottomTab(Screen.Profile.route) },
+                onRequireSignIn = { navController.navigate(Screen.SignIn.createRoute(Screen.Search.route)) },
+                onNavigateToFriends = { navController.navigateBottomTab(Screen.Friends.route) }
             )
         }
 
@@ -178,6 +181,7 @@ fun MovieLensNavHost(
                 onNavigateToHome = { navController.navigateBottomTab(Screen.Home.route) },
                 onNavigateToSearch = { navController.navigateBottomTab(Screen.Search.route) },
                 onNavigateToProfile = { navController.navigateBottomTab(Screen.Profile.route) },
+                onNavigateToFriends = { navController.navigateBottomTab(Screen.Friends.route) },
                 onNavigateToSignIn = { navController.navigate(Screen.SignIn.createRoute(Screen.Library.route)) }
             )
         }
@@ -196,6 +200,17 @@ fun MovieLensNavHost(
                 {
                     navController.navigate(Screen.SignIn.createRoute(Screen.Profile.route))
                 },
+                onNavigateToFriends = { navController.navigateBottomTab(Screen.Friends.route) }
+            )
+        }
+
+        composable(Screen.Friends.route) {
+            FriendsScreen(
+                onNavigateToHome = { navController.navigateBottomTab(Screen.Home.route) },
+                onNavigateToSearch = { navController.navigateBottomTab(Screen.Search.route) },
+                onNavigateToLibrary = { navController.navigateBottomTab(Screen.Library.route) },
+                onNavigateToProfile = { navController.navigateBottomTab(Screen.Profile.route) },
+                onNavigateToSignIn = { navController.navigate(Screen.SignIn.createRoute(Screen.Friends.route)) },
                 onNavigateToFriendProfile = { friendId: String ->
                     navController.navigate(Screen.FriendProfile.createRoute(friendId))
                 },

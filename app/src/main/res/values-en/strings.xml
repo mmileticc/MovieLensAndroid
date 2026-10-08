@@ -23,6 +23,11 @@
     <string name="nav_search">Search</string>
     <string name="nav_library">Library</string>
     <string name="nav_profile">Profile</string>
+    <string name="nav_friends">Friends</string>
+    <string name="friends_top_bar_title">Friends</string>
+    <string name="friends_sign_in_required_title">Sign in to see your friends</string>
+    <string name="friends_sign_in_required_message">Add friends, follow what they watch and find a movie for a night together.</string>
+    <string name="home_section_friends_watching">Friends are watching</string>
 
     <string name="sign_in_tagline">Discover, scan and share movies\nwith your friends</string>
     <string name="sign_in_google_button">Continue with Google</string>
@@ -67,6 +72,8 @@
     <string name="movie_detail_comment_label">Write a comment…</string>
     <string name="movie_detail_post_comment">Post</string>
     <string name="movie_detail_comment_post_signin_toast">Sign in to comment</string>
+    <string name="movie_detail_comment_signin_button">Sign in to comment</string>
+    <string name="movie_detail_comment_like_signin_toast">Sign in to like comments</string>
     <string name="movie_detail_comments_empty">No comments yet. Be the first!</string>
     <string name="movie_detail_comments_show_more">Show more</string>
     <string name="movie_detail_comments_show_less">Show less</string>

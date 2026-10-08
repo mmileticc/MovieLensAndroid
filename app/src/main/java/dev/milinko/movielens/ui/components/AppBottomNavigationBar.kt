@@ -17,6 +17,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.LibraryBooks
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -42,7 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.milinko.movielens.R
 
 enum class BottomNavTab {
-    HOME, SEARCH, LIBRARY, PROFILE
+    HOME, SEARCH, LIBRARY, FRIENDS, PROFILE
 }
 
 /**
@@ -102,10 +103,16 @@ fun AppBottomNavigationBar(
             ) { onTabSelected(BottomNavTab.LIBRARY) }
 
             AppBottomNavItem(
+                label = stringResource(R.string.nav_friends),
+                icon = Icons.Default.Group,
+                selected = selectedTab == BottomNavTab.FRIENDS,
+                badgeCount = pendingCount
+            ) { onTabSelected(BottomNavTab.FRIENDS) }
+
+            AppBottomNavItem(
                 label = stringResource(R.string.nav_profile),
                 icon = Icons.Default.Person,
-                selected = selectedTab == BottomNavTab.PROFILE,
-                badgeCount = pendingCount
+                selected = selectedTab == BottomNavTab.PROFILE
             ) { onTabSelected(BottomNavTab.PROFILE) }
         }
     }

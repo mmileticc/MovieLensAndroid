@@ -53,6 +53,7 @@ import dev.milinko.movielens.ui.components.BottomNavTab
 import dev.milinko.movielens.ui.components.MovieListRow
 import dev.milinko.movielens.ui.components.MoviePosterCard
 import dev.milinko.movielens.ui.components.MovieneeWordmark
+import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.ui.components.SectionHeader
 import kotlinx.coroutines.launch
 // ...existing code...
@@ -65,6 +66,7 @@ fun HomeScreen(
     onNavigateToSearch: () -> Unit,
     onNavigateToLibrary: () -> Unit,
     onNavigateToProfile: () -> Unit,
+    onNavigateToFriends: () -> Unit = {},
     onNavigateToSuggested: () -> Unit,
     onNavigateToNowInCinemas: () -> Unit
 ) {
@@ -118,6 +120,7 @@ fun HomeScreen(
                         BottomNavTab.HOME -> {}
                         BottomNavTab.SEARCH -> onNavigateToSearch()
                         BottomNavTab.LIBRARY -> onNavigateToLibrary()
+                        BottomNavTab.FRIENDS -> onNavigateToFriends()
                         BottomNavTab.PROFILE -> onNavigateToProfile()
                     }
                 }
@@ -244,6 +247,30 @@ fun HomeScreen(
                 }
             }
 
+            if (uiState.friendsActivity.isNotEmpty()) {
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            SectionHeader(
+                                title = stringResource(R.string.home_section_friends_watching),
+                                actionText = stringResource(R.string.home_see_all),
+                                onActionClick = onNavigateToFriends,
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(uiState.friendsActivity, key = { it.activityId }) { activity ->
+                                    FriendActivityCard(activity = activity, onClick = { onNavigateToDetail(activity.tmdbId) })
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             item {
                 Spacer(modifier = Modifier.height(28.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -350,6 +377,17 @@ private fun NowInCinemasCard(movie: NowInCinemasMovie, onClick: () -> Unit) {
         title = movie.title,
         posterPath = movie.posterPath,
         caption = movie.cinemas.firstOrNull(),
+        onClick = onClick
+    )
+}
+
+@Composable
+private fun FriendActivityCard(activity: FriendActivity, onClick: () -> Unit) {
+    val rating = activity.metadata.rating
+    MoviePosterCard(
+        title = activity.movieTitle,
+        posterPath = activity.posterPath,
+        caption = if (rating != null) "${activity.friendName} ★ ${rating.toInt()}" else activity.friendName,
         onClick = onClick
     )
 }

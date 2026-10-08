@@ -44,6 +44,8 @@ data class MovieDetailUiState(
     val commentsHasMoreOnServer: Boolean = false,
     val isLoadingComments: Boolean = false,
     val isLoadingMoreComments: Boolean = false,
+    // Gost vidi komentare, ali umesto polja za unos dobija poziv na prijavu.
+    val isSignedIn: Boolean = false,
     // Bugfix (E1.2, 2. septembar 2026) - RANIJE watchlistError/historyError polja koja su se
     // prikazivala kao Toast ("Update history failed: 404" iz test feedback-a). Uklonjena namerno -
     // watchlist/watched/ocena greške se sad samo tiho loguju (Log.w), nikad ne prekidaju korisnika,
@@ -81,6 +83,7 @@ class MovieDetailViewModel @Inject constructor(
             // dolaze nesortirani po udaljenosti, ne prazni - to je samo "ukras", ne blokira ništa.
             val location = locationHelper.getLastKnownLocation()
             val userId = sessionManager.getUserId()
+            _uiState.value = _uiState.value.copy(isSignedIn = userId != null)
 
             // Faza C (16. avgust 2026, korisnički zahtev "da deluje momentalno pa se pozadinski
             // sa backom to uradi") - watchlist/istorija se već keširaju u Room-u (isti keš koji
@@ -403,10 +406,12 @@ class MovieDetailViewModel @Inject constructor(
      * CommentsRepository.toggleLike). Ne deli Job sa ostalima - lajkovi na različitim komentarima
      * su nezavisni resursi, za razliku od historyJob/watchlistJob slučaja.
      */
-    fun toggleCommentLike(commentId: Int) {
-        if (commentId < 0) return // privremeni komentar, još nije na serveru
+    /** false ako korisnik nije prijavljen (lajk nije ni pokušan) - ekran treba da traži prijavu. */
+    fun toggleCommentLike(commentId: Int): Boolean {
+        if (sessionManager.getUserId() == null) return false
+        if (commentId < 0) return true // privremeni komentar, još nije na serveru
         val state = _uiState.value
-        val comment = state.comments.firstOrNull { it.id == commentId } ?: return
+        val comment = state.comments.firstOrNull { it.id == commentId } ?: return true
         val optimisticLiked = !comment.likedByMe
         val optimisticCount = (comment.likeCount + if (optimisticLiked) 1 else -1).coerceAtLeast(0)
         _uiState.value = state.copy(
@@ -433,6 +438,7 @@ class MovieDetailViewModel @Inject constructor(
                     )
                 }
         }
+        return true
     }
 
     companion object {
