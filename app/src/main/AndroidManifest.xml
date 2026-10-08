@@ -10,6 +10,8 @@
          (nivo grada) i traži manje od korisnika nego FINE. Opciono, aplikacija radi i bez ove
          dozvole (bioskopi se samo ne sortiraju po udaljenosti). -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Push obaveštenja (Android 13+ traži dozvolu u toku rada - videti NotificationPermissionPrompt). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
@@ -38,10 +40,19 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <service
+            android:name=".data.push.MovieneeMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:theme="@style/Theme.MovieLens">
             <intent-filter>

@@ -1,17 +1,25 @@
 package dev.milinko.movielens
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
+import dev.milinko.movielens.data.pref.SessionManager
 import dev.milinko.movielens.data.pref.ThemePreferences
+import dev.milinko.movielens.data.push.NotificationPreferences
+import dev.milinko.movielens.data.push.PushNotifier
 import dev.milinko.movielens.navigation.MovieLensNavHost
 import dev.milinko.movielens.navigation.Screen
+import dev.milinko.movielens.ui.components.NotificationPermissionPrompt
 import dev.milinko.movielens.ui.theme.MovieLensTheme
 import dev.milinko.movielens.util.AppLocale
 import javax.inject.Inject
@@ -23,6 +31,15 @@ class MainActivity : ComponentActivity() {
     // pri pokretanju aktivnosti (videti ThemePreferences.kt).
     @Inject
     lateinit var themePreferences: ThemePreferences
+
+    @Inject
+    lateinit var notificationPreferences: NotificationPreferences
+
+    @Inject
+    lateinit var sessionManager: SessionManager
+
+    // Ruta iz dodirnutog push obaveštenja; NavHost je otvori čim je spreman.
+    private val pendingRoute = mutableStateOf<String?>(null)
 
     // Jezik aplikacije (srpski/engleski) - ceo UI ove aktivnosti čita resurse iz ovog konteksta.
     // Promena jezika u Podešavanjima radi recreate() aktivnosti (videti AppLocale).
@@ -36,6 +53,7 @@ class MainActivity : ComponentActivity() {
 
         // App is usable without login; auth is required only for scan action.
         val startDestination = Screen.Home.route
+        pendingRoute.value = intent?.getStringExtra(PushNotifier.EXTRA_OPEN_ROUTE)
 
         setContent {
             val isDarkMode by themePreferences.isDarkMode.collectAsStateWithLifecycle()
@@ -45,7 +63,29 @@ class MainActivity : ComponentActivity() {
                     navController = navController,
                     startDestination = startDestination
                 )
+
+                val route = pendingRoute.value
+                LaunchedEffect(route) {
+                    if (route != null) {
+                        navController.navigate(route) { launchSingleTop = true }
+                        pendingRoute.value = null
+                    }
+                }
+
+                // Posle prijave (ponovo se proverava pri svakoj promeni ekrana) jednom se objasni
+                // čemu služe obaveštenja, pa se tek onda traži sistemska dozvola.
+                val backStackEntry by navController.currentBackStackEntryAsState()
+                NotificationPermissionPrompt(
+                    trigger = backStackEntry?.destination?.route,
+                    isSignedIn = { sessionManager.getUserId() != null },
+                    preferences = notificationPreferences
+                )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.getStringExtra(PushNotifier.EXTRA_OPEN_ROUTE)?.let { pendingRoute.value = it }
     }
 }

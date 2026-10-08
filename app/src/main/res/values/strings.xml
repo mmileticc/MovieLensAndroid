@@ -414,4 +414,29 @@
     <string name="error_send_request">Zahtev za prijateljstvo nije poslat. Pokušaj ponovo.</string>
     <string name="error_remove_friend">Prijatelj nije uklonjen. Pokušaj ponovo.</string>
     <string name="error_search">Pretraga nije uspela.</string>
+    <!-- Push obaveštenja -->
+    <string name="notif_channel_friends">Prijatelji</string>
+    <string name="notif_channel_comments">Komentari</string>
+    <string name="notif_channel_movies">Filmovi</string>
+    <string name="notif_friend_request_title">Novi zahtev za prijateljstvo</string>
+    <string name="notif_friend_request_body">%1$s želi da ti bude prijatelj</string>
+    <string name="notif_friend_accepted_title">Zahtev prihvaćen</string>
+    <string name="notif_friend_accepted_body">%1$s je sada tvoj prijatelj</string>
+    <string name="notif_comment_liked_title">Novi lajk</string>
+    <string name="notif_comment_liked_body">%1$s je lajkovao tvoj komentar na „%2$s“</string>
+    <string name="notif_comment_liked_body_no_movie">%1$s je lajkovao tvoj komentar</string>
+    <string name="notif_movie_shared_title">Preporuka od prijatelja</string>
+    <string name="notif_movie_shared_body">%1$s ti preporučuje „%2$s“</string>
+    <string name="notif_watchlist_cinema_title">Sada u bioskopima</string>
+    <string name="notif_watchlist_cinema_body">„%1$s“ sa tvoje liste sada igra u bioskopima</string>
+    <string name="settings_notifications_header">Obaveštenja</string>
+    <string name="settings_notif_friend_request">Zahtevi za prijateljstvo</string>
+    <string name="settings_notif_friend_accepted">Prihvaćeni zahtevi</string>
+    <string name="settings_notif_comment_liked">Lajkovi na moje komentare</string>
+    <string name="settings_notif_movie_shared">Filmovi koje mi pošalju prijatelji</string>
+    <string name="settings_notif_watchlist_cinema">Film sa moje liste stigao u bioskope</string>
+    <string name="notif_permission_title">Uključiti obaveštenja?</string>
+    <string name="notif_permission_message">Javićemo ti kad ti neko pošalje zahtev za prijateljstvo, lajkuje komentar ili preporuči film, i kad film sa tvoje liste stigne u bioskope. Vrste obaveštenja menjaš u Profil → Podešavanja.</string>
+    <string name="notif_permission_allow">Uključi</string>
+    <string name="notif_permission_later">Ne sada</string>
 </resources>

@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.milinko.movielens.data.auth.AuthRepository
 import dev.milinko.movielens.data.pref.SessionManager
 import dev.milinko.movielens.data.pref.UrlStorage
+import dev.milinko.movielens.data.push.PushTokenManager
 import dev.milinko.movielens.data.remote.AuthApi
 import dev.milinko.movielens.data.remote.AuthFirebaseRequest
 import dev.milinko.movielens.data.remote.UserDto
@@ -24,7 +25,8 @@ class AuthViewModel @Inject constructor(
     private val authApi: AuthApi,
     private val sessionManager: SessionManager,
     private val movieRepository: MovieRepository,
-    private val urlStorage: UrlStorage
+    private val urlStorage: UrlStorage,
+    private val pushTokenManager: PushTokenManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
@@ -82,6 +84,7 @@ class AuthViewModel @Inject constructor(
                         avatarUrl = user.avatarUrl
                     )
                     _uiState.value = AuthUiState.SignedIn(user)
+                    pushTokenManager.syncAsync()
                 } else {
                     _uiState.value = AuthUiState.Error(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_sign_in_no_token))
                 }
@@ -106,6 +109,9 @@ class AuthViewModel @Inject constructor(
     }
 
     fun signOut() {
+        val userId = sessionManager.getUserId()
+        val appToken = sessionManager.getAppToken()
+        if (userId != null && appToken != null) pushTokenManager.unregisterAsync(userId, appToken)
         authRepo.signOut()
         sessionManager.clearSession()
         _uiState.value = AuthUiState.Idle

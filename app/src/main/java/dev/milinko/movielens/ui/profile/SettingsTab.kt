@@ -225,6 +225,9 @@ internal fun SettingsSection(
         LanguageSetting()
 
         Spacer(modifier = Modifier.height(16.dp))
+        NotificationSettingsSection()
+
+        Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = stringResource(R.string.profile_about_section),
             style = MaterialTheme.typography.titleMedium,

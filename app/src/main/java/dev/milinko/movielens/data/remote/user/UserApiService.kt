@@ -6,6 +6,7 @@ import dev.milinko.movielens.data.remote.movie.WatchlistItem
 import dev.milinko.movielens.data.remote.movie.WatchlistResponse
 import retrofit2.Response
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.DELETE
@@ -149,5 +150,19 @@ interface UserApiService {
         @Path("friendId") friendId: String,
         @Query("page") page: Int = 1
     ): Response<MovieNightResponse>
-}
 
+    // Push obaveštenja - registracija uređaja za prijavljeni nalog.
+    @PUT("api/users/{userId}/device-token")
+    suspend fun registerDeviceToken(
+        @Path("userId") userId: String,
+        @Body body: DeviceTokenBody
+    ): Response<Unit>
+
+    // Pri odjavi sesija je već obrisana, pa se token naloga prosleđuje eksplicitno.
+    @DELETE("api/users/{userId}/device-token")
+    suspend fun unregisterDeviceToken(
+        @Path("userId") userId: String,
+        @Query("token") token: String,
+        @Header("Authorization") authorization: String
+    ): Response<Unit>
+}

@@ -268,3 +268,7 @@ data class MovieNightResponse(
     val matchScore: Float? = null
 )
 
+data class DeviceTokenBody(
+    @SerializedName("token")
+    val token: String
+)
