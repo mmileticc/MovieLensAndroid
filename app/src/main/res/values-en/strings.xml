@@ -384,4 +384,10 @@
     <string name="share_friend_failed">Sending failed, please try again</string>
     <string name="share_friend_signin_toast">Sign in to send movies to friends</string>
     <string name="notif_movie_shared_body_with_note">%1$s recommends \"%2$s\": %3$s</string>
+    <!-- Ekran Obaveštenja -->
+    <string name="notifications_title">Notifications</string>
+    <string name="notifications_empty">No notifications yet. Movies your friends send you, friend requests and likes show up here.</string>
+    <string name="notifications_load_failed">Notifications cannot be loaded right now.</string>
+    <string name="notifications_sign_in_title">Sign in to see notifications</string>
+    <string name="notifications_sign_in_message">Movies your friends send you, requests and likes show up here.</string>
 </resources>

@@ -281,3 +281,24 @@ data class ShareMovieBody(
     @SerializedName("note")
     val note: String? = null
 )
+
+// Istorija obaveštenja (GET /api/users/{id}/notifications). `data` su isti podaci kao u push poruci.
+data class NotificationItem(
+    @SerializedName("id")
+    val id: Int,
+    @SerializedName("type")
+    val type: String? = null,
+    @SerializedName("content")
+    val content: String = "",
+    @SerializedName("data")
+    val data: Map<String, String>? = null,
+    @SerializedName("isRead")
+    val isRead: Boolean = false,
+    @SerializedName("createdAt")
+    val createdAt: Long? = null
+)
+
+data class NotificationsResponse(
+    @SerializedName("notifications")
+    val notifications: List<NotificationItem> = emptyList()
+)

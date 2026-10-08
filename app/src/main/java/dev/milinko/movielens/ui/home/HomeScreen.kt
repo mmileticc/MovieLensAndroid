@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,11 +22,15 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 // ...existing imports...
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
@@ -55,6 +60,7 @@ import dev.milinko.movielens.ui.components.MoviePosterCard
 import dev.milinko.movielens.ui.components.MovieneeWordmark
 import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.ui.components.SectionHeader
+import dev.milinko.movielens.ui.notifications.NotificationsViewModel
 import kotlinx.coroutines.launch
 // ...existing code...
 
@@ -67,6 +73,7 @@ fun HomeScreen(
     onNavigateToLibrary: () -> Unit,
     onNavigateToProfile: () -> Unit,
     onNavigateToFriends: () -> Unit = {},
+    onNavigateToNotifications: () -> Unit = {},
     onNavigateToSuggested: () -> Unit,
     onNavigateToNowInCinemas: () -> Unit
 ) {
@@ -162,7 +169,7 @@ fun HomeScreen(
                 .background(MaterialTheme.colorScheme.background)
         ) {
             item {
-                HomeHeader()
+                HomeHeader(onNotificationsClick = onNavigateToNotifications)
             }
 
             // Search / scan lives on the Search screen. Home keeps a quick FAB for search.
@@ -334,7 +341,40 @@ fun HomeScreen(
 // ...existing code...
 
 @Composable
-private fun HomeHeader() {
+private fun HomeHeader(
+    onNotificationsClick: () -> Unit,
+    notificationsViewModel: NotificationsViewModel = hiltViewModel()
+) {
+    val notifications by notificationsViewModel.uiState.collectAsStateWithLifecycle()
+    // Ponovo pri svakom povratku na Home (npr. posle ekrana Obaveštenja) - brojač je uvek tačan.
+    LaunchedEffect(Unit) { notificationsViewModel.load() }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(modifier = Modifier.weight(1f)) { HomeTitle() }
+        // Gost nema obaveštenja - zvonce se ne prikazuje.
+        if (!notifications.requiresSignIn) {
+            IconButton(onClick = onNotificationsClick) {
+                BadgedBox(
+                    badge = {
+                        if (notifications.unreadCount > 0) {
+                            Badge { Text(if (notifications.unreadCount > 9) "9+" else notifications.unreadCount.toString()) }
+                        }
+                    }
+                ) {
+                    Icon(
+                        Icons.Default.Notifications,
+                        contentDescription = stringResource(R.string.notifications_title)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeTitle() {
     // Faza 4 redizajna: wordmark je ranije bio 28sp Bold - dominirao je ekran (videti
     // MOVIELENS_DESIGN_PLAN.md 2.2: "manji i tanji ... pomera fokus na sadržaj"). Sad koristi
     // `titleLarge` (20sp SemiBold) iz teme, akcentna boja se zadržava radi prepoznatljivosti brenda.

@@ -450,4 +450,10 @@
     <string name="share_friend_failed">Slanje nije uspelo, pokušaj ponovo</string>
     <string name="share_friend_signin_toast">Prijavi se da bi slao filmove prijateljima</string>
     <string name="notif_movie_shared_body_with_note">%1$s ti preporučuje „%2$s“: %3$s</string>
+    <!-- Ekran Obaveštenja -->
+    <string name="notifications_title">Obaveštenja</string>
+    <string name="notifications_empty">Još nema obaveštenja. Ovde stižu filmovi koje ti prijatelji pošalju, zahtevi za prijateljstvo i lajkovi.</string>
+    <string name="notifications_load_failed">Obaveštenja trenutno ne mogu da se učitaju.</string>
+    <string name="notifications_sign_in_title">Prijavi se da vidiš obaveštenja</string>
+    <string name="notifications_sign_in_message">Filmovi koje ti prijatelji pošalju, zahtevi i lajkovi stižu ovde.</string>
 </resources>

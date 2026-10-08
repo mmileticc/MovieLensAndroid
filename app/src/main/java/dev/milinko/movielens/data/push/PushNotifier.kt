@@ -70,9 +70,10 @@ object PushNotifier {
         runCatching { NotificationManagerCompat.from(context).notify(notificationId, notification) }
     }
 
-    private data class Content(val channel: String, val title: String, val body: String, val route: String)
+    /** Tekst i odredište obaveštenja - deli ga push prikaz i ekran Obaveštenja (istorija). */
+    internal data class Content(val channel: String, val title: String, val body: String, val route: String)
 
-    private fun contentFor(type: PushType, data: Map<String, String>): Content? {
+    internal fun contentFor(type: PushType, data: Map<String, String>): Content? {
         val actor = data["actorName"]?.takeIf { it.isNotBlank() } ?: AppLocale.string(R.string.profile_default_username)
         val actorId = data["actorId"]
         val tmdbId = data["tmdbId"]?.toIntOrNull()

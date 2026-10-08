@@ -10,6 +10,7 @@ import dev.milinko.movielens.data.remote.user.AddToHistoryBody
 import dev.milinko.movielens.data.remote.user.FriendActionBody
 import dev.milinko.movielens.data.remote.user.FriendProfileResponse
 import dev.milinko.movielens.data.remote.user.GenreAffinity
+import dev.milinko.movielens.data.remote.user.NotificationItem
 import dev.milinko.movielens.data.remote.user.PendingRequest
 import dev.milinko.movielens.data.remote.user.ShareMovieBody
 import dev.milinko.movielens.data.remote.user.UpdateHistoryBody
@@ -115,6 +116,9 @@ interface UserRepository {
     suspend fun getFriendActivity(userId: String): Result<List<FriendActivity>>
 
     suspend fun shareMovie(userId: String, friendId: String, tmdbId: Int, note: String?): Result<Unit>
+
+    suspend fun getNotifications(userId: String): Result<List<NotificationItem>>
+    suspend fun markNotificationsRead(userId: String): Result<Unit>
 
     // Dorada (25. avgust 2026, korisnička žalba "za neke prijatelje se predlozi ponavljaju posle
     // 3-4 ekrana") - vraća ceo MovieNightResponse (ne samo listu) da MovieNightViewModel dobije i
@@ -456,6 +460,17 @@ class UserRepositoryImpl @Inject constructor(
         } else {
             throw HttpException(response)
         }
+    }
+
+    override suspend fun getNotifications(userId: String): Result<List<NotificationItem>> = safeApiCall {
+        val response = userApiService.getNotifications(userId)
+        if (!response.isSuccessful) throw HttpException(response)
+        response.body()?.notifications.orEmpty()
+    }
+
+    override suspend fun markNotificationsRead(userId: String): Result<Unit> = safeApiCall {
+        val response = userApiService.markNotificationsRead(userId)
+        if (!response.isSuccessful) throw HttpException(response)
     }
 
     override suspend fun shareMovie(userId: String, friendId: String, tmdbId: Int, note: String?): Result<Unit> = safeApiCall {

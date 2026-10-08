@@ -172,4 +172,14 @@ interface UserApiService {
         @Path("userId") userId: String,
         @Body body: ShareMovieBody
     ): Response<Unit>
+
+    @GET("api/users/{userId}/notifications")
+    suspend fun getNotifications(
+        @Path("userId") userId: String
+    ): Response<NotificationsResponse>
+
+    @POST("api/users/{userId}/notifications/read")
+    suspend fun markNotificationsRead(
+        @Path("userId") userId: String
+    ): Response<Unit>
 }

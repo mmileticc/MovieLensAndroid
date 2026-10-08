@@ -17,6 +17,7 @@ import dev.milinko.movielens.ui.friendprofile.FriendProfileScreen
 import dev.milinko.movielens.ui.home.HomeScreen
 import dev.milinko.movielens.ui.library.LibraryScreen
 import dev.milinko.movielens.ui.movienight.MovieNightScreen
+import dev.milinko.movielens.ui.notifications.NotificationsScreen
 import dev.milinko.movielens.ui.profile.FriendsScreen
 import dev.milinko.movielens.ui.profile.ProfileScreen
 import dev.milinko.movielens.ui.search.SearchScreen
@@ -45,6 +46,7 @@ sealed class Screen(val route: String) {
     object Library : Screen("library")
     object Profile : Screen("profile")
     object Friends : Screen("friends")
+    object Notifications : Screen("notifications")
     object FriendProfile : Screen("friend_profile/{friendId}") {
         fun createRoute(friendId: String) = "friend_profile/$friendId"
     }
@@ -111,6 +113,7 @@ fun MovieLensNavHost(
                 onNavigateToLibrary = { navController.navigateBottomTab(Screen.Library.route) },
                 onNavigateToProfile = { navController.navigateBottomTab(Screen.Profile.route) },
                 onNavigateToFriends = { navController.navigateBottomTab(Screen.Friends.route) },
+                onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
                 onNavigateToSuggested = { navController.navigate(Screen.Suggested.route) },
                 onNavigateToNowInCinemas = { navController.navigate(Screen.NowInCinemas.route) }
             )
@@ -201,6 +204,14 @@ fun MovieLensNavHost(
                     navController.navigate(Screen.SignIn.createRoute(Screen.Profile.route))
                 },
                 onNavigateToFriends = { navController.navigateBottomTab(Screen.Friends.route) }
+            )
+        }
+
+        composable(Screen.Notifications.route) {
+            NotificationsScreen(
+                onNavigateBack = { navController.navigateUp() },
+                onNavigateToRoute = { route -> navController.navigate(route) },
+                onNavigateToSignIn = { navController.navigate(Screen.SignIn.createRoute(Screen.Notifications.route)) }
             )
         }
 
