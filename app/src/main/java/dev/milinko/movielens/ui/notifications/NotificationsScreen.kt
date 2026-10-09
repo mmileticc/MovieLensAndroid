@@ -51,7 +51,7 @@ import dev.milinko.movielens.data.remote.user.NotificationItem
 import dev.milinko.movielens.ui.components.ErrorCard
 import dev.milinko.movielens.ui.components.SignInRequiredState
 
-/** Istorija obaveštenja; dodir na stavku otvara film, profil prijatelja ili Prijatelje. */
+/** Notification history; tapping an item opens the movie, the friend's profile or Friends. */
 @Composable
 fun NotificationsScreen(
     viewModel: NotificationsViewModel = hiltViewModel(),
@@ -137,7 +137,8 @@ private fun PushType.icon(): ImageVector = when (this) {
 @Composable
 private fun NotificationRow(item: NotificationItem, onClick: (String) -> Unit) {
     val type = PushType.fromWire(item.type)
-    // Tekst se sastavlja isto kao za push (na jeziku aplikacije); nepoznat/stariji tip -> tekst sa servera.
+    // Text is built the same way as for the push (in the app's language); an unknown/older type
+    // falls back to the text from the server.
     val content = type?.let { PushNotifier.contentFor(it, item.data.orEmpty()) }
     val title = content?.title ?: item.content
     val body = content?.body

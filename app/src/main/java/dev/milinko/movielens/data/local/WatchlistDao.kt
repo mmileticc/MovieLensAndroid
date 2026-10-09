@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
+/** Cached watchlist, per user. */
 @Dao
 interface WatchlistDao {
 
@@ -26,9 +27,8 @@ interface WatchlistDao {
     suspend fun delete(userId: String, tmdbId: Int)
 
     /**
-     * Puno osvežavanje keša sa mreže (posle uspešnog GET /watchlist) - obriši sve za korisnika pa
-     * upiši sveže. Jednostavnije i dovoljno brzo za realne veličine liste (nema potrebe za
-     * diff/merge logikom), garantuje da lokalni keš tačno odražava server posle svakog refresh-a.
+     * Full refresh after a successful network load: delete the user's rows and insert the fresh
+     * list. Simple and fast enough for real list sizes, and the cache always matches the server.
      */
     @Transaction
     suspend fun replaceAll(userId: String, items: List<WatchlistEntity>) {

@@ -5,12 +5,10 @@ import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
 
 /**
- * Prvi put uveden u Fazi 6 redizajna - pre ovoga je svaki ekran koristio svoj ad-hoc
- * RoundedCornerShape(...) (8dp/12dp/14dp mešano, videti MOVIELENS_DESIGN_PLAN.md 1.3).
- *
- * small = chip, dugme, mali bedž
- * medium = kartica filma, showtime kartica (podrazumevani oblik za većinu kartica)
- * large = bottom sheet, dialog, donji rub hero slike
+ * Corner radius scale used across the app:
+ * - small = chip, button, small badge
+ * - medium = movie card, showtime card (the default for most cards)
+ * - large = bottom sheet, dialog, bottom edge of the hero image
  */
 val MovieLensShapes = Shapes(
     small = RoundedCornerShape(8.dp),
@@ -18,6 +16,5 @@ val MovieLensShapes = Shapes(
     large = RoundedCornerShape(20.dp)
 )
 
-// Poster slike su UVEK 8dp (dosledno kroz sve kartice) - ne zavisi od Shapes() skale iznad jer
-// Material3 Shapes nema poseban slot za "poster" - koristi se direktno gde treba.
+// Posters always use 8dp corners. Material 3 Shapes has no "poster" slot, so this is used directly.
 val MlPosterCornerRadius = 8.dp

@@ -34,12 +34,9 @@ import coil.request.ImageRequest
 import dev.milinko.movielens.R
 
 /**
- * Pun ekran pregled slike na klik - deljena komponenta (2. septembar 2026, izdvojena iz
- * `MovieDetailScreen.kt`-ovog `FullScreenPosterDialog`-a da bi je mogao da koristi i
- * `ActorDetailScreen` za fotografiju glumca, koja je inače isečena preko `ContentScale.Crop`
- * fiksne visine hero-a pa se ceo kadar ne vidi). `ContentScale.Fit` + pinch-to-zoom/pan
- * (`detectTransformGestures` - deo Compose foundation-a, bez nove biblioteke), kao u drugim
- * movie/photo aplikacijama.
+ * Full-screen image preview (movie poster, actor photo): `ContentScale.Fit` plus pinch-to-zoom and
+ * pan via `detectTransformGestures`, so the whole picture can be seen even where the screen shows
+ * it cropped.
  */
 @Composable
 fun FullScreenImageDialog(imageUrl: String, onDismiss: () -> Unit) {

@@ -113,12 +113,9 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /**
- * Faza D (17. avgust 2026, predlog mentora Marka) - segmentovani toggle "Sve filmove" / "U
- * bioskopima". Nema gotove segmented-control komponente u projektu (samo `SecondaryTabRow` za
- * Profile/Library tabove, koji vodi računa o zasebnim stranicama - ovde nema stranica, samo
- * prekidač za jedan search bar), pa je napravljena minimalna verzija istim vizuelnim jezikom kao
- * `GenreChip` (surfaceVariant pozadina + outline ivica), samo sa dva klikabilna segmenta i
- * markiranim izabranim (primary pozadina/onPrimary tekst).
+ * Segmented toggle "All movies" / "In cinemas". The project has no segmented control component
+ * (SecondaryTabRow is for real pages), so this is a minimal one in the same visual language as
+ * `GenreChip`, with the selected segment highlighted (primary background / onPrimary text).
  */
 @Composable
 internal fun SearchModeToggle(isCinemaMode: Boolean, onModeChange: (Boolean) -> Unit) {
@@ -145,12 +142,10 @@ internal fun SearchModeToggle(isCinemaMode: Boolean, onModeChange: (Boolean) -> 
 }
 
 /**
- * Faza D dorada (korisnički zahtev za poređenje Gemini vs. lokalni MiniLM embedding "da bih
- * pogledao razliku u radu", pa naknadno "da ne bude isto veliko kao ova gore podela... manji
- * togle") - NAMERNO sitnija/sekundarna varijanta [SearchModeSegment] jezika: `wrapContentWidth`
- * umesto `fillMaxWidth` (ne razvlači se preko celog ekrana kao glavni mod toggle), manji tekst
- * (`labelSmall`) i manji unutrašnji padding, `secondaryContainer` pozadina da vizuelno čita kao
- * "podešavanje" unutar "U bioskopima" moda, ne kao ravnopravan treći mod pretrage.
+ * Toggle between the Gemini and the local MiniLM embedding engine for the "In cinemas" search (to
+ * compare their results; shown only when enabled in DevSettings). A deliberately smaller, secondary
+ * variant of [SearchModeSegment]: wraps its content, smaller text and a `secondaryContainer`
+ * background, so it reads as a setting inside the mode rather than a third search mode.
  */
 @Composable
 internal fun EmbeddingEngineToggle(useLocalEmbedding: Boolean, onChange: (Boolean) -> Unit) {
@@ -174,6 +169,7 @@ internal fun EmbeddingEngineToggle(useLocalEmbedding: Boolean, onChange: (Boolea
     }
 }
 
+/** One segment of [EmbeddingEngineToggle]. */
 @Composable
 internal fun EmbeddingEngineSegment(text: String, selected: Boolean, onClick: () -> Unit) {
     Box(
@@ -192,6 +188,7 @@ internal fun EmbeddingEngineSegment(text: String, selected: Boolean, onClick: ()
     }
 }
 
+/** One segment of [SearchModeToggle]. */
 @Composable
 internal fun SearchModeSegment(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
@@ -210,8 +207,10 @@ internal fun SearchModeSegment(text: String, selected: Boolean, onClick: () -> U
     }
 }
 
-/** Jedan "nedavna pretraga" chip - klik ponovo pokreće tu pretragu, X uklanja iz istorije. Isti
- * vizuelni jezik kao GenreChip (surfaceVariant + outline border), samo klikabilan i sa X. */
+/**
+ * A "recent search" chip: tapping runs the search again, X removes it from the history. Same
+ * visual language as GenreChip, but clickable and with an X.
+ */
 @Composable
 internal fun RecentSearchChip(
     query: String,
@@ -243,7 +242,7 @@ internal fun RecentSearchChip(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false)
         )
-        // 40dp meta (ranije 24dp sa ikonicom od 12dp - teško se pogađalo prstom).
+        // 40dp touch target (a 12dp icon alone is hard to hit with a finger).
         IconButton(onClick = onRemove, modifier = Modifier.size(40.dp)) {
             Icon(
                 imageVector = Icons.Default.Close,
@@ -256,9 +255,8 @@ internal fun RecentSearchChip(
 }
 
 /**
- * Kompaktna traka iznad input bara kad je slika izabrana ali još nije analizirana - isti obrazac
- * kao "prikačena slika" pregled u chat aplikacijama (WhatsApp/Telegram stil), zamenjuje raniju
- * veliku (260dp) karticu za pregled slike sa dva odvojena dugmeta.
+ * Compact strip above the input bar when an image is picked but not analyzed yet, like the
+ * "attached image" preview in chat apps.
  */
 @Composable
 internal fun SelectedImagePreviewRow(imageUri: String, isAnalyzing: Boolean, onRemove: () -> Unit) {
@@ -298,11 +296,9 @@ internal fun SelectedImagePreviewRow(imageUri: String, isAnalyzing: Boolean, onR
 }
 
 /**
- * Docked input bar (Faza 6, MOVIELENS_DESIGN_PLAN.md 2.3): ikonica kamere/slike (levo, sa
- * `PremiumBadge` u gornjem desnom uglu - signalizira da pretraga slikom troši Gemini pozive, za
- * sada čisto vizuelno), tekstualno polje (centar, pilula), okruglo dugme za slanje (desno).
- * Dugme prioritetno šalje sliku na analizu ako je slika prikačena, inače pokreće tekstualnu
- * pretragu - ista logika kao ranija dva odvojena dugmeta, sad konsolidovana u jedno.
+ * Docked input bar: the camera/image button (left, with a `PremiumBadge` - image search uses Gemini
+ * requests), the text field (center, pill-shaped) and a round send button (right). Send analyzes
+ * the attached image if there is one, otherwise runs the text search.
  */
 @Composable
 internal fun SearchInputBar(
@@ -313,8 +309,8 @@ internal fun SearchInputBar(
     isAnalyzingImage: Boolean,
     isCinemaMode: Boolean,
     onSubmit: () -> Unit,
-    // Pita roditelja da li sme da otvori meni Galerija/Kamera - roditelj sam prikazuje objašnjenje
-    // ako ne sme (prijava potrebna / "U bioskopima" mod) umesto sive, "pokvarene" ikonice.
+    // Asks the parent whether the Gallery/Camera menu may open - if not (sign-in required / "In
+    // cinemas" mode) the parent explains why instead of showing a grey, "broken" icon.
     canOpenImageMenu: () -> Boolean,
     onGalleryClick: () -> Unit,
     onCameraClick: () -> Unit
@@ -331,9 +327,9 @@ internal fun SearchInputBar(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box {
-            // Faza D - pretraga slikom (Gemini vision) postoji samo u tekstualnom modu. UX dorada
-            // (oktobar 2026): u "U bioskopima" modu dugme više nije onemogućeno bez objašnjenja -
-            // samo je prigušeno, a klik objašnjava zašto i nudi prelazak (videti canOpenImageMenu).
+            // Image search (Gemini vision) exists only in the text mode. In the "In cinemas" mode
+            // the button is dimmed, and tapping it explains why and offers to switch (see
+            // canOpenImageMenu).
             IconButton(
                 onClick = { if (canOpenImageMenu()) showImageSourceMenu = true },
                 modifier = Modifier
@@ -377,10 +373,8 @@ internal fun SearchInputBar(
         TextField(
             value = query,
             onValueChange = onQueryChange,
-            // Bag korisnik prijavio: fiksna .height(48.dp) je bila premala za M3 TextField-ov
-            // podrazumevani unutrašnji padding, pa je donji deo teksta (repovi slova g/j/p/y) bio
-            // odsečen. heightIn(min=) umesto height() - polje raste do svoje prirodne, neisečene
-            // visine ako zatreba, umesto da se nasilno stisne.
+            // heightIn(min =) instead of a fixed height: a fixed 48dp was too small for the M3
+            // TextField's default padding and cut off descenders (g/j/p/y).
             modifier = Modifier
                 .weight(1f)
                 .heightIn(min = 48.dp),

@@ -102,6 +102,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 
+/**
+ * Own profile: the editable profile header and the settings (language, theme, notifications, app
+ * info, developer options). Signed out, it shows a sign-in prompt instead.
+ */
 @Composable
 fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -114,12 +118,12 @@ fun ProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val sessionUser by viewModel.sessionUser.collectAsStateWithLifecycle()
-    // Odjava briše ceo back stack i vraća na prijavu - lako se slučajno pritisne u gornjoj traci.
+    // Sign-out clears the whole back stack - easy to tap by accident in the top bar, so confirm.
     var showSignOutConfirm by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
-    // Collect one-shot UI events (toasts) from ViewModel
+    // One-shot UI events (toasts) from the ViewModel.
     LaunchedEffect(viewModel.events) {
         viewModel.events.collect { event ->
             when (event) {
@@ -146,12 +150,7 @@ fun ProfileScreen(
             val authUiState by authViewModel.uiState.collectAsStateWithLifecycle()
             val isSignedIn = authUiState is AuthUiState.SignedIn || authViewModel.isAlreadySignedIn()
 
-            // Bug fix (17. avgust 2026): dodat statusBarsPadding (videti identičan komentar u
-            // LibraryScreen.kt) + uklonjeno duplirano "Backend" dugme koje je otvaralo isti
-            // SettingsDialog kao kartica "Backend URL" na Podešavanja tabu (SettingsSection
-            // ispod) - dve odvojene tačke ulaza za istu funkciju je nepotrebno zauzimalo top bar
-            // i vizuelno zatrpavalo prostor pored Odjavi se/Prijavi se dugmeta. Uređivanje
-            // backend URL-a i dalje postoji, samo na jednom mestu (u tabu).
+            // Custom top bar with statusBarsPadding (see LibraryScreen.kt).
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -220,12 +219,8 @@ fun ProfileScreen(
                 .background(MaterialTheme.colorScheme.background)
         ) {
             if (sessionUser == null) {
-                // Bugfix (17. avgust 2026, korisnička žalba: neulogovan korisnik je ovde ranije
-                // video poluprazan/"pokvaren" EditableProfileHeader - bez username-a, bez
-                // avatara, ništa se ne može ni sačuvati bez tokena, izgledalo je kao neki
-                // generički nefunkcionalan korisnik umesto jasne poruke). Isti deljeni
-                // SignInRequiredState prikaz kao Library kad tab zahteva prijavu - ne navigira
-                // automatski, samo jasno kaže šta fali i nudi dugme.
+                // Shared sign-in prompt (like Library): does not navigate by itself, just explains
+                // what is missing and offers a button.
                 SignInRequiredState(
                     title = stringResource(R.string.profile_sign_in_required_title),
                     message = stringResource(R.string.profile_sign_in_required_message),

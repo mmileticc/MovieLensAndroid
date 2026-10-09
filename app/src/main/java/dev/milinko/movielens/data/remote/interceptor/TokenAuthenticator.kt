@@ -14,20 +14,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Backend JWT (izdat u Routing.kt) traje 24h. Bez ovoga, kad istekne, SVAKI zaštićeni poziv
- * (watchlist, history, profile...) tiho puca sa 401 zauvek - SessionManager.isSessionValid()
- * samo proverava da li token POSTOJI, ne da li je istekao, pa korisnik ostaje "prijavljen" u UI-ju
- * dok mu ništa ne radi dok se ručno ne odjavi/prijavi.
+ * Renews the backend JWT (valid 24 hours) transparently.
  *
- * Ovaj Authenticator hvata 401 odgovore, tiho traži svež Firebase ID token (Firebase SDK sam
- * održava refresh token koji traje mnogo duže od 24h) i njime ponovo razmenjuje novi backend JWT
- * (POST /api/auth/firebase), pa ponavlja originalni zahtev sa novim tokenom - korisnik ništa ne
- * primeti. Ako i to ne uspe (npr. korisnik stvarno nije prijavljen na Firebase-u), odustaje i
- * zahtev ostaje 401 - postojeći "traži prijavu" tok u ViewModel-ima to hvata.
+ * On a 401 it asks Firebase for a fresh ID token (the Firebase SDK keeps a long-lived refresh
+ * token), exchanges it for a new backend JWT and retries the request, so the user never notices.
+ * If that fails too (the user is really signed out of Firebase), the request stays 401 and the
+ * ViewModels show the sign-in prompt.
  *
- * Koristi @AuthRefresh AuthApi (poseban Retrofit/OkHttpClient BEZ ovog Authenticator-a i BEZ
- * AuthInterceptor-a) da se izbegne beskonačna petlja/Dagger ciklus - da smo ovde koristili glavni
- * OkHttpClient, on bi opet prošao kroz ovaj isti Authenticator na 401.
+ * Uses the @AuthRefresh AuthApi (a separate Retrofit/OkHttpClient without this authenticator and
+ * without AuthInterceptor); using the main client here would loop on 401 and create a Dagger cycle.
  */
 @Singleton
 class TokenAuthenticator @Inject constructor(
@@ -39,16 +34,16 @@ class TokenAuthenticator @Inject constructor(
     private val refreshLock = Any()
 
     override fun authenticate(route: Route?, response: Response): Request? {
-        // Ne pokušavaj ako korisnik nikad nije bio prijavljen, i ne pokušavaj više od jednom po
-        // originalnom zahtevu (sprečava beskonačnu petlju ako je refresh i dalje neuspešan).
+        // Do not try when the user was never signed in, and only once per original request (no
+        // endless loop if the refresh keeps failing).
         if (sessionManager.getAppToken() == null) return null
         if (responseCount(response) > 1) return null
 
         val failedToken = response.request.header("Authorization")?.removePrefix("Bearer ")
 
-        // Više paralelnih zahteva (npr. Home učitava nekoliko lista odjednom) može da dobije 401
-        // istovremeno. Samo prvi osvežava token; ostali čekaju na lock i, pošto je token u
-        // međuvremenu već zamenjen, samo ponove zahtev sa novim umesto da svaki radi svoj refresh.
+        // Several parallel requests (e.g. Home loads a few lists at once) can get 401 at the same
+        // time. Only the first one refreshes; the others wait for the lock and, since the token has
+        // already changed, just retry with the new one.
         synchronized(refreshLock) {
             val currentToken = sessionManager.getAppToken() ?: return null
             if (currentToken != failedToken) {

@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
+/** Key-value access to [GenericCacheEntity]. */
 @Dao
 interface GenericCacheDao {
 

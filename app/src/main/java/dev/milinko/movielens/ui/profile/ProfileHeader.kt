@@ -101,12 +101,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// Isto ograničenje kao BIO_MAX_LENGTH na backendu (db/UsersTable.kt).
+// Same limit as BIO_MAX_LENGTH on the backend (db/UsersTable.kt).
 private const val BIO_MAX_LENGTH = 160
 
-/** Krug avatara sa tankim `accentPrimary` obrubom (Faza 7, MOVIELENS_DESIGN_PLAN.md 2.6) - deljen
- * između `ProfileHeader`/`SessionIdentityHeader` (sopstveni profil) i `FriendProfileScreen`
- * (profil prijatelja, "isti stil avatara"). */
+/**
+ * Avatar circle with a thin `accentPrimary` border, shared by one's own profile headers and
+ * FriendProfileScreen.
+ */
 @Composable
 internal fun BorderedAvatar(avatarUrl: String?, fallbackLabel: String?, size: Int = 80) {
     Box(
@@ -135,6 +136,7 @@ internal fun BorderedAvatar(avatarUrl: String?, fallbackLabel: String?, size: In
     }
 }
 
+/** Read-only profile header: avatar, name, status line and statistics. */
 @Composable
 internal fun ProfileHeader(profile: dev.milinko.movielens.data.remote.user.UserProfile) {
     Column(
@@ -187,6 +189,9 @@ internal fun ProfileHeader(profile: dev.milinko.movielens.data.remote.user.UserP
     }
 }
 
+/**
+ * Minimal header from the cached session (name, avatar) while the full profile is not loaded yet.
+ */
 @Composable
 internal fun SessionIdentityHeader(user: SessionUserInfo) {
     Column(
@@ -210,6 +215,7 @@ internal fun SessionIdentityHeader(user: SessionUserInfo) {
     }
 }
 
+/** One statistic: a large value with a label below. */
 @Composable
 internal fun StatItem(value: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -219,22 +225,17 @@ internal fun StatItem(value: String, label: String) {
 }
 
 /**
- * Header + uređivanje profila, spojeni u JEDAN prikaz (Faza 7 dorada #4 - korisnička žalba: gore
- * je stajao read-only header sa slikom/username-om/bio-jem, pa odmah ispod ISTI podaci ponovo kao
- * editabilna forma - redundantno). Olovka-ikonica prebacuje između read-only prikaza (isto što je
- * ranije crtao `ProfileHeader`) i edit stanja (isto polja kao ranija `EditProfileSection`), isti
- * obrazac kao "tap to edit" u većini appova - umesto dve stalno vidljive kopije istih podataka.
+ * Profile header and profile editing in ONE view: the pencil/edit button switches between the
+ * read-only header and the edit form, instead of showing the same data twice.
  *
- * Default `username` (kad korisnik nikad nije sam postavio ime) se sad provlači kroz
- * `sanitizeUsername` PRE nego što uđe u tekstualno polje - korisnička žalba: default je bio sirovo
- * Google ime ("Miloš Miletić", razmak + dijakritika), pa je čuvanje BILO KOJE izmene (čak i kad
- * korisnik menja samo sliku ili bio, ne dodiruje username polje) padalo na backend regex proveru.
- * Sanitizacija je idempotentna za već validne username-e, pa ne dira ništa što korisnik sam postavi.
+ * A default `username` (when the user never set one) goes through `sanitizeUsername` before it
+ * enters the text field, so saving any change (even just the picture or bio) does not fail the
+ * backend's username check because of a raw Google name. Sanitizing is idempotent, so names the
+ * user set themselves are untouched.
  *
- * `username`/`bio`/`pickedAvatarDataUri` se drže u lokalnom stanju sa `isEditing` kao delom ključa
- * (`remember(fullProfile?.userId, isEditing)`) - svaki ulazak u edit mod kreće od SVEŽIH vrednosti
- * iz `uiState`, što automatski odbacuje neposlate izmene kad korisnik pritisne "Otkaži" (izlazak pa
- * ponovni ulazak u edit mod re-inicijalizuje state, ne pamti prethodni draft).
+ * `username`/`bio`/`pickedAvatarDataUri` are local state keyed by `isEditing`
+ * (`remember(fullProfile?.userId, isEditing)`): every entry into edit mode starts from FRESH values
+ * from `uiState`, which automatically discards unsaved changes on "Cancel".
  */
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
@@ -255,8 +256,8 @@ internal fun EditableProfileHeader(
 
     var isEditing by remember { mutableStateOf(false) }
     var showDiscardConfirm by remember { mutableStateOf(false) }
-    // Unos koji server nije prihvatio (optimistično čuvanje, videti ProfileViewModel.updateProfile) -
-    // forma se sama ponovo otvara sa njim umesto sa starim vrednostima.
+    // Input the server rejected (optimistic save, see ProfileViewModel.updateProfile) - the form
+    // reopens with it instead of the old values.
     val failedDraft = uiState.failedProfileDraft
     var username by remember(fullProfile?.userId, isEditing, failedDraft) {
         mutableStateOf(failedDraft?.username ?: initialUsername)
@@ -265,8 +266,8 @@ internal fun EditableProfileHeader(
         mutableStateOf(failedDraft?.let { it.bio.orEmpty() } ?: initialBio)
     }
 
-    // Slika izabrana OVOG puta (data URI, već kompresovana) - null dok korisnik ne izabere novu
-    // sliku, u kom slučaju se šalje trenutna (initialAvatar) nepromenjena (videti ViewModel.updateProfile).
+    // The picture picked THIS time (a data URI, already compressed) - null until the user picks a
+    // new one, in which case the current one (initialAvatar) is kept (see ViewModel.updateProfile).
     var pickedAvatarDataUri by remember(fullProfile?.userId, isEditing, failedDraft) {
         mutableStateOf(failedDraft?.avatarDataUri)
     }
@@ -294,8 +295,8 @@ internal fun EditableProfileHeader(
         }
     )
 
-    // Optimistično čuvanje: forma se zatvara odmah na "Sačuvaj" (videti dugme ispod); ako server
-    // posle odbije izmenu, ovde se ponovo otvara sa korisnikovim unosom i porukom o grešci.
+    // Optimistic save: the form closes immediately on "Save" (see the button below); if the server
+    // later rejects the change, it reopens here with the user's input and an error message.
     LaunchedEffect(failedDraft) {
         if (failedDraft != null) isEditing = true
     }
@@ -358,8 +359,7 @@ internal fun EditableProfileHeader(
                 }
             }
 
-            // UX dorada (oktobar 2026): provera korisničkog imena dok se kuca, sa konkretnim razlogom
-            // ispod polja (ranije tek posle slanja na server, kao jedna opšta poruka ispod forme).
+            // The username is validated while typing, with the specific reason under the field.
             val usernameProblem = dev.milinko.movielens.util.validateUsername(username.trim())
             OutlinedTextField(
                 value = username,
@@ -384,8 +384,8 @@ internal fun EditableProfileHeader(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // take(BIO_MAX_LENGTH) umesto odbacivanja celog unosa - i nalepljen duži tekst se skrati,
-            // a brojač postaje crven na maksimumu (ranije je kucanje samo tiho prestajalo da radi).
+            // take(BIO_MAX_LENGTH) instead of rejecting the whole input, so pasted longer text is
+            // trimmed; the counter turns red at the maximum.
             val bioAtLimit = bio.length >= BIO_MAX_LENGTH
             OutlinedTextField(
                 value = bio,
@@ -424,7 +424,8 @@ internal fun EditableProfileHeader(
                 AppButton(
                     text = stringResource(R.string.profile_cancel_edit),
                     onClick = {
-                        // Nesačuvane izmene (uklj. izabranu sliku) se ne bacaju bez pitanja.
+                        // Unsaved changes (including a picked picture) are not discarded without
+                        // asking.
                         val hasChanges = username != initialUsername || bio != initialBio || pickedAvatarDataUri != null
                         if (hasChanges) {
                             showDiscardConfirm = true
@@ -478,8 +479,8 @@ internal fun EditableProfileHeader(
                     ?: stringResource(R.string.profile_default_username),
                 style = MaterialTheme.typography.titleLarge
             )
-            // Izmena je već prikazana (optimistično) - ovo samo diskretno kaže da sinhronizacija
-            // sa serverom još traje.
+            // The change is already shown (optimistically); this only quietly says the sync with
+            // the server is still running.
             if (uiState.isSavingProfile) {
                 Text(
                     text = stringResource(R.string.profile_saving),
@@ -522,8 +523,7 @@ internal fun EditableProfileHeader(
                 }
             }
 
-            // UX dorada (oktobar 2026): jasno dugme umesto sitne olovke (18dp ikonica u 28dp meti)
-            // pored imena, koju je bilo teško i primetiti i pogoditi.
+            // A clear button instead of a tiny pencil next to the name (hard to notice and to hit).
             Spacer(modifier = Modifier.height(16.dp))
             AppButton(
                 text = stringResource(R.string.profile_edit_section_title),
@@ -537,35 +537,22 @@ internal fun EditableProfileHeader(
     }
 }
 
-// Videti komentar u TasteProfileSection ispod - "kazna po neizvesnosti" konstanta, veće = agresivnije
-// kažnjava žanrove sa malo filmova (podesivo ako se ponašanje pokaže presurovo/preblago u praksi).
+// Uncertainty penalty constant (see TasteProfileSection): larger = genres with few movies are
+// penalized more.
 private const val TASTE_CONFIDENCE_PENALTY_Z = 1.5
 
 /**
- * "Tvoj ukus" - prosečna ocena po žanru (Faza 4, MOVIELENS_ROADMAP.md). Faza 7 dorada (korisnička
- * žalba #1: sekcija je kao vertikalna lista od 5 kartica zauzimala previše prostora iznad tabova i
- * gurala Prijatelje/Aktivnost duboko dole) - prebačeno u kompaktan horizontalni red (top 3 žanra,
- * `LazyRow`). Dorada #2 (korisnik je tražio da i dalje može da vidi SVE žanrove, ne samo top 3):
- * ostatak liste (`sorted.drop(3)`) je sad iza `ExpandableMatchCard` "Prikaži još N žanrova" -
- * isti sklopivi obrazac kao showtimes na Movie Detail-u i sekundarni pogoci na Search-u, u
- * originalnom vertikalnom stilu (žanr + ocena + traka po redu) kad se razvije.
+ * "Your taste" - average rating per genre. The top 3 genres are a compact horizontal row; the rest
+ * are behind "Show N more genres" (ExpandableMatchCard), in a vertical list (genre + rating + bar).
  */
 @Composable
 internal fun TasteProfileSection(genres: List<GenreAffinity>) {
-    // Bugfix (16. avgust 2026, korisnički zahtev - "Western 10 a to je sporedna odlika jednog filma
-    // koji je najmanje western"), dorada #2 - korisnik je konkretnim primerom pokazao da prvi pokušaj
-    // - Bayesian shrinkage ka globalnom proseku - NIJE bio dovoljan: npr. Fantasy(10.0, 1 film) je i
-    // dalje bio iznad Action(9.5, 4 filma), jer shrinkage-ka-proseku matematički NE MOŽE da obrne
-    // redosled dva žanra čiji sirovi proseci padaju sa suprotnih strana globalnog proseka - žanr
-    // iznad proseka se povlači naniže ka proseku ali nikad ne padne ISPOD njega samo zbog malog
-    // uzorka, pa žanr ispod proseka (čak i sa mnogo filmova) ne može da ga prestigne.
-    //
-    // Zato sad umesto "povuci ka proseku" koristimo "kazni po neizvesnosti" - oduzimamo
-    // CONFIDENCE_PENALTY_Z / sqrt(movieCount) direktno od ocene (isti duh kao Wilson/lower-confidence-
-    // bound rangiranje - Reddit/Rotten Tomatoes stil). Kazna ne zavisi od drugih žanrova (nema
-    // "proseka" u igri), pa žanr sa 1 filmom uvek dobija veliku kaznu (kod z=1.5, n=1 -> -1.5) dok
-    // žanr sa 4-6 filmova dobija mnogo manju (n=4 -> -0.75, n=6 -> -0.61) - dovoljno da Action(9.5,4)
-    // i Adventure(9.2,6) prestignu Fantasy(10.0,1) u ovom konkretnom primeru.
+    // Ranking with an uncertainty penalty: CONFIDENCE_PENALTY_Z / sqrt(movieCount) is subtracted
+    // from the average (in the spirit of lower-confidence-bound ranking). A genre with one movie
+    // gets a large penalty (z=1.5, n=1 -> -1.5) while one with 4-6 movies gets much less (n=4 ->
+    // -0.75, n=6 -> -0.61), so e.g. Action (9.5, 4 movies) ranks above Fantasy (10.0, 1 movie).
+    // Shrinking toward the global average would not work: it can never reorder two genres whose
+    // raw averages are on opposite sides of the global average.
     val sorted = remember(genres) {
         genres.sortedByDescending { affinity ->
             affinity.averageRating - TASTE_CONFIDENCE_PENALTY_Z / kotlin.math.sqrt(affinity.movieCount.toDouble())
@@ -641,6 +628,7 @@ internal fun TasteProfileSection(genres: List<GenreAffinity>) {
     }
 }
 
+/** Compact card for one genre in the top-3 row: genre name, average rating and a bar. */
 @Composable
 internal fun CompactGenreAffinityCard(affinity: GenreAffinity) {
     Column(

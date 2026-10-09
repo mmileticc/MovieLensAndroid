@@ -2,31 +2,15 @@ package dev.milinko.movielens.util
 
 import java.text.Normalizer
 
-/**
- * Ista sanitizacija kao `sanitizeUsername` na backendu (`db/UsersTable.kt`) - namerno dupliran
- * algoritam (odvojeni Gradle projekti, nema deljenog Kotlin modula) da bi default korisničko ime
- * VEĆ bilo validno po `USERNAME_REGEX`-u (`^[A-Za-z0-9_.]{3,30}$`) pre nego što stigne do backenda.
- *
- * Rešava korisnički prijavljen bag: kad korisnik nikad nije sam postavio username, polje se
- * popunjavalo sirovim Google imenom ("Miloš Miletić" - razmak i č/š/ć nisu dozvoljeni karakteri),
- * pa je SVAKA izmena profila (čak i kad korisnik menja samo sliku ili opis, ne dodiruje username
- * polje) padala na regex proveru na backendu. Ovde se taj default pretvara u "milos_miletic" -
- * malim slovima, razmak -> donja crta, srpska latinična slova bez dijakritike (č/ć/š/ž se skidaju
- * preko NFD dekompozicije, đ ručno jer se NFD ne dekomponuje na d + kvačicu).
- *
- * Idempotentno je za već validne username-e (npr. korisnik je ranije sam postavio "milinko_m") -
- * transformacije ne menjaju ništa što već zadovoljava regex, pa je bezbedno pozvati i na
- * vrednost učitanu sa backenda, ne samo na sirovo Google ime.
- */
-/** Isto pravilo kao `USERNAME_REGEX` na backendu (`db/UsersTable.kt`). */
+/** Same rule as `USERNAME_REGEX` on the backend (`db/UsersTable.kt`). */
 private val USERNAME_REGEX = Regex("^[A-Za-z0-9_.]{3,30}$")
 
-/** Razlog zašto korisničko ime nije validno (za poruku ispod polja), ili null ako je validno. */
+/** Why a username is invalid (for the message under the field); null from [validateUsername] means valid. */
 enum class UsernameProblem { TOO_SHORT, TOO_LONG, INVALID_CHARACTERS }
 
 /**
- * Provera na uređaju, pre slanja - ranije se nevalidno ime otkrivalo tek posle mrežnog poziva,
- * kao jedna opšta poruka ispod forme. Backend i dalje radi istu proveru (i jedinstvenost).
+ * On-device check before sending, so an invalid name is reported under the field right away. The
+ * backend still runs the same check (plus uniqueness).
  */
 fun validateUsername(username: String): UsernameProblem? = when {
     USERNAME_REGEX.matches(username) -> null
@@ -35,6 +19,15 @@ fun validateUsername(username: String): UsernameProblem? = when {
     else -> UsernameProblem.INVALID_CHARACTERS
 }
 
+/**
+ * Turns a raw name (usually the Google display name, e.g. "Miloš Miletić") into a valid default
+ * username ("milos_miletic"): lowercase, spaces -> underscores, Serbian Latin letters without
+ * diacritics (č/ć/š/ž via NFD decomposition, đ by hand because NFD does not decompose it).
+ *
+ * Same algorithm as `sanitizeUsername` on the backend (`db/UsersTable.kt`), duplicated because the
+ * two Gradle projects share no module. Idempotent for names that are already valid, so it is safe to
+ * call on a value loaded from the backend too.
+ */
 fun sanitizeUsername(raw: String): String {
     var s = raw.trim()
         .replace("đ", "dj")

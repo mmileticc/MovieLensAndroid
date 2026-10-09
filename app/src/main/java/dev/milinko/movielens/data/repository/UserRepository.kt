@@ -34,55 +34,42 @@ import retrofit2.Response
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * The signed-in user's data and social features: profile, watchlist, history, friends, activity
+ * feed, Movie Night, sharing and notifications.
+ *
+ * Offline-first: `observe*` functions read only from Room and emit immediately, while the matching
+ * `get*` calls fetch from the network and write the fresh data back into the same cache, so the
+ * UI shows cached data at once and updates when the network answers.
+ */
 interface UserRepository {
     suspend fun getUserProfile(userId: String): Result<UserProfile>
     suspend fun updateUserProfile(userId: String, profile: UserProfile): Result<UserProfile>
 
-    // Faza C (16. avgust 2026, korisnički zahtev "da deluje momentalno pa se pozadinski sa
-    // backom to uradi... i offline stvari") - isti obrazac kao observeWatchlist/observeHistory
-    // ispod, sad i za profil/prijatelje/pending zahteve/feed aktivnosti/taste profil/profil
-    // prijatelja. `observeCached*` SAMO čita iz Room-a (nikad ne zove mrežu) - ViewModel ga koristi
-    // za trenutni prikaz dok redovan `getXxx()` poziv ispod (nepromenjen) i dalje ide na mrežu u
-    // pozadini i piše sveže podatke nazad u isti keš.
+    // Cache-only readers (never hit the network). The ViewModel shows these immediately while the
+    // regular get* call below refreshes the same cache in the background.
     fun observeCachedUserProfile(userId: String): Flow<UserProfile?>
     fun observeCachedFriends(userId: String): Flow<List<FriendInfo>>
     fun observeCachedPendingRequests(userId: String): Flow<List<PendingRequest>>
-    // Korisnički zahtev (2. septembar 2026, "da mi budu vidljivi izlistani poslati zahtevi kao
-    // sto su mi izlistani prijatelji") - isti obrazac keš/mreža kao dolazni pending zahtevi.
+    // Sent (outgoing) friend requests, same cache/network pattern as the incoming ones.
     fun observeCachedSentRequests(userId: String): Flow<List<PendingRequest>>
     fun observeCachedFriendActivity(userId: String): Flow<List<FriendActivity>>
     fun observeCachedTasteProfile(userId: String): Flow<List<GenreAffinity>>
     fun observeCachedFriendProfile(userId: String, friendId: String): Flow<FriendProfileResponse?>
-    // Bugfix (2. septembar 2026, feedback - "posalje se zahtev, pa se ponovo otvori profil i
-    // dugme i dalje pise 'Dodaj prijatelja'") - `sendFriendRequest`/`cancelFriendRequest` na
-    // FriendProfileScreen-u RANIJE su menjali SAMO _uiState u memoriji, ne i Room keš - pa bi
-    // sveže otvoren (nova ViewModel instanca) ekran tog istog prijatelja pročitao STARI keš
-    // zapis (npr. i dalje "NONE") i nakratko prikazao pogrešno dugme dok mreža (koja može biti
-    // spora na Render cold-startu) ne stigne da ispravi stanje. Ovo piše samo u keš, bez mreže -
-    // zove se odmah uz optimistički UI update, isto kao što getFriendProfile piše keš posle
-    // stvarnog mrežnog odgovora.
+    // Writes the friend profile to the cache only (no network). Called together with an optimistic
+    // UI update (e.g. after sending or cancelling a friend request) so a freshly opened profile
+    // screen does not briefly show the stale state from an older cache entry.
     suspend fun cacheFriendProfile(userId: String, friendId: String, profile: FriendProfileResponse)
 
-    // Bugfix (2. septembar 2026, feedback - "otkažem zahtev kod prijatelja [na Profile ekranu],
-    // uđem na detalje [FriendProfileScreen] - stanje se nije promenilo, vratim se nazad na
-    // prijatelje - tu bude opet pogrešno kao na detaljima") - `sendFriendRequest`/
-    // `cancelFriendRequest` na ProfileScreen-u (rezultati pretrage) su menjali SAMO
-    // `friendSearchResults` u memoriji, NE i isti Room keš zapis koji FriendProfileScreen čita
-    // (`friendprofile:userId:friendId`). Kad bi se posle toga otvorio taj profil, čitao bi se
-    // STARI keš (netaknut ProfileScreen akcijom) - i taj (pogrešan) zapis bi se onda, preko
-    // `refreshFriendSearchResults()` cache-merge dorade, prepisao NAZAD u `friendSearchResults`
-    // pri povratku na Profile ekran - efektivno brišući ispravno stanje pogrešnim. Ovo zatvara
-    // petlju u OBA smera: ako keš zapis za tog prijatelja već postoji (znači korisnik ga je
-    // nekad otvorio), status u njemu se odmah ažurira - bez mreže. Ako zapis ne postoji, nema šta
-    // da se ažurira (nema dovoljno podataka - bio/email/watchedMovies - da se napravi ceo
-    // FriendProfileResponse iz UserSearchResult-a, koji ima samo id/username/avatar/status) - to
-    // je ok, prvi network fetch na FriendProfileScreen-u će ga sam popuniti ispravno.
+    // Updates the friendship status inside an existing cached friend profile (no network), so an
+    // action taken from the search results on the Profile screen is reflected on the friend's
+    // profile screen and vice versa. If no cache entry exists there is nothing to update; the first
+    // network load of that profile fills it in correctly.
     suspend fun updateCachedFriendshipStatus(userId: String, friendId: String, status: String)
 
-    // Offline-first: čita se odmah iz Room keša (instant, radi i bez interneta), getWatchlist
-    // ispod ostaje "osveži sa mreže" - poziva se u pozadini, upisuje u isti keš, Flow automatski
-    // emituje novu vrednost UI-ju. Videti diskusiju u MOVIELENS_ROADMAP.md o offline obimu -
-    // namerno SAMO watchlist/istorija, ne i pretraga/trending/bioskopski termini.
+    // Offline-first: read from Room immediately (also works without internet); getWatchlist
+    // refreshes from the network and writes into the same table, and the Flow emits the new value.
+    // Only watchlist and history have their own tables; search/trending/cinemas are not cached.
     fun observeWatchlist(userId: String): Flow<List<WatchlistItem>>
     suspend fun getWatchlist(userId: String): Result<List<WatchlistItem>>
     suspend fun addToWatchlist(userId: String, tmdbId: Int): Result<WatchlistItem>
@@ -90,17 +77,17 @@ interface UserRepository {
 
     fun observeHistory(userId: String): Flow<List<HistoryItem>>
     suspend fun getHistory(userId: String): Result<List<HistoryItem>>
-    // rating/duration su opcioni - "označeno kao odgledano bez ocene" šalje oba kao null (ne kao
-    // 0.0, koji bi backend zaokružio na ocenu 1 - videti Double?.toRatingIntOrNull() na backendu).
-    // review - kratak tekstualni komentar uz ocenu (opcion, nezavisan od rating-a).
+    // rating/duration are optional: "watched without a rating" sends both as null (not 0.0, which
+    // the backend would round to rating 1, see Double?.toRatingIntOrNull() there). `review` is a
+    // short optional note attached to the rating.
     suspend fun addToHistory(userId: String, tmdbId: Int, rating: Double? = null, review: String? = null, duration: Int? = null): Result<HistoryItem>
-    // rating/review = null znače "ne diraj postojeću vrednost" (npr. izmena samo komentara bez
-    // dodira na ocenu, ili obrnuto) - videti napomenu u backend UserActionsRepository.markWatched.
+    // rating/review = null mean "keep the existing value" (e.g. edit only the note). See the
+    // backend's UserActionsRepository.markWatched.
     suspend fun updateHistoryItem(userId: String, tmdbId: Int, rating: Double?, review: String? = null): Result<HistoryItem>
-    // "Undo" za slučajno "označi kao odgledano" - briše i ocenu (isti red na backendu).
+    // Undo for an accidental "mark as watched" - also removes the rating (same row on the backend).
     suspend fun removeFromHistory(userId: String, tmdbId: Int): Result<Unit>
 
-    // Pretraga korisnika za dodavanje prijatelja (search-as-you-type, kao Search filmova).
+    // User search for adding friends (search as you type).
     suspend fun searchUsers(query: String): Result<List<UserSearchResult>>
     suspend fun getPendingFriendRequests(userId: String): Result<List<PendingRequest>>
     suspend fun getSentFriendRequests(userId: String): Result<List<PendingRequest>>
@@ -120,24 +107,22 @@ interface UserRepository {
     suspend fun getNotifications(userId: String): Result<List<NotificationItem>>
     suspend fun markNotificationsRead(userId: String): Result<Unit>
 
-    // Dorada (25. avgust 2026, korisnička žalba "za neke prijatelje se predlozi ponavljaju posle
-    // 3-4 ekrana") - vraća ceo MovieNightResponse (ne samo listu) da MovieNightViewModel dobije i
-    // `hasMore` (da li TMDB ima još stranica) umesto ranijeg izmišljenog fiksnog broja stranica.
-    // forceRefresh = zaobiđi memorijski/Room keš (pull-to-refresh i tiho osvežavanje prve strane).
+    // Returns the whole MovieNightResponse (not just the list) so MovieNightViewModel also gets
+    // `hasMore` (whether TMDB has more pages). forceRefresh bypasses the memory and Room cache
+    // (pull-to-refresh and the silent refresh of the first page).
     suspend fun getMovieNightSuggestions(userId: String, friendId: String, page: Int = 1, forceRefresh: Boolean = false): Result<MovieNightResponse>
 
     /**
-     * Učitava movienight-suggestions unapred (npr. čim se otvori profil prijatelja) i drži ih u
-     * memoriji da getMovieNightSuggestions posle vrati odmah bez čekanja mreže kad korisnik
-     * stvarno klikne na dugme. Tiho gutа grešku - ovo je samo optimizacija, ne kritičan poziv;
-     * ako ne uspe, obično dugme i dalje radi normalno (samo bez prefetch-a).
+     * Loads Movie Night suggestions ahead of time (e.g. when a friend's profile opens) so that
+     * getMovieNightSuggestions can return them instantly when the user taps the button. Errors are
+     * swallowed: this is only an optimization.
      */
     suspend fun prefetchMovieNightSuggestions(userId: String, friendId: String)
 }
 
 private data class ApiErrorBody(val error: String? = null)
 
-/** Parsira backend-ovo `{"error": "..."}` telo greške (ErrorResponse.kt) u čitljivu poruku. */
+/** Extracts the message from the backend's `{"error": "..."}` error body (see ErrorResponse.kt). */
 private fun Response<*>.parseErrorMessage(fallback: String): String {
     return try {
         val raw = errorBody()?.string()
@@ -147,7 +132,7 @@ private fun Response<*>.parseErrorMessage(fallback: String): String {
     }
 }
 
-// Žanrovi watchlist/history stavki se u Room čuvaju kao JSON string (videti WatchlistEntity).
+// Genres of watchlist/history items are stored in Room as a JSON string (see WatchlistEntity).
 private val genreListType = object : TypeToken<List<Genre>>() {}.type
 
 private fun List<Genre>?.toGenresJson(): String? = this?.let { Gson().toJson(it) }
@@ -210,6 +195,7 @@ private fun HistoryItem.toEntity(userId: String) = HistoryEntity(
     voteAverage = voteAverage
 )
 
+/** Network + Room implementation of [UserRepository]; see the interface for the caching rules. */
 @Singleton
 class UserRepositoryImpl @Inject constructor(
     private val userApiService: UserApiService,
@@ -218,17 +204,13 @@ class UserRepositoryImpl @Inject constructor(
     private val genericCacheDao: GenericCacheDao
 ) : UserRepository {
 
-    // Memorijski keš za movienight predloge (userId:friendId -> lista) - popunjava se preko
-    // prefetchMovieNightSuggestions kad se otvori profil prijatelja, čita se u
-    // getMovieNightSuggestions da MovieNightScreen ne mora da čeka mrežu ako je već prefetch-ovano.
-    // ConcurrentHashMap jer prefetch i stvaran poziv mogu teoretski da se preklope. Faza C dodaje
-    // Room ISPOD ovoga kao drugi nivo (memorija se prazni na svaki restart procesa, Room ostaje).
-    // Dorada (25. avgust 2026) - keš sad drži ceo MovieNightResponse (uklj. hasMore), ne samo
-    // listu predloga - videti obrazloženje na interfejsu iznad.
+    // In-memory cache of Movie Night suggestions ("userId:friendId:page" -> response), filled by
+    // prefetchMovieNightSuggestions and read by getMovieNightSuggestions so MovieNightScreen does
+    // not wait for the network. ConcurrentHashMap because a prefetch and a real call can overlap.
+    // Room is the second level below it (memory is lost on every process restart).
     private val movieNightCache = java.util.concurrent.ConcurrentHashMap<String, MovieNightResponse>()
 
-    // Faza C - deljena Gson instanca za GenericCache (de)serijalizaciju (parseErrorMessage ispod
-    // pravi sopstvenu Gson() instancu za sasvim drugu svrhu - namerno odvojeno, ne deli se).
+    // Shared Gson instance for GenericCache (de)serialization.
     private val cacheGson = Gson()
 
     private fun profileCacheKey(userId: String) = "profile:$userId"
@@ -283,15 +265,9 @@ class UserRepositoryImpl @Inject constructor(
     override fun observeCachedFriendProfile(userId: String, friendId: String): Flow<FriendProfileResponse?> =
         genericCacheDao.observe(friendProfileCacheKey(userId, friendId)).map { entity ->
             entity?.jsonPayload?.let { json -> runCatching { cacheGson.fromJson(json, FriendProfileResponse::class.java) }.getOrNull() }
-                // Bugfix (2. septembar 2026, feedback - "otvorim profil prijatelja i prikaže ga
-                // kao da nismo prijatelji, pa se tek posle malo osveži") - stari keš zapisi
-                // (snimljeni PRE E1.5) nemaju friendshipStatus u JSON-u, pa Gson tu vrednost
-                // ostavlja null (videti komentar u UserModels.kt). Takav zapis se NE SME
-                // prikazati kao da je "nije prijatelj" (isLocked=true bi bio pogrešan zaključak,
-                // ne stvarno stanje) - bolje je da ekran ostane na spinneru dok pravi mrežni
-                // odgovor ne stigne, nego da na trenutak prikaže pogrešan "zaključan" prikaz koji
-                // posle "trepne" u tačan. Zato se ovakav (stari/nepotpun) keš zapis tretira kao
-                // da uopšte ne postoji.
+                // Old cache entries without friendshipStatus (Gson leaves it null, see
+                // UserModels.kt) are treated as missing: showing them would briefly render the
+                // "not friends" locked view before the network corrects it. A spinner is better.
                 ?.takeIf { it.friendshipStatus != null }
         }
 
@@ -310,15 +286,14 @@ class UserRepositoryImpl @Inject constructor(
         val response = userApiService.updateUserProfile(userId, profile)
         if (response.isSuccessful) {
             val updated = response.body() ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
-            // Faza C - i ovde upisujemo u keš (ne samo GET), da observeCachedUserProfile odmah
-            // odražava izmenu, bez čekanja na sledeći loadProfile() network refresh.
+            // Also written to the cache (not only on GET) so observeCachedUserProfile reflects the
+            // change immediately.
             genericCacheDao.put(GenericCacheEntity(profileCacheKey(userId), cacheGson.toJson(updated)))
             updated
         } else {
-            // Backend vraća konkretnu poruku (npr. "Korisničko ime je već zauzeto") u JSON telu
-            // greške ({"error": "..."}) - izvlačimo je da UI može da prikaže nešto korisnije od
-            // golog HTTP koda (jedini poziv u repo-u gde je poruka greške stvarno actionable za
-            // korisnika, za razliku od ostalih mrežnih poziva ovde).
+            // The backend returns a specific message (e.g. "Username is already taken") in the
+            // error body; it is shown to the user because, unlike other failures here, it is
+            // actionable.
             throw IllegalStateException(response.parseErrorMessage("Ažuriranje profila nije uspelo (${response.code()})"))
         }
     }
@@ -330,8 +305,8 @@ class UserRepositoryImpl @Inject constructor(
         val response = userApiService.getWatchlist(userId)
         if (response.isSuccessful) {
             val items = response.body()?.items ?: emptyList()
-            // Osveži lokalni keš sa serverom - Flow iz observeWatchlist automatski emituje ovu
-            // novu vrednost svakom kolektoru (Room je single source of truth za UI).
+            // Refresh the local cache; observeWatchlist's Flow emits the new value to every
+            // collector (Room is the single source of truth for the UI).
             watchlistDao.replaceAll(userId, items.map { it.toEntity(userId) })
             items
         } else {
@@ -374,8 +349,8 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override suspend fun addToHistory(userId: String, tmdbId: Int, rating: Double?, review: String?, duration: Int?): Result<HistoryItem> = safeApiCall {
-        // rating/duration null se serijalizuju kao JSON null (Gson) - backend AddToHistoryRequest
-        // ima podrazumevanu vrednost null za oba, pa je to ekvivalentno izostavljanju polja.
+        // null rating/duration serialize as JSON null; the backend treats that the same as a
+        // missing field.
         val response = userApiService.addToHistory(userId, AddToHistoryBody(tmdbId, rating, review, duration))
         if (response.isSuccessful) {
             val item = response.body() ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
@@ -393,11 +368,9 @@ class UserRepositoryImpl @Inject constructor(
             historyDao.insert(item.toEntity(userId))
             item
         } else if (response.code() == 404) {
-            // Bugfix (E1.1, 2. septembar 2026) - odbrambeni sloj uz backend samoisceljujući PUT
-            // (videti UserActionsRouting.kt komentar). Lokalni uiState je mislio da je film već
-            // "odgledan" (npr. stari keš iz vremena pre backend fix-a, ili druga verzija backend-a
-            // dok se ne redeploy-uje) pa je pozvan PUT umesto POST - ako backend ipak vrati 404,
-            // probamo POST kao fallback umesto da odmah prijavimo grešku korisniku.
+            // Fallback: the local state thought the movie was already watched (e.g. a stale
+            // cache) and called PUT; if the backend answers 404, try POST instead of reporting an
+            // error to the user.
             val addResponse = userApiService.addToHistory(userId, AddToHistoryBody(tmdbId, rating, review, null))
             if (addResponse.isSuccessful) {
                 val item = addResponse.body() ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
@@ -554,13 +527,12 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getMovieNightSuggestions(userId: String, friendId: String, page: Int, forceRefresh: Boolean): Result<MovieNightResponse> {
-        // page je deo ključa - svaka strana se kešira posebno.
+        // The page is part of the key: every page is cached separately.
         val cacheKey = "$userId:$friendId:$page"
         if (!forceRefresh) movieNightCache[cacheKey]?.let { return Result.success(it) }
 
-        // Faza C - drugi nivo keša u Room-u (memorija se prazni na svaki restart procesa/app-a,
-        // Room ostaje) - ako postoji, ubaci i nazad u memoriju da sledeći poziti u istoj sesiji
-        // budu instant bez ponovnog Room čitanja.
+        // Second cache level in Room (survives process restarts); a hit is also put back into
+        // memory so later calls in the same session skip the Room read.
         if (!forceRefresh) genericCacheDao.get(movieNightCacheKey(userId, friendId, page))?.jsonPayload?.let { json ->
             val cached = runCatching {
                 cacheGson.fromJson(json, MovieNightResponse::class.java)

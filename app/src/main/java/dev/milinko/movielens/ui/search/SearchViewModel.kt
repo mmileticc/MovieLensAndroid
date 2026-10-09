@@ -19,51 +19,47 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** State of the Search screen for both modes (text/image search and "In cinemas"). */
 data class SearchUiState(
     val searchQuery: String = "",
-    // Odvojeno od isAnalyzingImage - deljeno "isLoading" polje je značilo da kucanje teksta dok je
-    // slika izabrana zna da prikaže "Analiziram sliku..." dugme iako se ne dešava nikakva analiza.
+    // Separate from isAnalyzingImage, so typing while an image is selected never shows
+    // "Analyzing image..." when no analysis is running.
     val isSearching: Boolean = false,
     val isAnalyzingImage: Boolean = false,
     val selectedImageUri: String? = null,
     val searchResults: List<MovieSearchResult> = emptyList(),
     val visionResult: VisionSearchResponse? = null,
     val error: String? = null,
-    // Dorada (2. septembar 2026, korisnički zahtev - "poruka o preopterećenju me para oči, deluje
-    // kao greška koju sam ja skrivio") - razlikuje "pravu" grešku (crveni karton) od privremenog,
-    // ne-korisnikovog stanja poput Gemini overload-a (smireniji, info karton). Videti
-    // TransientServiceException.kt i SearchScreen.kt (uslovni stil error kartona).
+    // Distinguishes a real error (red card) from a temporary state that is not the user's fault,
+    // such as Gemini overload (a calmer info card). See TransientServiceException.kt and
+    // SearchScreen.
     val isSoftError: Boolean = false,
-    // Faza D (17. avgust 2026, predlog mentora Marka) - "U bioskopima" mod: semantička pretraga
-    // svedena na filmove trenutno na repertoaru (videti backend CinemaSemanticIndex). Odvojeno od
-    // searchResults/isSearching iznad - drugačiji tip podataka (NowInCinemasMovie, ne
-    // MovieSearchResult).
-    // E2.1/E2.4 dorada (2. septembar 2026, korisnički zahtev - "dok se kuca da radi live pretraga
-    // po nazivu kao obična pretraga, a semantička ide samo na klik lupice") - `cinemaResults` se
-    // sad ažurira na DVA načina: (1) debounced lokalni filter po nazivu nad `allCinemaMovies` dok
-    // korisnik kuca (bez mreže, besplatno - videti setSearchQuery), (2) pravi semantički poziv
-    // SAMO na eksplicitan submit (nepromenjeno, videti searchCinemasSemantic/searchMovies).
+    // "In cinemas" mode: search limited to the movies currently showing (see the backend's
+    // CinemaSemanticIndex), with its own result type (NowInCinemasMovie). `cinemaResults` is
+    // updated in two ways: (1) a debounced local title filter over `allCinemaMovies` while typing
+    // (no network, free - see setSearchQuery), (2) the real semantic call ONLY on an explicit
+    // submit (see searchCinemasSemantic/searchMovies).
     val isCinemaMode: Boolean = false,
     val cinemaResults: List<NowInCinemasMovie> = emptyList(),
     val isSearchingCinemas: Boolean = false,
-    // Bugfix (2. septembar 2026) - dok debounce (300ms) čeka pre lokalnog filtriranja, `cinemaResults`
-    // je i dalje "stara" (prazna posle svakog karaktera) - bez ovog flag-a, "nema poklapanja" poruka
-    // (SearchScreen) bi treperila na SVAKI karakter pre nego što filter stigne da se izvrši. Isti
-    // princip kao isSearchingCinemas, samo za jeftiniji lokalni posao umesto mrežnog poziva.
+    // True while the 300ms debounce waits before local filtering; without it the "no matches"
+    // message would flicker on every character before the filter runs.
     val isFilteringCinemasLive: Boolean = false,
-    // Cela lista filmova trenutno na repertoaru, preuzeta JEDNOM (network poziv bez ikakvog
-    // embedding troška - isti podaci kao Home "U bioskopima sada" traka) čim se uđe u "U
-    // bioskopima" mod - lokalni filter iznad radi nad ovom listom, ne nad mrežom.
+    // The whole current programme, fetched ONCE when entering the "In cinemas" mode (a plain call
+    // without embedding cost, same data as the Home row); the local filter works on this list.
     val allCinemaMovies: List<NowInCinemasMovie> = emptyList(),
-    // Repertoar (za filter po nazivu u "U bioskopima" modu) nije mogao da se učita - bez ovoga je
-    // svaka pretraga tada pokazivala "Nema poklapanja po nazivu", kao da filma nema.
+    // The programme could not be loaded - without this every search would show "No title matches",
+    // as if the movie did not exist.
     val cinemaCatalogError: String? = null,
-    // Faza D dorada (korisnički zahtev za poređenje Gemini vs. lokalni MiniLM embedding) - bira koji
-    // embedding provajder backend koristi za "U bioskopima" semantičku pretragu. Podrazumevano
-    // Gemini (isti kvalitet kao pre ove dorade). Vidljivo samo u isCinemaMode - videti SearchScreen.
+    // Which embedding provider the backend uses for the "In cinemas" semantic search (Gemini by
+    // default; local MiniLM for comparison). Visible only in the cinema mode, see SearchScreen.
     val useLocalEmbedding: Boolean = false
 )
 
+/**
+ * Search: debounced text search, image recognition and the "In cinemas" mode (live local title
+ * filter while typing + semantic search on submit), plus the per-account recent searches.
+ */
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val movieRepository: MovieRepository,
@@ -75,21 +71,17 @@ class SearchViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
-    // Dorada (17. avgust 2026, korisničko pitanje "je l keš vezan za telefon a ne za nalog") -
-    // istorija MORA biti po nalogu (videti opširno obrazloženje u RecentSearchesStore.kt), ne
-    // deljena za sve naloge na istom telefonu. Scope se čita JEDNOM ovde - dovoljno, jer
-    // NavGraph.onSignOut čisti ceo back stack (popUpTo(0){inclusive=true}) pa se posle promene
-    // naloga ionako pravi NOVA instanca ovog ViewModel-a kad se korisnik vrati na Search. "guest"
-    // bucket za neulogovanog korisnika - tekstualna pretraga radi i bez prijave.
+    // The history is per account (see RecentSearchesStore.kt), "guest" when signed out (text search
+    // works without signing in). Reading the scope once is enough: sign-out clears the whole back
+    // stack, so a new account always gets a new instance of this ViewModel.
     private val recentSearchesScopeId = sessionManager.getUserId() ?: "guest"
 
-    // Dorada (17. avgust 2026, korisnička žalba "prazno dok se ne krene sa pretragom") - odvojeno
-    // od SearchUiState (isti obrazac kao sessionUser/baseUrl u ProfileViewModel) jer ne zavisi ni
-    // od jednog mrežnog poziva, samo lokalno čita/piše SharedPreferences.
+    // Separate from SearchUiState because it depends on no network call - it only reads and writes
+    // SharedPreferences.
     private val _recentSearches = MutableStateFlow(recentSearchesStore.getQueries(recentSearchesScopeId))
     val recentSearches: StateFlow<List<String>> = _recentSearches.asStateFlow()
 
-    // Debounce posao za pretragu dok korisnik kuca - svaki novi karakter otkazuje prethodni.
+    // Debounce job for the search while typing - each new character cancels the previous one.
     private var searchJob: Job? = null
 
     private companion object {
@@ -97,16 +89,16 @@ class SearchViewModel @Inject constructor(
         const val MIN_QUERY_LENGTH = 2
     }
 
+    /**
+     * Updates the query and schedules a debounced live search (or the local filter in the cinema
+     * mode).
+     */
     fun setSearchQuery(query: String) {
         _uiState.value = _uiState.value.copy(searchQuery = query)
 
-        // E2.1/E2.4 dorada (2. septembar 2026) - RANIJE u "U bioskopima" modu NIJE bilo
-        // debounce/"live" pretrage jer je svaki upit slao pravi API poziv koji embeduje tekst
-        // preko Gemini-ja (stvaran trošak) - delovalo je "mrtvo" dok korisnik kuca. Sad se dok
-        // kuca radi ISTI princip kao obična pretraga (debounce + filter), samo lokalno nad već
-        // preuzetom listom `allCinemaMovies` (videti loadCinemaCatalog) - bez mreže, besplatno.
-        // Pravi semantički poziv i dalje ide SAMO na eksplicitan submit (searchMovies ispod),
-        // nepromenjeno.
+        // In the "In cinemas" mode typing only runs the local title filter over `allCinemaMovies`
+        // (debounced, no network): each semantic query embeds text via Gemini, which costs money,
+        // so the real semantic call happens only on an explicit submit (searchMovies below).
         if (_uiState.value.isCinemaMode) {
             filterCinemaResultsLive(query)
             return
@@ -126,9 +118,8 @@ class SearchViewModel @Inject constructor(
     }
 
     /**
-     * E2.1/E2.4 dorada - lokalni debounced filter po nazivu nad `allCinemaMovies` (bez mreže).
-     * Isti debounce (300ms) i minimalna dužina kao obična tekstualna pretraga - korisniku deluje
-     * identično dok kuca, razlika (lokalni filter vs. Gemini embedding) je nevidljiva.
+     * Debounced local title filter over `allCinemaMovies` (no network), with the same debounce
+     * (300ms) and minimum length as the text search, so typing feels the same in both modes.
      */
     private fun filterCinemaResultsLive(query: String) {
         searchJob?.cancel()
@@ -146,13 +137,9 @@ class SearchViewModel @Inject constructor(
     }
 
     /**
-     * Faza D (17. avgust 2026, predlog mentora Marka) - prebacuje između obične tekstualne
-     * pretrage (ceo TMDB katalog) i semantičke pretrage svedene na filmove trenutno na repertoaru
-     * bioskopa. Čisti rezultate OBA moda pri prebacivanju - sprečava da se stari rezultati
-     * drugačijeg tipa/obima vide ispod novog moda.
-     *
-     * UX dorada (oktobar 2026): uneti tekst se odmah ponovo pretražuje u novom modu - ranije je
-     * ostajao upit iznad prazne stranice, pa je izgledalo da pretraga nije uspela.
+     * Switches between the text search (whole TMDB catalog) and the semantic search over the movies
+     * currently in cinemas. Clears the results of BOTH modes, so results of a different type never
+     * show under the new mode, and immediately re-runs the entered text in the new mode.
      */
     fun setCinemaMode(enabled: Boolean) {
         if (_uiState.value.isCinemaMode == enabled) return
@@ -161,39 +148,34 @@ class SearchViewModel @Inject constructor(
             isCinemaMode = enabled,
             searchResults = emptyList(),
             cinemaResults = emptyList(),
-            // Higijena - searchJob?.cancel() iznad prekida debounce posao PRE nego što stigne da
-            // ovaj flag vrati na false, pa bi bez ovoga mogao ostati "zaglavljen" na true ako se
-            // mod promeni usred debounce prozora.
+            // searchJob?.cancel() above stops the debounce job before it can reset this flag, so it
+            // would stay stuck on true if the mode changed in the middle of the debounce window.
             isFilteringCinemasLive = false,
             visionResult = null,
             error = null,
             isSoftError = false,
-            // Pretraga slikom ne postoji u "U bioskopima" modu (dugme za kameru se onemogućava u
-            // SearchScreen-u) - ako je korisnik imao sliku izabranu PRE prebacivanja, uklanja se
-            // ovde da submit dugme posle prebacivanja ne bi tiho pokrenulo vision analizu umesto
-            // semantičke pretrage.
+            // There is no image search in the "In cinemas" mode, so a previously picked image is
+            // removed - otherwise submit would silently run the image analysis instead of the
+            // semantic search.
             selectedImageUri = if (enabled) null else _uiState.value.selectedImageUri
         )
-        // E2.1/E2.4 dorada - katalog se preuzima JEDNOM po ulasku u mod (ne na svaki karakter),
-        // da lokalni filter u filterCinemaResultsLive ima nad čime da radi. Ako je već preuzet
-        // (npr. korisnik izašao pa se vratio u istom ViewModel-u), ne ponavlja se poziv.
+        // The programme is fetched ONCE per mode entry (not per character), so the local filter has
+        // data. If it is already loaded (e.g. the user left and came back), it is not refetched.
         if (enabled && _uiState.value.allCinemaMovies.isEmpty()) {
             loadCinemaCatalog()
         }
         setSearchQuery(_uiState.value.searchQuery)
     }
 
-    /** "Pokušaj ponovo" kad repertoar za "U bioskopima" mod nije učitan. */
+    /** "Try again" when the programme for the "In cinemas" mode failed to load. */
     fun retryCinemaCatalog() = loadCinemaCatalog()
 
     private var cinemaCatalogJob: Job? = null
 
     /**
-     * E2.1/E2.4 dorada - preuzima celu listu filmova trenutno na repertoaru (isti podaci kao Home
-     * "U bioskopima sada" traka, obična ruta bez embedding troška) da lokalni filter po nazivu
-     * ima nad čime da radi dok korisnik kuca. Tiho guta grešku - ako padne, lokalni filter samo
-     * neće naći ništa (prazna lista), a eksplicitna semantička pretraga (submit) i dalje radi
-     * potpuno nezavisno, svojim network pozivom.
+     * Fetches the whole current programme (same data as the Home row, no embedding cost) for the
+     * local title filter. A failure sets cinemaCatalogError; the explicit semantic search still
+     * works independently with its own call.
      */
     private fun loadCinemaCatalog() {
         cinemaCatalogJob?.cancel()
@@ -205,8 +187,8 @@ class SearchViewModel @Inject constructor(
                 )
             }.onSuccess { movies ->
                 _uiState.value = _uiState.value.copy(allCinemaMovies = movies)
-                // Ako je korisnik već nešto ukucao dok se katalog učitavao, primeni filter odmah
-                // umesto da čeka sledeći karakter.
+                // If the user typed something while the programme was loading, apply the filter
+                // now instead of waiting for the next character.
                 val query = _uiState.value.searchQuery.trim()
                 if (query.length >= MIN_QUERY_LENGTH) {
                     _uiState.value = _uiState.value.copy(
@@ -218,10 +200,9 @@ class SearchViewModel @Inject constructor(
     }
 
     /**
-     * Trenutna pretraga na Enter/IME search akciju - preskače debounce, traži odmah. Namerno
-     * upisuje u istoriju (eksplicitna, namerna akcija - videti napomenu na [recordCurrentQueryInHistory]).
-     * U "U bioskopima" modu delegira na [searchCinemasSemantic] - istorija pretraga ostaje samo za
-     * tekstualni mod (videti MOVIELENS_DESIGN_PLAN.md Faza D).
+     * Immediate search on Enter / the IME search action - skips the debounce. Recorded in the
+     * history (an explicit action, see [recordCurrentQueryInHistory]). In the "In cinemas" mode it
+     * delegates to [searchCinemasSemantic]; the history is kept only for the text mode.
      */
     fun searchMovies() {
         if (_uiState.value.isCinemaMode) {
@@ -238,9 +219,8 @@ class SearchViewModel @Inject constructor(
     }
 
     /**
-     * Faza D dorada - prebacuje embedding provajder za "U bioskopima" pretragu (Gemini/lokalni
-     * MiniLM), radi poređenja ponašanja. Čisti stare rezultate - drugi provajder znači drugi
-     * vektorski prostor, stari rezultati više nisu relevantni dok se ne pretraži ponovo.
+     * Switches the embedding provider of the "In cinemas" search (Gemini / local MiniLM). Clears
+     * the old results: another provider means another vector space.
      */
     fun setUseLocalEmbedding(enabled: Boolean) {
         if (_uiState.value.useLocalEmbedding == enabled) return
@@ -271,7 +251,10 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    /** Ponovo pokreće pretragu za upit iz istorije (tap na chip) - preskače debounce, kao Enter. */
+    /**
+     * Runs the search for a query from the history (tapping a chip) - skips the debounce, like
+     * Enter.
+     */
     fun selectRecentQuery(query: String) {
         _uiState.value = _uiState.value.copy(searchQuery = query)
         _recentSearches.value = recentSearchesStore.addQuery(recentSearchesScopeId, query)
@@ -279,22 +262,21 @@ class SearchViewModel @Inject constructor(
         searchJob = viewModelScope.launch { performSearch(query) }
     }
 
+    /** Removes one query from the history. */
     fun removeRecentQuery(query: String) {
         _recentSearches.value = recentSearchesStore.removeQuery(recentSearchesScopeId, query)
     }
 
+    /** Clears the whole search history of this account. */
     fun clearRecentQueries() {
         _recentSearches.value = recentSearchesStore.clearQueries(recentSearchesScopeId)
     }
 
     /**
-     * Dorada #2 (17. avgust 2026, korisnička žalba "i uz debounce prečesto čuva") - prvi pokušaj
-     * (upis na SVAKI performSearch, uklj. debounced "live" pretragu dok korisnik kuca) se pokazao
-     * prečest - svaka pauza u kucanju duža od 300ms je već upisivala upit, čak i ako korisnik samo
-     * pregleda rezultate uživo i ništa ne otvori. Vraćeno na eksplicitne akcije (searchMovies/
-     * selectRecentQuery iznad), plus OVA funkcija - poziva je SearchScreen kad korisnik stvarno
-     * klikne na neki rezultat (poster/red) i ode na Movie Detail, jasan signal da je pretraga
-     * "uspela" i vredi je zapamtiti. Ne-op ako je upit prazan (npr. čist vision/slika pretraga).
+     * Records the current query in the history. Called by SearchScreen when the user actually opens
+     * a result (a clear sign that the search was useful); the debounced live search does not record
+     * anything, otherwise every pause in typing would be saved. No-op for an empty query (e.g. a
+     * pure image search).
      */
     fun recordCurrentQueryInHistory() {
         val query = _uiState.value.searchQuery.trim()
@@ -321,6 +303,7 @@ class SearchViewModel @Inject constructor(
             }
     }
 
+    /** Sets the picked image (null removes it). */
     fun onImageSelected(uri: String?) {
         _uiState.value = _uiState.value.copy(
             selectedImageUri = uri,
@@ -330,6 +313,7 @@ class SearchViewModel @Inject constructor(
         )
     }
 
+    /** Sends the picked image for recognition (Gemini vision via the backend). */
     fun detectImage() {
         val imageUri = _uiState.value.selectedImageUri ?: return
         viewModelScope.launch {
@@ -344,8 +328,8 @@ class SearchViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: dev.milinko.movielens.util.TransientServiceException) {
-                // Videti TransientServiceException.kt/VisionRepository.kt - Gemini overload i
-                // slična "nije tvoja greška" stanja dobijaju smireniji UI umesto crvene "Greške".
+                // Gemini overload and similar "not your fault" states get a calmer UI instead of a
+                // red error (see TransientServiceException.kt / VisionRepository.kt).
                 _uiState.value = _uiState.value.copy(
                     isAnalyzingImage = false,
                     error = e.message,
@@ -361,6 +345,7 @@ class SearchViewModel @Inject constructor(
         }
     }
 
+    /** Clears the query and all results (text, image and cinema) and any error. */
     fun clearResults() {
         searchJob?.cancel()
         _uiState.value = _uiState.value.copy(

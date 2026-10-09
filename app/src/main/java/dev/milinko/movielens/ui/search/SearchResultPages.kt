@@ -113,10 +113,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /**
- * Stranica 0 pagera (25. avgust 2026 dorada, videti napomenu u [SearchScreen]) - obična tekstualna
- * pretraga (ceo TMDB katalog) + vision rezultat, isti sadržaj koji je ranije bio direktno u glavnom
- * LazyColumn-u pod `!uiState.isCinemaMode` granom - sad je to sama ova stranica, grananje po modu
- * više nije potrebno unutra jer stranica sama IMPLICIRA mod.
+ * Pager page 0: the regular text search (whole TMDB catalog) plus the image search result.
  */
 @Composable
 internal fun TextSearchResultsPage(
@@ -134,15 +131,15 @@ internal fun TextSearchResultsPage(
             .fillMaxSize()
             .padding(horizontal = 16.dp)
     ) {
-        // Faza 6 dorada (korisnikov feedback): rezultat pretrage slikom se ne gasi kad korisnik
-        // počne da kuca tekstualnu pretragu - obe sekcije mogu da postoje istovremeno, naslagane.
+        // The image search result stays when the user starts typing a text search - both sections
+        // can be on screen at once, stacked.
         uiState.visionResult?.let { response ->
             item {
                 VisionResultSection(
                     response = response,
                     onClear = onClearVision,
-                    // Dorada #2 (17. avgust 2026) - istorija se upisuje samo kad korisnik stvarno
-                    // klikne na rezultat (ne na svako kucanje).
+                    // The query is added to the history only when the user actually opens a result
+                    // (not on every keystroke).
                     onNavigateToDetail = { tmdbId ->
                         onRecordHistory()
                         onNavigateToDetail(tmdbId)
@@ -154,7 +151,7 @@ internal fun TextSearchResultsPage(
 
         if (uiState.searchResults.isNotEmpty()) {
             if (uiState.visionResult != null) {
-                // Mala odvojena naslovna linija samo kad su OBA rezultata istovremeno na ekranu.
+            // A small separate heading only when BOTH results are on screen at the same time.
                 item {
                     SectionHeader(title = stringResource(R.string.search_text_results_header))
                     Spacer(modifier = Modifier.height(8.dp))
@@ -187,8 +184,7 @@ internal fun TextSearchResultsPage(
         } else if (uiState.visionResult == null && uiState.error == null && !uiState.isSearching &&
             uiState.searchQuery.trim().length >= 2
         ) {
-            // UX dorada (oktobar 2026): ranije je stranica tad ostajala potpuno prazna - nije se
-            // razlikovalo "nema rezultata" od "još se učitava" ili "nešto je puklo".
+            // Distinguishes "no results" from "still loading" and "something failed".
             item {
                 EmptyStateCard(
                     title = stringResource(R.string.search_no_results_title, uiState.searchQuery.trim()),
@@ -205,9 +201,8 @@ internal fun TextSearchResultsPage(
 }
 
 /**
- * Stranica 1 pagera (25. avgust 2026 dorada) - semantička pretraga svedena na filmove trenutno na
- * repertoaru (Faza D). Bez istorije (namerno, videti MOVIELENS_DESIGN_PLAN.md Faza D), bez vision
- * sekcije, drugačiji izvor podataka (`NowInCinemasMovie`).
+ * Pager page 1: semantic search limited to the movies currently in cinemas. No history and no image
+ * section; the data source is `NowInCinemasMovie`.
  */
 @Composable
 internal fun CinemaResultsPage(
@@ -221,8 +216,8 @@ internal fun CinemaResultsPage(
             .padding(horizontal = 16.dp)
     ) {
         if (uiState.cinemaCatalogError != null && uiState.cinemaResults.isEmpty()) {
-            // Repertoar nije učitan - filter po nazivu nema nad čime da radi; ranije je ovo
-            // izgledalo kao "Nema poklapanja po nazivu".
+            // The programme is not loaded - the title filter has nothing to work on (otherwise this
+            // would look like "No title matches").
             item {
                 ErrorCard(
                     message = uiState.cinemaCatalogError,
@@ -252,12 +247,10 @@ internal fun CinemaResultsPage(
             }
         } else if (uiState.error == null && !uiState.isSearchingCinemas && !uiState.isFilteringCinemasLive) {
             item {
-                // E2.1/E2.4 dorada - ova poruka se sad prikazuje i kad lokalni filter po nazivu
-                // (dok korisnik kuca) ne nađe ništa, NE samo posle prave semantičke pretrage -
-                // zato sad eksplicitno usmerava na dugme za slanje umesto generičkog "nema
-                // poklapanja", da korisnik zna da postoji i pametnija (AI) opcija.
-                // Bugfix - !isFilteringCinemasLive sprečava treperenje ove poruke tokom debounce
-                // prozora (300ms) posle svakog karaktera, pre nego što lokalni filter završi.
+                // Shown also when the live title filter (while typing) finds nothing, so it points
+                // to the send button: the smarter (AI) search is still available.
+                // !isFilteringCinemasLive prevents the message from flickering during the 300ms
+                // debounce after each character, before the local filter finishes.
                 Text(
                     text = stringResource(R.string.search_cinemas_no_results),
                     style = MaterialTheme.typography.bodyMedium,
@@ -274,18 +267,13 @@ internal fun CinemaResultsPage(
 }
 
 /**
- * Prazno stanje pre prve pretrage. Dorada (17. avgust 2026, korisnička žalba "prazno dok se ne
- * krene sa pretragom") - ranije je ovde stajala samo prijateljska poruka (dokument 2.3 je pominjao
- * "nedavne pretrage" kao ideju, odloženo tada jer SearchUiState nije imao to polje - sad ima, videti
- * SearchViewModel.recentSearches/RecentSearchesStore). Istorija pretraga se prikazuje kao tap-nazad
- * chip-ovi (isti obrazac kao Google/YouTube "nedavne pretrage") iznad postojeće poruke - ako istorije
- * nema (prvi ikad ulazak) prikazuje se identično kao pre ove dorade.
+ * Empty state before the first search: recent searches as chips (tap to search again) above a
+ * message with an animated icon. Without history (first visit) only the message is shown.
  */
 @Composable
 internal fun SearchEmptyState(
-    // Faza D - title/message su sad parametri (ranije fiksni stringResource pozivi unutra) da isti
-    // sastav (chip-ovi istorije + animirana ikonica) može da se reciklira i za "U bioskopima" mod
-    // (koji nema istoriju - poziva se sa recentSearches = emptyList()).
+    // title/message are parameters so the same layout can be reused for the "In cinemas" mode
+    // (which has no history - called with recentSearches = emptyList()).
     title: String,
     message: String,
     recentSearches: List<String>,
@@ -317,9 +305,8 @@ internal fun SearchEmptyState(
                         Text(stringResource(R.string.search_recent_clear_all))
                     }
                 }
-                // FlowRow bi bio idealan ovde, ali projekat ga još ne koristi nigde - obična
-                // Column od Row-ova (2 po redu) je dovoljno dobra za najviše 8 stavki
-                // (RecentSearchesStore.MAX_ITEMS), bez uvođenja novog layout obrasca samo za ovo.
+                // A simple Column of Rows (2 per row) is enough for at most 8 items
+                // (RecentSearchesStore.MAX_ITEMS).
                 recentSearches.chunked(2).forEach { rowQueries ->
                     Row(
                         modifier = Modifier
@@ -344,11 +331,8 @@ internal fun SearchEmptyState(
             Spacer(modifier = Modifier.height(32.dp))
         }
 
-        // Dorada (17. avgust 2026, korisnička žalba "ekran deluje delimično prazan") - animirana
-        // ikonica-bedž iznad poruke, isti vizuelni obrazac kao logo krug na Sign In ekranu
-        // (`accentPrimary` na 13% providnosti + tanka ivica), samo ovde "diše" (blag puls skale) -
-        // ista `rememberInfiniteTransition` tehnika koja već postoji u MovieNightScreen.kt za
-        // rotaciju "Osveži predloge" ikonice, ovde primenjena na skalu umesto rotaciju.
+        // Animated icon badge above the message: like the logo circle on Sign In, but gently
+        // "breathing" (a slow scale pulse).
         val infiniteTransition = rememberInfiniteTransition(label = "search_empty_pulse")
         val scale by infiniteTransition.animateFloat(
             initialValue = 1f,
@@ -367,8 +351,7 @@ internal fun SearchEmptyState(
                 .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.27f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            // Rebrending (25. avgust 2026) - stvaran Movienee znak umesto generičke
-            // Icons.Default.Movie ikonice, isti tretman kao badž na Sign In ekranu.
+            // The Movienee mark, same treatment as the badge on Sign In.
             Image(
                 painter = painterResource(R.drawable.ic_movienee_mark),
                 contentDescription = null,

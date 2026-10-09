@@ -12,10 +12,10 @@ import dev.milinko.movielens.data.repository.VisionRepository
 import dev.milinko.movielens.data.repository.VisionRepositoryImpl
 import javax.inject.Singleton
 
+/** Binds the repository interfaces to their implementations. */
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
-
 
     @Binds
     @Singleton

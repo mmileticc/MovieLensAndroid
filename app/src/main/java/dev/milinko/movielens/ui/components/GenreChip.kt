@@ -12,11 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 
-/**
- * Mali "pilula" bedž za žanr (npr. na Movie Detail ekranu). Koristi `MaterialTheme.shapes.small`
- * (8dp, videti MOVIELENS_DESIGN_PLAN.md 1.3 - "small = 8dp - čip, dugme, mali bedž"). Faza 6
- * redizajna.
- */
+/** Small "pill" badge for a genre (e.g. on Movie Detail), using `MaterialTheme.shapes.small`. */
 @Composable
 fun GenreChip(text: String, modifier: Modifier = Modifier) {
     Box(

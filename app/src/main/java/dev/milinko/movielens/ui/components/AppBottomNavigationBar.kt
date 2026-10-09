@@ -42,17 +42,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.milinko.movielens.R
 
+/** Tabs of the bottom navigation bar. */
 enum class BottomNavTab {
     HOME, SEARCH, LIBRARY, FRIENDS, PROFILE
 }
 
 /**
- * Faza 3 redizajna (videti MOVIELENS_DESIGN_PLAN.md 3): puna širina (korisnikova odluka - manje
- * rizika, predvidljivije ponašanje uz insets/tastaturu na Search ekranu), pozadina
- * `colorScheme.surface` (= MlSurfaceElevated1 iz teme), aktivni tab dobija `accentPrimary`
- * ikonicu + suptilnu "pill" pozadinu iza ikonice umesto samo promene boje. Popravljen postojeći
- * bag: ikonica za "Profil" je bila Settings (zupčanik) umesto Person - nije bila dizajn odluka,
- * samo pogrešna ikonica. Tekst natpisa prebačen u strings.xml po novoj konvenciji lokalizacije.
+ * Full-width bottom navigation bar. The active tab gets an accent-colored icon with a subtle pill
+ * behind it; the Friends tab shows a badge with the number of pending friend requests.
  */
 @Composable
 fun AppBottomNavigationBar(
@@ -63,12 +60,8 @@ fun AppBottomNavigationBar(
     val pendingCount by badgeViewModel.pendingCount.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { badgeViewModel.refresh() }
 
-    // Bugfix (E1.6, 2. septembar 2026, feedback testera - "nav traka ide ispod sistemske nav trake
-    // na nekim verzijama") - RANIJE je Surface imao fiksnu `.height(64.dp)` bez ikakvog insets
-    // podešavanja, pa se na gesture-navigation (ili nekim 3-dugme) uređajima sadržaj trake
-    // preklapao sa sistemskom navigacijom na dnu ekrana. `.navigationBarsPadding()` na Surface-u
-    // dodaje dodatni razmak VELIČINE sistemskog dna ISPOD sadržaja (koji i dalje ima svojih 64dp,
-    // sad na unutrašnjem Row-u), umesto da se ceo Surface samo suzi/prekrije.
+    // navigationBarsPadding() adds space the size of the system navigation bar BELOW the 64dp row,
+    // so the bar never overlaps the system navigation (gesture or 3-button).
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -126,8 +119,8 @@ private fun AppBottomNavItem(
     badgeCount: Int = 0,
     onClick: () -> Unit
 ) {
-    // TalkBack: tab se čita jednom (tekst ispod je labela - ikonica nema svoj opis, ranije se
-    // naziv čitao dvaput) i javlja da li je izabran (Role.Tab + selectable).
+        // TalkBack: the tab is read once (the text below is the label; the icon has no description
+        // of its own) and announces whether it is selected (Role.Tab + selectable).
     Column(
         modifier = Modifier
             .selectable(selected = selected, role = Role.Tab, onClick = onClick)

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** State of the person page. */
 data class ActorDetailUiState(
     val person: PersonDetail? = null,
     val isLoading: Boolean = false,
@@ -19,10 +20,8 @@ data class ActorDetailUiState(
 )
 
 /**
- * E2.3 (2. septembar 2026) - stranica glumca. Namerno prost, bez Room keša/offline podrške
- * (za razliku od MovieDetailViewModel) - podaci o glumcu su čist TMDB proxy prikaz bez ličnih
- * korisničkih akcija (nema watchlist/ocena/komentar ovde), isti obim kao npr. showtimes deo
- * Movie Detail-a pre nego što je dobio Room keš.
+ * Person page. Deliberately simple, without a Room cache: it is a plain TMDB view with no personal
+ * user actions (no watchlist, ratings or comments here).
  */
 @HiltViewModel
 class ActorDetailViewModel @Inject constructor(
@@ -32,6 +31,7 @@ class ActorDetailViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ActorDetailUiState())
     val uiState: StateFlow<ActorDetailUiState> = _uiState.asStateFlow()
 
+    /** Loads the person's details; failures end up in `error` as a user-facing message. */
     fun loadPerson(personId: Int) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)

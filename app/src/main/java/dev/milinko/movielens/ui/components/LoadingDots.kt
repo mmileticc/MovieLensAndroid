@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
+/** Three pulsing dots - a small loading indicator. */
 @Composable
 fun LoadingDots(
     modifier: Modifier = Modifier,
@@ -87,7 +88,7 @@ private fun Dot(
     )
 }
 
-
+/** A chat-style "typing" bubble with [LoadingDots]. */
 @Composable
 fun AiLoadingItem() {
     Column(

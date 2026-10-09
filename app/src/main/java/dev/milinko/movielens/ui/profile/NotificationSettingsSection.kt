@@ -27,11 +27,13 @@ import dev.milinko.movielens.data.push.NotificationPreferences
 import dev.milinko.movielens.data.push.PushType
 import javax.inject.Inject
 
+/** Notification type switches, backed by [NotificationPreferences]. */
 @HiltViewModel
 class NotificationSettingsViewModel @Inject constructor(
     private val preferences: NotificationPreferences
 ) : ViewModel() {
     val enabled = preferences.enabled
+    /** Enables or disables notifications of [type]. */
     fun setEnabled(type: PushType, enabled: Boolean) = preferences.setEnabled(type, enabled)
 }
 
@@ -44,7 +46,7 @@ private fun PushType.labelRes(): Int = when (this) {
     PushType.WATCHLIST_IN_CINEMA -> R.string.settings_notif_watchlist_cinema
 }
 
-/** Prekidači po vrsti obaveštenja (čuvaju se lokalno, videti NotificationPreferences). */
+/** Switches per notification type (stored locally, see NotificationPreferences). */
 @Composable
 internal fun NotificationSettingsSection(viewModel: NotificationSettingsViewModel = hiltViewModel()) {
     val enabled by viewModel.enabled.collectAsStateWithLifecycle()
@@ -71,7 +73,8 @@ internal fun NotificationSettingsSection(viewModel: NotificationSettingsViewMode
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(stringResource(type.labelRes()), modifier = Modifier.weight(1f))
-                    // Klik obrađuje ceo red (veća dodirna površina, TalkBack čita red kao jedan prekidač).
+                    // The whole row handles the click (bigger touch target; TalkBack reads the row
+                    // as one switch).
                     Switch(checked = checked, onCheckedChange = null)
                 }
             }

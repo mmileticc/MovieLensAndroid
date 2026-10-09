@@ -6,6 +6,7 @@ import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
 
+/** Image recognition: uploads a photo (poster or film still) to `POST /chat/vision`. */
 interface VisionApi {
     @Multipart
     @POST("chat/vision")

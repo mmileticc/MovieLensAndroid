@@ -34,7 +34,7 @@ class ErrorHandlingTest {
             safeApiCall<Int> { throw CancellationException("typed another letter") }
             fail("CancellationException must be rethrown")
         } catch (e: CancellationException) {
-            // očekivano - otkazana pretraga ne sme da se prikaže kao greška
+            // expected - a cancelled search must not be shown as an error
         }
     }
 

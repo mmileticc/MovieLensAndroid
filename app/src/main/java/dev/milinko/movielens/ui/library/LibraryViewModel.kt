@@ -25,36 +25,37 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** Sortiranje taba "Za gledanje". */
+/** Sort order of the "To watch" tab. */
 enum class WatchlistSort { ADDED, TMDB_RATING, TITLE, YEAR }
 
-/** Sortiranje taba "Odgledano". */
+/** Sort order of the "Watched" tab. */
 enum class HistorySort { WATCHED, MY_RATING, TMDB_RATING, TITLE }
 
-/** Sirovo stanje - liste iz Room keša + filteri. UI dobija već filtriranu/sortiranu verziju. */
+/** Raw state: the lists from the Room cache + filters. The UI gets the filtered/sorted version. */
 private data class LibraryRawState(
     val watchlist: List<WatchlistItem> = emptyList(),
     val history: List<HistoryItem> = emptyList(),
-    // Stavke uklonjene sa liste za gledanje koje čekaju da istekne "Poništi" snackbar - sakrivene
-    // iz prikaza, ali se mrežni poziv šalje tek kad korisnik ne poništi (videti requestRemove).
+    // Watchlist items removed but waiting for the "Undo" snackbar to expire - hidden from the list;
+    // the network call is sent only if the user does not undo (see requestRemove).
     val pendingRemovalIds: Set<Int> = emptySet(),
-    // Isto za tab "Odgledano" (uklanjanje briše i ocenu - isti red na backendu).
+    // The same for the "Watched" tab (removal also deletes the rating - same row on the backend).
     val pendingHistoryRemovalIds: Set<Int> = emptySet(),
     val query: String = "",
     val selectedGenreIds: Set<Int> = emptySet(),
     val watchlistSort: WatchlistSort = WatchlistSort.ADDED,
     val historySort: HistorySort = HistorySort.WATCHED,
-    // Minimalna moja ocena na tabu "Odgledano" (npr. 8 = samo filmovi koje sam ocenio 8+); null = svi.
+    // Minimum own rating on the "Watched" tab (e.g. 8 = only movies I rated 8+); null = all.
     val minMyRating: Int? = null,
     val isLoading: Boolean = false,
     val requiresSignIn: Boolean = false,
     val error: String? = null
 )
 
+/** State of the Library screen: the filtered and sorted lists plus the active filters. */
 data class LibraryUiState(
     val watchlist: List<WatchlistItem> = emptyList(),
     val history: List<HistoryItem> = emptyList(),
-    // Ukupan broj pre filtera - razlikuje "lista je prazna" od "filter ništa ne pogađa".
+    // Total before filtering - distinguishes "the list is empty" from "the filter matches nothing".
     val watchlistTotal: Int = 0,
     val historyTotal: Int = 0,
     val availableGenres: List<Genre> = emptyList(),
@@ -63,7 +64,8 @@ data class LibraryUiState(
     val watchlistSort: WatchlistSort = WatchlistSort.ADDED,
     val historySort: HistorySort = HistorySort.WATCHED,
     val minMyRating: Int? = null,
-    // Samo dok NI lokalni keš NI mreža još nisu vratili ništa (prvi ikad ulazak, prazna baza).
+    // Only while NEITHER the local cache NOR the network has returned anything (first visit, empty
+    // database).
     val isLoading: Boolean = false,
     val requiresSignIn: Boolean = false,
     val error: String? = null
@@ -71,23 +73,23 @@ data class LibraryUiState(
     val hasActiveFilters: Boolean get() = query.isNotBlank() || selectedGenreIds.isNotEmpty() || minMyRating != null
 }
 
+/** One-off events for the screen (snackbars). */
 sealed class LibraryEvent {
-    /** Prikaži "Uklonjeno · Poništi" snackbar za ovu stavku. */
+    /** Show the "Removed · Undo" snackbar for this item. */
     data class WatchlistItemRemoved(val tmdbId: Int, val title: String) : LibraryEvent()
-    /** Prikaži "Uklonjeno iz odgledanih · Poništi" snackbar. */
+    /** Show the "Removed from watched · Undo" snackbar. */
     data class HistoryItemRemoved(val tmdbId: Int, val title: String) : LibraryEvent()
+    /** A short message (e.g. rating saved or failed). */
     data class Message(@StringRes val messageRes: Int) : LibraryEvent()
 }
 
 /**
- * Offline-first: Room (preko UserRepository.observeWatchlist/observeHistory) je izvor istine za
- * UI - čita se instant, radi i bez interneta. Mreža (getWatchlist/getHistory) samo osvežava Room
- * keš u pozadini; čim se upiše, Flow automatski gurne novu listu u stanje. Videti
- * MOVIELENS_ROADMAP.md za obrazloženje offline obima (samo watchlist/istorija, ne i pretraga).
+ * The user's watchlist and watched history. Offline-first: Room (UserRepository.observeWatchlist /
+ * observeHistory) is the source of truth for the UI - instant and offline. The network
+ * (getWatchlist/getHistory) only refreshes the Room cache in the background, and the Flow pushes
+ * the new lists into the state.
  *
- * UX dorada (oktobar 2026): lokalni filteri (naziv, žanr, minimalna moja ocena) i sortiranje po
- * tabu, "Poništi" za uklanjanje sa liste, potvrda/greška za izmenu ocene, i greška učitavanja koja
- * se stvarno prikazuje (ranije je pad mreže izgledao kao prazna lista).
+ * Filters (title, genre, minimum own rating) and sorting are local.
  */
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
@@ -108,15 +110,13 @@ class LibraryViewModel @Inject constructor(
     private var watchlistCollectJob: Job? = null
     private var historyCollectJob: Job? = null
 
-    // Bugfix (E1.2, 2. septembar 2026, feedback testera - "greske 500/400 pri brzim uzastopnim
-    // klikovima") - isti obrazac kao MovieDetailViewModel (historyJob/watchlistJob), samo keyed po
-    // tmdbId jer ovde više različitih filmova u listi mogu da se menjaju nezavisno (ne sme jedan
-    // klik da otkaže zahtev za DRUGI film). Nova akcija nad ISTIM filmom otkaže prethodnu ako je
-    // još u letu, umesto da se dva zahteva sudare na backendu.
+    // Same pattern as MovieDetailViewModel (historyJob/watchlistJob), but keyed by tmdbId: several
+    // movies in the list can change independently, and a tap must never cancel the request for
+    // ANOTHER movie. A new action on the SAME movie cancels the previous one if still in flight.
     private val historyJobs = mutableMapOf<Int, Job>()
     private val removalJobs = mutableMapOf<Int, Job>()
 
-    /** Učitava biblioteku za trenutno ulogovanog korisnika (iz SessionManager-a). */
+    /** Loads the library of the currently signed-in user (from SessionManager). */
     fun loadLibrary() {
         val userId = sessionManager.getUserId()
         if (userId == null) {
@@ -135,7 +135,7 @@ class LibraryViewModel @Inject constructor(
         refreshFromNetwork(userId)
     }
 
-    /** "Pokušaj ponovo" na kartici greške. */
+    /** "Try again" on the error card. */
     fun retry() = loadLibrary()
 
     private fun startObservingLocalCache(userId: String) {
@@ -158,17 +158,16 @@ class LibraryViewModel @Inject constructor(
     }
 
     private fun refreshFromNetwork(userId: String) {
-        // Spinner samo ako ekran nema baš ništa da pokaže dok čekamo mrežu (npr. prvi ikad ulazak,
-        // Room prazan) - inače je osvežavanje tiho, korisnik već vidi keširanu listu.
+        // A spinner only if the screen has nothing at all to show while waiting for the network
+        // (e.g. first visit, empty Room); otherwise the refresh is silent over the cached list.
         val hasNothingToShow = raw.value.watchlist.isEmpty() && raw.value.history.isEmpty()
 
         viewModelScope.launch {
             raw.update { it.copy(isLoading = hasNothingToShow, error = null) }
 
-            // Watchlist i istorija su nezavisni pozivi - paralelno umesto sekvencijalno
-            // (prepolovljuje vreme čekanja na spor/udaljen backend). Rezultat se ne piše ovde u
-            // stanje direktno - to radi Room Flow collector iznad, čim getWatchlist/getHistory
-            // upišu svež keš. Ovde samo gasimo spinner i javljamo grešku.
+            // Watchlist and history are independent calls, run in parallel. The results are not
+            // written to the state here - the Room Flow collector above does that as soon as
+            // getWatchlist/getHistory write the fresh cache. Here only the spinner and the error.
             val watchlistDeferred = async { userRepository.getWatchlist(userId) }
             val historyDeferred = async { userRepository.getHistory(userId) }
             val watchlistResult = watchlistDeferred.await()
@@ -178,9 +177,9 @@ class LibraryViewModel @Inject constructor(
             raw.update {
                 it.copy(
                     isLoading = false,
-                    // Greška se prikazuje UVEK kad poziv padne (ranije samo kad nije bilo keša, a ni
-                    // tad je ekran nije čitao). Kad keš postoji, lista ostaje vidljiva ispod poruke -
-                    // korisnik zna da gleda možda zastarele podatke i može da pokuša ponovo.
+                    // The error is ALWAYS shown when a call fails. With a cache the list stays
+                    // visible
+                    // below the message, so the user knows the data may be stale and can retry.
                     error = firstException?.let { e ->
                         dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_library_refresh)
                     }
@@ -189,7 +188,7 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    // --- Filteri i sortiranje (lokalno, bez mreže) ---
+    // --- Filters and sorting (local, no network) ---
 
     fun onQueryChange(query: String) = raw.update { it.copy(query = query) }
 
@@ -202,17 +201,17 @@ class LibraryViewModel @Inject constructor(
 
     fun onHistorySortChange(sort: HistorySort) = raw.update { it.copy(historySort = sort) }
 
-    /** Ponovni klik na isti prag ga isključuje. */
+    /** Tapping the same threshold again turns it off. */
     fun onMinMyRatingChange(minRating: Int?) = raw.update {
         it.copy(minMyRating = if (it.minMyRating == minRating) null else minRating)
     }
 
-    // --- Izmena ocene ---
+    // --- Rating edits ---
 
     /**
-     * Izmena ocene direktno iz taba Odgledano (bez odlaska na Movie Detail) - optimistički, isti
-     * obrazac kao MovieDetailViewModel.rateMovie. Film je ovde po definiciji već odgledan, pa uvek
-     * ide PUT (updateHistoryItem), nikad POST.
+     * Changes the rating directly from the Watched tab (optimistically, like
+     * MovieDetailViewModel.rateMovie). The movie is already watched here, so it is always a PUT
+     * (updateHistoryItem), never a POST.
      */
     fun rateMovie(tmdbId: Int, rating: Int) {
         val userId = sessionManager.getUserId() ?: return
@@ -233,23 +232,26 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    // --- Uklanjanje sa liste za gledanje, sa "Poništi" ---
+    // --- Removing from the watchlist, with "Undo" ---
 
     /**
-     * Stavka odmah nestaje iz prikaza i ekran pokazuje "Uklonjeno · Poništi". Mrežni poziv se šalje
-     * tek u [commitRemove] (kad snackbar istekne ili korisnik napusti ekran) - "Poništi" zato ne
-     * mora ništa da vraća na serveru, samo ponovo prikaže stavku.
+     * The item disappears from the list immediately and the screen shows "Removed · Undo". The
+     * network call is sent only in [commitRemove] (when the snackbar expires or the user leaves the
+     * screen), so "Undo" never needs to restore anything on the server - it just shows the item
+     * again.
      */
     fun requestRemove(item: WatchlistItem) {
         raw.update { it.copy(pendingRemovalIds = it.pendingRemovalIds + item.tmdbId) }
         _events.tryEmit(LibraryEvent.WatchlistItemRemoved(item.tmdbId, item.title))
     }
 
+    /** "Undo": shows the item again (nothing was sent to the server yet). */
     fun undoRemove(tmdbId: Int) {
-        if (removalJobs.containsKey(tmdbId)) return // mrežni poziv je već krenuo
+        if (removalJobs.containsKey(tmdbId)) return // the network call has already started
         raw.update { it.copy(pendingRemovalIds = it.pendingRemovalIds - tmdbId) }
     }
 
+    /** Actually removes the item on the server (the snackbar expired). */
     fun commitRemove(tmdbId: Int) {
         val userId = sessionManager.getUserId() ?: return
         if (tmdbId !in raw.value.pendingRemovalIds || removalJobs.containsKey(tmdbId)) return
@@ -260,14 +262,14 @@ class LibraryViewModel @Inject constructor(
                     Log.w("LibraryViewModel", "removeFromWatchlist nije uspeo: ${e.message}")
                     _events.tryEmit(LibraryEvent.Message(R.string.library_remove_failed))
                 }
-            // Uspeh: repozitorijum je obrisao red iz Room-a, Flow ga više ne emituje. Neuspeh:
-            // stavka se vraća u prikaz (gore je korisnik obavešten porukom).
+            // Success: the repository deleted the row from Room and the Flow no longer emits it.
+            // Failure: the item reappears (the user was informed with a message above).
             raw.update { it.copy(pendingRemovalIds = it.pendingRemovalIds - tmdbId) }
             removalJobs.remove(tmdbId)
         }
     }
 
-    // --- Uklanjanje iz "Odgledano", sa "Poništi" (isti mehanizam kao lista za gledanje) ---
+    // --- Removing from "Watched", with "Undo" (same mechanism as the watchlist) ---
 
     private val historyRemovalJobs = mutableMapOf<Int, Job>()
 
@@ -296,13 +298,16 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    /** Korisnik napušta ekran pre isteka snackbar-a - uklanjanje koje nije poništeno se izvršava. */
+    /**
+     * The user leaves the screen before the snackbar expires - removals that were not undone are
+     * carried out.
+     */
     fun commitAllPendingRemovals() {
         raw.value.pendingRemovalIds.forEach { commitRemove(it) }
         raw.value.pendingHistoryRemovalIds.forEach { commitRemoveFromHistory(it) }
     }
 
-    // --- Izvođenje UI stanja ---
+    // --- Deriving the UI state ---
 
     private fun LibraryRawState.toUiState(): LibraryUiState {
         val q = query.trim()

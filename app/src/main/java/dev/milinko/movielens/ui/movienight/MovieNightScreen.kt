@@ -62,14 +62,10 @@ import dev.milinko.movielens.ui.components.ErrorCard
 import dev.milinko.movielens.ui.theme.MlPosterCornerRadius
 
 /**
- * Predlozi za zajedničko gledanje sa prijateljem (Faza 7 redizajna, MOVIELENS_DESIGN_PLAN.md 2.7).
- *
- * UX dorada (oktobar 2026):
- * - naslov sa imenom prijatelja i zaglavlje (poklapanje ukusa, "Ti / Prijatelj" za glavni
- *   zajednički žanr) JEDNOM na vrhu - ranije su iste trake bile ponovljene u svakom redu;
- * - zajednički žanrovi kao filter čipovi;
- * - svaki predlog ima godinu, TMDB ocenu i razlog po filmu;
- * - beskonačan skrol (strane se dodaju) umesto "Osveži" koje je menjalo celu listu.
+ * Movie Night: suggestions for watching together with a friend. The friend's name and the match
+ * header (taste match, "You / Friend" for the main shared genre) appear ONCE at the top; shared
+ * genres work as filter chips; each suggestion shows the year, TMDB rating and its own reason; the
+ * list grows with infinite scroll and pull-to-refresh starts over.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -119,8 +115,8 @@ fun MovieNightScreen(
                     uiState.isLoading && uiState.totalLoaded == 0 -> {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     }
-                    // Greška i prazno stanje su u skrolujućoj koloni - bez toga pull-to-refresh nije
-                    // radio baš u tim stanjima (PullToRefreshBox traži skrolujući sadržaj).
+                    // Error and empty states are inside a scrollable column: PullToRefreshBox needs
+                    // scrollable content, otherwise pull-to-refresh would not work in these states.
                     uiState.error != null -> {
                         Column(
                             modifier = Modifier
@@ -170,7 +166,7 @@ private fun SuggestionsList(
     onNavigateToDetail: (Int) -> Unit
 ) {
     val listState = rememberLazyListState()
-    // Isti obrazac beskonačnog skrola kao HomeScreen/BrowseMovieList.
+    // Same infinite scroll pattern as HomeScreen/BrowseMovieList.
     val shouldLoadMore by remember {
         derivedStateOf {
             val info = listState.layoutInfo
@@ -236,7 +232,7 @@ private fun SuggestionsList(
     }
 }
 
-/** Zaglavlje: ukupno poklapanje ukusa + "Ti / Prijatelj" za glavni zajednički žanr (jednom, ne po redu). */
+/** Header: overall taste match + "You / Friend" for the main shared genre (once, not per row). */
 @Composable
 private fun MatchHeader(uiState: MovieNightUiState) {
     val primaryGenre = uiState.sharedGenres.firstOrNull()
@@ -299,7 +295,7 @@ private fun MovieSuggestionRow(suggestion: MovieSuggestion, onClick: () -> Unit)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 if (suggestion.posterPath != null) {
-                    // AsyncImage mora imati fillMaxSize() PRE clip() unutar sized Box-a (Faza 2 bug).
+                    // AsyncImage needs fillMaxSize() BEFORE clip() inside a sized Box.
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(tmdbPosterUrl(suggestion.posterPath, "w185"))
@@ -337,7 +333,7 @@ private fun MovieSuggestionRow(suggestion: MovieSuggestion, onClick: () -> Unit)
     }
 }
 
-/** "★ 7,8 · 2024" - delovi koji nedostaju se preskaču. */
+/** "★ 7.8 · 2024" - missing parts are skipped. */
 @Composable
 private fun YearAndRating(suggestion: MovieSuggestion) {
     val year = suggestion.releaseDate?.take(4)?.takeIf { it.isNotBlank() }
@@ -365,7 +361,7 @@ private fun YearAndRating(suggestion: MovieSuggestion) {
     }
 }
 
-/** Mini traka napretka za jedan match-procenat (Ti/Prijatelj). */
+/** Mini progress bar for one match percentage (You/Friend). */
 @Composable
 private fun MatchBar(label: String, percent: Float, color: androidx.compose.ui.graphics.Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {

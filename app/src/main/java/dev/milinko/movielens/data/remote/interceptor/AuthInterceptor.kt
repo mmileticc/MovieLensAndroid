@@ -6,10 +6,7 @@ import okhttp3.Response
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Attaches `Authorization: Bearer <appToken>` to every outgoing request
- * when a backend session token is available in [SessionManager].
- */
+/** Adds `Authorization: Bearer <appToken>` to every request when a backend session exists. */
 @Singleton
 class AuthInterceptor @Inject constructor(
     private val sessionManager: SessionManager

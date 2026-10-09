@@ -25,17 +25,12 @@ import androidx.compose.ui.unit.dp
 import dev.milinko.movielens.R
 
 /**
- * Generički sklopivi/rasklopivi kontejner: red sa `header` sadržajem + `expandedContent` koji se
- * prikazuje samo kada je `expanded == true`. Napravljena za rezultate pretrage slikom (Faza 6,
- * Search - korisnikov feedback: "trenutno uzme prikaze... izlista njih sve sto je dosta
- * nepregledno, to bi mozda trebalo da se klikom prikaze ili sakrije"), ali je NAMERNO generička.
+ * Generic expandable container: a `header` row plus `expandedContent` shown only when
+ * `expanded == true` (used for the image-search results).
  *
- * `headerTogglesExpansion` (dodato posle Faze 6 feedback-a - korisnik je primetio da rezultati
- * pretrage slikom nisu klikabilni ka Movie Detail-u): kada je `true` (podrazumevano, npr. "Prikaži
- * još N mogućih poklapanja" red) ceo red je jedan veliki tap-target za širenje/skupljanje. Kada je
- * `false` (npr. pojedinačni red sekundarnog poklapanja koji TREBA da vodi na Movie Detail klikom na
- * sam sadržaj), samo strelica postaje eksplicitan IconButton za širenje/skupljanje - `header()`
- * sadržaj je tad slobodan da ima sopstveni `.clickable{}` (npr. navigaciju) bez konflikta.
+ * With `headerTogglesExpansion = true` (default) the whole row is one tap target for expanding.
+ * With `false`, only the arrow is an IconButton, so `header()` can have its own `.clickable {}`
+ * (e.g. opening Movie Detail) without a conflict.
  */
 @Composable
 fun ExpandableMatchCard(

@@ -112,10 +112,13 @@ import java.io.File
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
-/** Jedno "sekundarno" TMDB podudaranje + procenat podudaranja iz njegove roditeljske rezolucije
- * (confidence je polje kandidata/rezolucije, ne pojedinačnog TmdbMatch-a - videti VisionModels.kt). */
+/**
+ * One "secondary" TMDB match + the confidence of its parent resolution (confidence belongs to the
+ * candidate/resolution, not to the individual TmdbMatch - see VisionModels.kt).
+ */
 internal data class SecondaryMatchEntry(val match: TmdbMatch, val confidencePercent: Int?)
 
+/** All matches of all resolutions except the hero one, each with its resolution's confidence. */
 internal fun buildSecondaryMatches(response: VisionSearchResponse, heroMatchId: Int?): List<SecondaryMatchEntry> {
     val result = mutableListOf<SecondaryMatchEntry>()
     response.resolutions.forEach { resolution ->
@@ -130,10 +133,9 @@ internal fun buildSecondaryMatches(response: VisionSearchResponse, heroMatchId: 
 }
 
 /**
- * Faza 6 redizajna (MOVIELENS_DESIGN_PLAN.md 2.3) - korisnikov feedback: rezultati pretrage
- * slikom su ranije ispisivali SVE detektovane filmove odjednom, ravno, nepregledno. Novo,
- * dvoslojno sažimanje: najbolje poklapanje uvek razvijeno (`HeroMatchCard`), ostala poklapanja
- * sažeta iza "Prikaži još N" (`ExpandableMatchCard`), svaki od tih redova je i sam proširiv.
+ * Image search result in two levels: the best match is always expanded (`HeroMatchCard`); the other
+ * matches are collapsed behind "Show N more" (`ExpandableMatchCard`), and each of those rows is
+ * expandable itself.
  */
 @Composable
 internal fun VisionResultSection(
@@ -222,10 +224,8 @@ internal fun VisionResultSection(
 }
 
 /**
- * Hero kartica najboljeg poklapanja - veći poster, naslov, procenat podudaranja, i (ako igra u
- * bioskopu) prva 1-2 mesta prikazivanja direktno vidljiva. Napomena: `ScrapedMovie` (isto kao
- * `Showtime` na Movie Detail ekranu) nema polje za VREME termina - prikazuje se naziv bioskopa kao
- * chip umesto izmišljenog vremena.
+ * Hero card of the best match: a larger poster, title, match percentage and (if it is in cinemas)
+ * the first 1-2 cinemas directly visible as chips.
  */
 @Composable
 internal fun HeroMatchCard(match: TmdbMatch, confidencePercent: Int?, onClick: () -> Unit) {
@@ -286,9 +286,8 @@ internal fun HeroMatchCard(match: TmdbMatch, confidencePercent: Int?, onClick: (
 }
 
 /**
- * Red sekundarnog poklapanja unutar sažete liste - mali poster thumb + naslov + %. Sam je proširiv
- * (ako ima bioskopskih termina) klikom otkriva `ShowtimeCard` listu za taj konkretan film, umesto
- * da se sve sipa odjednom na ekran.
+ * A secondary match row inside the collapsed list: small poster, title and %. If the movie is in
+ * cinemas, the row expands to show its `ShowtimeCard`s instead of putting everything on screen.
  */
 @Composable
 internal fun SecondaryMatchRow(
@@ -358,9 +357,10 @@ internal fun SecondaryMatchRow(
     )
 }
 
-/** Kartica bioskopa unutar rezultata pretrage slikom - isti obrazac kao `CinemaShowtimeCard` na
- * Movie Detail ekranu (Faza 5), ovde za `ScrapedMovie` umesto `Showtime` (dva odvojena modela sa
- * istim poljima - videti VisionModels.kt/MovieModels.kt). */
+/**
+ * Cinema card inside the image search results - the same pattern as `CinemaShowtimeCard` on Movie
+ * Detail, for `ScrapedMovie` instead of `Showtime` (two models with the same fields).
+ */
 @Composable
 internal fun ShowtimeCard(show: ScrapedMovie) {
     val context = LocalContext.current

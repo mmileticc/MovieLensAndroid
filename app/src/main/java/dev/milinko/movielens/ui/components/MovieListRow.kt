@@ -30,14 +30,11 @@ import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 import dev.milinko.movielens.ui.theme.MlPosterCornerRadius
 
 /**
- * Horizontalan red filma (poster + naslov + meta/opis/ocena + opcioni "trailing" slot). Zamenjuje
- * HomeScreen.MovieCard, SearchScreen.MovieSearchResultCard, LibraryScreen.WatchlistItemCard,
- * LibraryScreen.HistoryItemCard (bez inline izmene ocene - taj deo ostaje u LibraryScreen jer se
- * širi ISPOD reda, ne pored njega), MovieNightScreen.MovieSuggestionRow i
- * FriendProfileScreen.WatchedMovieRow (Faza 6, videti MOVIELENS_DESIGN_PLAN.md 1.4).
+ * Horizontal movie row: poster + title + meta/overview/rating + an optional `trailing` slot. Used by
+ * Home, Search, Library, Movie Night and the friend profile.
  *
- * `trailing` je namerno generički slot (IconButton za brisanje sa liste želja, tekst "Prioritet: N",
- * dugme za izmenu ocene...) - svaki ekran prosleđuje ono što mu treba.
+ * `trailing` is a deliberately generic slot (a delete IconButton, "Priority: N" text, an edit-rating
+ * button...); every screen passes what it needs.
  */
 @Composable
 fun MovieListRow(

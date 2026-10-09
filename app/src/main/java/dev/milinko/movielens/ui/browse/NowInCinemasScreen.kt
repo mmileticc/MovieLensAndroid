@@ -35,7 +35,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.milinko.movielens.R
 
-/** "U bioskopima" - Vidi sve (otvara se sa Home trake "U bioskopima sada"). */
+/** "In cinemas" - See all (opened from the Home row "In cinemas now"). */
 @Composable
 fun NowInCinemasScreen(
     onNavigateBack: () -> Unit,

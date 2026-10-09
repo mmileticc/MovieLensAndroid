@@ -91,12 +91,17 @@ import dev.milinko.movielens.ui.components.RemoteAvatarImage
 import dev.milinko.movielens.ui.components.SectionHeader
 import dev.milinko.movielens.ui.components.YouTubeTrailerPlayer
 
-/** Koliko bioskopa se uvek prikazuje pre "Prikaži još N" - videti dorada posle Faze 6 feedback-a. */
+/** How many cinemas are always shown before "Show N more". */
 private const val ALWAYS_VISIBLE_SHOWTIMES = 3
 
-// Opis filma se skraćuje na ovoliko redova uz "Prikaži više".
+// The overview is collapsed to this many lines, with "Show more".
 private const val OVERVIEW_COLLAPSED_LINES = 5
 
+/**
+ * Movie detail: poster hero with title/year/runtime, ratings, watchlist/watched buttons and the
+ * user's rating, genres, overview, trailer, cinemas showing the movie, images, cast and public
+ * comments. Sharing works via the system share sheet (link) or by sending the movie to a friend.
+ */
 @Composable
 fun MovieDetailScreen(
     tmdbId: Int,
@@ -104,15 +109,14 @@ fun MovieDetailScreen(
     onNavigateBack: () -> Unit,
     onRequireSignIn: () -> Unit = {},
     onNavigateToFriendProfile: (String) -> Unit = {},
-    // E2.3 (2. septembar 2026) - klik na glumca u "Cast" traci vodi na njegovu stranicu.
+    // Tapping an actor in the cast row opens their page.
     onNavigateToActor: (Int) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    // "Sortiraj po udaljenosti" dugme u sekciji bioskopa - traži dozvolu tek na klik (ne odmah pri
-    // otvaranju ekrana), da ne nagovaramo korisnika za dozvolu na filmovima koji možda i nemaju
-    // bioskopske termine.
+    // The "Sort by distance" button in the cinemas section asks for location permission only when
+    // tapped, not when the screen opens - many movies have no cinemas at all.
     var hasLocationPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -125,20 +129,18 @@ fun MovieDetailScreen(
         if (granted) viewModel.loadMovieDetail(tmdbId)
     }
 
-    // Fullscreen pregled postera na klik (kao u drugim movie/photo aplikacijama) - poster je inače
-    // ContentScale.Crop u fiksnoj visini pa se seče, ovde se vidi ceo + može da se zumira.
+    // Full-screen poster on tap: the poster is ContentScale.Crop at a fixed height, so it is cut
+    // off; here it is shown whole and can be zoomed.
     var showFullPoster by remember { mutableStateOf(false) }
-    // Backdrop iz galerije "Slike" otvoren preko celog ekrana (null = zatvoreno).
+    // A backdrop from the "Images" gallery opened full screen (null = closed).
     var fullBackdropPath by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(tmdbId) {
         viewModel.loadMovieDetail(tmdbId)
     }
 
-    // Bugfix (E1.2, 2. septembar 2026, feedback testera - ružna "Update history failed: 404"
-    // poruka pri brzim uzastopnim klikovima) - watchlistError/historyError polja i ovi Toast-ovi su
-    // namerno uklonjeni, videti MovieDetailViewModel.kt (historyJob/watchlistJob napomena) - greške
-    // iz ovog toka se sad samo tiho loguju, nikad ne prekidaju korisnika usred klika.
+    // Watchlist/history update errors are not shown as Toasts on purpose: rapid repeated taps are
+    // expected and errors are only logged (see historyJob/watchlistJob in MovieDetailViewModel.kt).
 
     Scaffold(
         topBar = {
@@ -158,9 +160,9 @@ fun MovieDetailScreen(
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
-                // Deljenje: link ka stranici filma (otvara aplikaciju ako je instalirana) preko
-                // sistemskog Share menija, ili slanje prijatelju unutar aplikacije (push obaveštenje).
-                // Onemogućeno dok se detalji filma ne učitaju (treba nam naslov).
+                // Sharing: a link to the movie page (opens the app if installed) via the system
+                // share sheet, or sending to a friend in the app (push notification). Disabled until
+                // the details are loaded (the title is needed).
                 val movieForShare = uiState.movieDetail
                 var shareMenuExpanded by remember { mutableStateOf(false) }
                 var showShareWithFriend by remember { mutableStateOf(false) }
@@ -246,9 +248,6 @@ fun MovieDetailScreen(
                     style = MaterialTheme.typography.titleMedium
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                // Faza B bugfix - uiState.error!! je nepotreban non-null assertion (uslov iznad
-                // `else if (uiState.error != null)` ga već garantuje, ali `?:` je jeftinije i
-                // otpornije na buduće refaktorisanje ovog if-lanca).
                 Text(uiState.error ?: stringResource(R.string.error_generic_title))
                 Spacer(modifier = Modifier.height(16.dp))
                 AppButton(
@@ -257,10 +256,7 @@ fun MovieDetailScreen(
                 )
             }
         } else if (uiState.movieDetail != null) {
-            // Faza B bugfix (16. avgust 2026) - ranije `uiState.movieDetail!!` ponovljeno 9+ puta
-            // (svaki `item{}` blok posebno) - jedan `!!` OVDE (odmah posle već proverenog uslova
-            // gore) i dalje se koristi `movie` svuda ispod, umesto da svaki nested blok sam ponavlja
-            // istu proveru/pretpostavku.
+            // Checked by the condition above; `movie` is used everywhere below.
             val movie = uiState.movieDetail!!
             LazyColumn(
                 modifier = Modifier
@@ -268,12 +264,9 @@ fun MovieDetailScreen(
                     .padding(paddingValues)
                     .background(MaterialTheme.colorScheme.background)
             ) {
-                // Faza 5 redizajna (videti MOVIELENS_DESIGN_PLAN.md 2.4): poster + naslov su ranije
-                // bili dva odvojena item bloka (poster pa ispod običan tekst). Sad su spojeni u
-                // jedan "hero" - naslov/godina/trajanje se ispisuju PREKO donjeg dela slike uz
-                // "scrim" gradijent (transparent -> background) radi čitljivosti, filmskiji izgled
-                // i štedi vertikalni prostor. Ocena/dugmad/RatingStars/prijatelji ostaju ispod hero-a
-                // kao običan sadržaj (doc eksplicitno pominje samo naslov/godina/trajanje na slici).
+                // Hero: title/year/runtime are drawn OVER the bottom of the poster with a scrim
+                // gradient (transparent -> background) for readability. Rating, buttons, stars and
+                // friends follow below as regular content.
                 item {
                     Box(modifier = Modifier.fillMaxWidth().height(340.dp)) {
                         if (movie.posterPath != null) {
@@ -295,8 +288,8 @@ fun MovieDetailScreen(
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
                             )
                         }
-                        // Frakcioni color stop-ovi (ne raw piksel startY) - nezavisno od gustine
-                        // ekrana, "scrim" uvek počinje od pola visine hero-a naniže.
+                        // Fractional color stops (not a pixel startY), so regardless of screen
+                        // density the scrim always starts at half the hero height.
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -340,11 +333,8 @@ fun MovieDetailScreen(
                     }
                 }
 
-                // Dorada (3. septembar 2026, korisnički zahtev - "žanrovi treba da stoje pre
-                // komentara i moje ocene, a verovatno i pre watchliste/oznaci-kao-odgledano" - žanr
-                // je brz vizuelni kontekst o filmu, ima smisla da se vidi ODMAH ispod hero-a, pre
-                // interaktivnih dugmadi/ocene/komentara koji su niže niz ekran) - premešteno sa
-                // ranije pozicije (bilo je ispod svega, između komentara i bioskopskih termina).
+                // Genres right below the hero - quick context about the movie before the
+                // interactive buttons, rating and comments further down.
                 item {
                     if (movie.genres.isNotEmpty()) {
                         Column(modifier = Modifier.padding(16.dp)) {
@@ -387,9 +377,8 @@ fun MovieDetailScreen(
                                 modifier = Modifier.padding(start = 4.dp)
                             )
                         }
-                        // Dopunske ocene (3. septembar 2026) - IMDb i Rotten Tomatoes, dolaze sa
-                        // OMDb-a preko backend-a. Ceo red se ne prikazuje ako oba polja nedostaju
-                        // (npr. OMDB_API_KEY nije podešen na serveru).
+                        // Extra ratings (IMDb, Rotten Tomatoes) from OMDb via the backend. The row is
+                        // hidden when both are missing (e.g. OMDB_API_KEY is not set on the server).
                         if (movie.imdbRating != null || movie.rottenTomatoes != null) {
                             Spacer(modifier = Modifier.height(6.dp))
                             Row(
@@ -479,9 +468,9 @@ fun MovieDetailScreen(
                     }
                 }
 
-                // UX dorada (oktobar 2026): opis je odmah ispod ocena/dugmadi - ranije je bio tek posle
-                // komentara i bioskopskih termina, pa je korisnik morao da prođe kroz njih da bi
-                // saznao o čemu je film. Dug opis se skraćuje (isti obrazac kao biografija glumca).
+                // The overview comes right after the ratings and buttons so the user learns what
+                // the movie is about without scrolling past comments and cinemas. A long overview is
+                // collapsed (same pattern as the actor biography).
                 movie.overview?.takeIf { it.isNotBlank() }?.let { overview ->
                     item {
                         var overviewExpanded by remember { mutableStateOf(false) }
@@ -513,7 +502,7 @@ fun MovieDetailScreen(
                     }
                 }
 
-                // "Istraži više" - trejler pušten u aplikaciji (sekcija se ne prikazuje bez videa).
+                // Trailer played in the app (the section is hidden without videos).
                 val videos = movie.videos.orEmpty()
                 if (videos.isNotEmpty()) {
                     item {
@@ -530,10 +519,8 @@ fun MovieDetailScreen(
                 if (movie.showtimes.isNotEmpty()) {
                     item {
                         val showtimes = movie.showtimes
-                        // Dorada posle Faze 6 feedback-a: lista bioskopa je bila ravna i nepregledna
-                        // kad ih ima dosta - isti obrazac sažimanja kao sekundarni pogoci na Search
-                        // ekranu (prvih ALWAYS_VISIBLE_SHOWTIMES uvek vidljivo, ostatak iza
-                        // "Prikaži još N" pomoću ExpandableMatchCard).
+                        // The first ALWAYS_VISIBLE_SHOWTIMES cinemas are always visible, the rest
+                        // are behind "Show N more" (ExpandableMatchCard), so a long list stays readable.
                         val alwaysVisible = showtimes.take(ALWAYS_VISIBLE_SHOWTIMES)
                         val remaining = showtimes.drop(ALWAYS_VISIBLE_SHOWTIMES)
                         var showtimesExpanded by remember { mutableStateOf(false) }
@@ -628,8 +615,8 @@ fun MovieDetailScreen(
                     }
                 }
 
-                // E2.2 dorada (3. septembar 2026) - javni komentari. UX dorada (oktobar 2026): na kraju
-                // ekrana, posle informacija o filmu (opis, trejler, bioskopi, slike, glumci).
+                // Public comments, at the end of the screen after the movie information
+                // (overview, trailer, cinemas, images, cast).
                 item {
                     CommentsSection(
                         tmdbId = tmdbId,

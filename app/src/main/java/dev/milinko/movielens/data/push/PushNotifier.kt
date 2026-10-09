@@ -17,19 +17,19 @@ import dev.milinko.movielens.navigation.Screen
 import dev.milinko.movielens.util.AppLocale
 
 /**
- * Prikaz push obaveštenja. Backend šalje samo podatke (tip, ime prijatelja, film...), a tekst se
- * sastavlja ovde iz stringova aplikacije - uvek na jeziku aplikacije.
+ * Displays push notifications. The backend sends only data (type, friend name, movie...); the text
+ * is built here from the app's strings, so it is always in the app's language.
  */
 object PushNotifier {
 
-    /** Ruta na koju MainActivity navigira kad korisnik dodirne obaveštenje. */
+    /** Route MainActivity navigates to when the user taps a notification. */
     const val EXTRA_OPEN_ROUTE = "dev.milinko.movielens.OPEN_ROUTE"
 
     private const val CHANNEL_FRIENDS = "friends"
     private const val CHANNEL_COMMENTS = "comments"
     private const val CHANNEL_MOVIES = "movies"
 
-    /** Kanali po vrsti (korisnik ih može zasebno isključiti i u podešavanjima telefona). */
+    /** One channel per type (the user can also turn each off in the phone's settings). */
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
@@ -42,6 +42,7 @@ object PushNotifier {
         )
     }
 
+    /** Shows a notification for an FCM data message, unless its type is unknown or disabled. */
     fun show(context: Context, data: Map<String, String>, preferences: NotificationPreferences) {
         val type = PushType.fromWire(data["type"]) ?: return
         if (!preferences.isEnabled(type)) return
@@ -70,9 +71,10 @@ object PushNotifier {
         runCatching { NotificationManagerCompat.from(context).notify(notificationId, notification) }
     }
 
-    /** Tekst i odredište obaveštenja - deli ga push prikaz i ekran Obaveštenja (istorija). */
+    /** Text and destination of a notification - shared by the push display and the Notifications screen. */
     internal data class Content(val channel: String, val title: String, val body: String, val route: String)
 
+    /** Builds the notification content for [type], or null if the data is incomplete. */
     internal fun contentFor(type: PushType, data: Map<String, String>): Content? {
         val actor = data["actorName"]?.takeIf { it.isNotBlank() } ?: AppLocale.string(R.string.profile_default_username)
         val actorId = data["actorId"]

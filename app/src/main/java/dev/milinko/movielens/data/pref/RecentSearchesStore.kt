@@ -9,28 +9,16 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Istorija pretraga (17. avgust 2026, korisnička žalba "prazno dok se ne krene sa pretragom") -
- * čisto lokalno, isti obrazac kao ThemePreferences/UrlStorage (SharedPreferences, radi i za
- * neulogovanog korisnika, nezavisno od mreže). Lista se čuva kao JSON preko Gson-a (isti pristup
- * kao GenericCacheEntity) umesto SharedPreferences `getStringSet` - Set nema garantovan redosled,
- * a ovde nam treba MRU (most-recently-used) redosled.
+ * Recent search queries, stored locally in SharedPreferences (works signed out and offline).
  *
- * Namerno čuva samo TEKST upita, ne pune rezultate pretrage - jednostavnije, manje podataka za
- * čuvanje, i i dalje daje isti UX (tap na chip ponovo pokreće pretragu, ista logika kao Google/
- * YouTube "nedavne pretrage").
+ * - Stored as a JSON list (Gson) rather than `getStringSet`, because a Set has no order and the
+ *   list must be most-recently-used first.
+ * - Only the query text is stored, not the results; tapping a chip simply runs the search again.
+ * - Scoped per account: every method takes a `scopeId` (the user id, or "guest" when signed out),
+ *   so a different account on the same phone never sees someone else's history.
  *
- * Dorada (17. avgust 2026, korisničko pitanje "je l keš vezan za telefon a ne za nalog") - PRVA
- * verzija je čuvala jednu jedinu globalnu listu (jedan SharedPreferences ključ za ceo uređaj), pa
- * bi promena Google naloga na istom telefonu i dalje prikazivala istoriju PRETHODNOG naloga -
- * tačno bug koji je korisnik posumnjao. Za razliku od toga, sve Room keš tabele (watchlist/
- * istorija/GenericCache za profil/prijatelje/taste/Movie Night) su VEĆ bile ispravno skopirane po
- * `userId` (proveren ceo kod - videti MOVIELENS_DESIGN_PLAN.md dorada #6) - ovo je bio jedini
- * stvarni slučaj tog buga, i to u featuru dodatom istog dana. Popravljeno tako što svaka metoda
- * sad prima eksplicitan `scopeId` (userId ili "guest" za neulogovanog korisnika - SearchViewModel
- * ga čita iz SessionManager-a) i gradi poseban SharedPreferences ključ po scope-u - isti princip
- * kao `cacheKey` kod GenericCache-a. Store je namerno "glup" (nema svoj StateFlow/scope state) -
- * SearchViewModel drži svoj lokalni StateFlow i osvežava ga posle svakog poziva, jednostavnije
- * nego da Singleton pokušava da reaktivno prati promenu trenutnog naloga.
+ * The store is deliberately stateless; SearchViewModel keeps its own StateFlow and updates it with
+ * the list returned by each call.
  */
 @Singleton
 class RecentSearchesStore @Inject constructor(
@@ -45,6 +33,7 @@ class RecentSearchesStore @Inject constructor(
 
     private fun key(scopeId: String) = "recent_queries:$scopeId"
 
+    /** Queries for [scopeId], most recent first. */
     fun getQueries(scopeId: String): List<String> {
         val json = prefs.getString(key(scopeId), null) ?: return emptyList()
         return try {
@@ -55,7 +44,7 @@ class RecentSearchesStore @Inject constructor(
         }
     }
 
-    /** Dodaje upit na vrh (MRU) - uklanja raniji duplikat (bez obzira na velika/mala slova) i seče na MAX_ITEMS. Vraća novo stanje. */
+    /** Adds the query at the top (removing an earlier duplicate, case-insensitive), trims to MAX_ITEMS and returns the new list. */
     fun addQuery(scopeId: String, query: String): List<String> {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return getQueries(scopeId)
@@ -65,13 +54,14 @@ class RecentSearchesStore @Inject constructor(
         return updated
     }
 
-    /** Vraća novo stanje (bez uklonjenog upita). */
+    /** Removes the query and returns the new list. */
     fun removeQuery(scopeId: String, query: String): List<String> {
         val updated = getQueries(scopeId).filterNot { it == query }
         prefs.edit { putString(key(scopeId), gson.toJson(updated)) }
         return updated
     }
 
+    /** Clears the history for [scopeId] and returns the (empty) list. */
     fun clearQueries(scopeId: String): List<String> {
         prefs.edit { remove(key(scopeId)) }
         return emptyList()

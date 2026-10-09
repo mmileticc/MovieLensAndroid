@@ -13,6 +13,7 @@ import dev.milinko.movielens.data.local.HistoryDao
 import dev.milinko.movielens.data.local.WatchlistDao
 import javax.inject.Singleton
 
+/** Provides the Room database and its DAOs. */
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
@@ -21,10 +22,8 @@ object DatabaseModule {
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
         return Room.databaseBuilder(context, AppDatabase::class.java, "movielens.db")
-            // Destructive fallback uključen od v2 (16. avgust 2026, HistoryEntity.review kolona) -
-            // ovo su čiste keš tabele koje se uvek ponovo pune sa servera (getHistory/getWatchlist
-            // pri sledećem otvaranju ekrana), pa je brisanje pri promeni šeme bezbedno i jednostavnije
-            // od pisanja Migration klasa za podatke koji ionako nisu izvor istine.
+            // Cache tables only; everything is refetched from the server on the next screen load,
+            // so wiping them on a schema change is safe and simpler than Migration classes.
             .fallbackToDestructiveMigration()
             .build()
     }

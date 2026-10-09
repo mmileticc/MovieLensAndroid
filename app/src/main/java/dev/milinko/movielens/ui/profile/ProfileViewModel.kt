@@ -27,45 +27,40 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** State shared by the Profile and Friends screens. */
 data class ProfileUiState(
     val userProfile: UserProfile? = null,
     val friends: List<FriendInfo> = emptyList(),
     val friendActivity: List<FriendActivity> = emptyList(),
     val pendingRequests: List<PendingRequest> = emptyList(),
-    // Korisnički zahtev (2. septembar 2026, "da mi budu vidljivi izlistani poslati zahtevi kao
-    // sto su mi izlistani prijatelji, a ne samo da kad ponovo pretrazim osobu vidim da sam mu
-    // vec poslao zahtev") - poslati (odlazni) zahtevi, prikazani u posebnoj sekciji.
+    // Sent (outgoing) friend requests, shown in their own section.
     val sentRequests: List<PendingRequest> = emptyList(),
-    // Taste profile (Faza 4) - top žanrovi po prosečnoj oceni, izvedeno iz korisnikovih ocena.
+    // Taste profile - top genres by average rating, derived from the user's ratings.
     val tasteProfile: List<GenreAffinity> = emptyList(),
-    // Search-as-you-type za dodavanje prijatelja (isti obrazac kao SearchViewModel za filmove).
+    // Search as you type for adding friends (same pattern as SearchViewModel for movies).
     val friendSearchQuery: String = "",
     val friendSearchResults: List<UserSearchResult> = emptyList(),
     val isSearchingFriends: Boolean = false,
-    // Neuspela pretraga korisnika - bez ovoga je pad mreže izgledao kao "nema rezultata za X".
+    // A failed user search - without it a network failure looked like "no results for X".
     val friendSearchError: String? = null,
     val friendActionError: String? = null,
     val isLoading: Boolean = false,
     val error: String? = null,
-    // Uređivanje profila (username/bio) - Faza 7 redizajna, MOVIELENS_DESIGN_PLAN.md.
+    // Profile editing (username/bio/avatar).
     val isSavingProfile: Boolean = false,
     val editProfileError: String? = null,
-    // Unos koji server nije prihvatio - forma se ponovo otvara sa njim (videti updateProfile).
+    // Input the server rejected - the form reopens with it (see updateProfile).
     val failedProfileDraft: ProfileDraft? = null,
-    // Bugfix (E1.4, 2. septembar 2026, feedback testera - "lista prijatelja se ne ažurira odmah
-    // posle prihvatanja, mora da se promeni ekran ili zatvori app") - odvojeno od `isLoading`
-    // (koje pokriva prvi ikad ulazak na ekran) - swipe-down gest na Prijatelji tabu.
+    // Pull-to-refresh on the Friends tab - separate from `isLoading` (the very first load).
     val isRefreshingFriends: Boolean = false,
-    // Bugfix (2. septembar 2026, feedback - "posalji/otkazi rapidno, dodaj posle radi sporo i
-    // nikako da osvezi") - id-jevi ciljnih korisnika za koje je zahtev trenutno u letu. Dok je
-    // neki id ovde, dugme za njega je onemogućeno (videti UserSearchResultRow) - sprečava da
-    // korisnik pokrene SUPROTNU akciju (npr. otkaži) dok je prethodna (pošalji) još na putu ka
-    // sporom Render backendu, što je ranije otkazivalo prethodni mrežni poziv usred leta i
-    // rasinhronizovalo klijent/server (videti FriendProfileViewModel za detaljno objašnjenje).
+    // Ids of users with a friend request action in flight. While an id is here its button is
+    // disabled (see UserSearchResultRow), so the user cannot start the OPPOSITE action (e.g.
+    // cancel) while the previous one (send) is still on its way (see FriendProfileViewModel for why
+    // calls are never cancelled mid-flight).
     val friendActionInFlightIds: Set<String> = emptySet()
 )
 
-/** Vrednosti iz forme za uređivanje profila koje server nije prihvatio. */
+/** Values from the profile edit form that the server rejected. */
 data class ProfileDraft(
     val username: String,
     val bio: String?,
@@ -73,9 +68,9 @@ data class ProfileDraft(
 )
 
 /**
- * Osnovni identitet ulogovanog korisnika, čuvan lokalno u SessionManager-u odmah nakon
- * Firebase/backend auth exchange-a (vidi AuthViewModel.finishGoogleSignIn). Ne zavisi od
- * GET /api/users/{id} (koji jos ne postoji na backendu) - prikazuje se odmah, bez čekanja mreže.
+ * Basic identity of the signed-in user, stored locally in SessionManager right after the sign-in
+ * exchange (see AuthViewModel.finishGoogleSignIn), so it can be shown immediately without waiting
+ * for the network.
  */
 data class SessionUserInfo(
     val username: String?,
@@ -83,6 +78,11 @@ data class SessionUserInfo(
     val avatarUrl: String?
 )
 
+/**
+ * Own profile, settings and all friend features (requests, search, friend list, activity feed),
+ * shared by the Profile and Friends screens. Data is shown from the Room cache first and refreshed
+ * from the network; friend actions are optimistic and written through to the cache.
+ */
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val userRepository: UserRepository,
@@ -94,14 +94,13 @@ class ProfileViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
-    // Faza 2 (light tema) - lokalno podešavanje, nezavisno od backend-a (koji nikad nije imao
-    // /settings rutu, videti ThemePreferences.kt), pa Settings sekcija sad uvek može da ga prikaže.
+    // A local setting (see ThemePreferences.kt).
     val isDarkMode: StateFlow<Boolean> = themePreferences.isDarkMode
 
     private val _sessionUser = MutableStateFlow(readSessionUser())
     val sessionUser: StateFlow<SessionUserInfo?> = _sessionUser.asStateFlow()
 
-    // Expose base URL from UrlStorage so UI can edit backend address during testing
+    // Backend URL from UrlStorage, editable in the developer settings (debug builds).
     private val _baseUrl = MutableStateFlow(urlStorage.getBaseUrl())
     val baseUrl: StateFlow<String> = _baseUrl.asStateFlow()
 
@@ -117,26 +116,25 @@ class ProfileViewModel @Inject constructor(
         )
     }
 
-    /** Poziva se pri ponovnom ulasku na Profile ekran (npr. nakon prijave/odjave). */
+    /** Called when the Profile screen is entered again (e.g. after signing in or out). */
     fun refreshSessionUser() {
         _sessionUser.value = readSessionUser()
     }
 
-    // One-shot UI events (toasts, messages)
+    // One-shot UI events (toasts, messages).
     private val _events = MutableSharedFlow<ProfileUiEvent>()
     val events = _events.asSharedFlow()
 
+/** One-shot events for the Profile/Friends screens. */
     sealed class ProfileUiEvent {
         data class ShowMessage(val message: String) : ProfileUiEvent()
     }
 
-    // Debounce posao za pretragu prijatelja dok korisnik kuca - isti obrazac kao SearchViewModel.
+    // Debounce job for the friend search while the user types - same pattern as SearchViewModel.
     private var friendSearchJob: Job? = null
 
-    // Bugfix (E1.3, 2. septembar 2026, feedback testera - "greske 40x/50x pri prijateljstvima",
-    // isti obrazac kao E1.2/MovieDetailViewModel) - guard protiv duplih tapova, keyed po
-    // requesterId (accept/reject su drugi smer akcije od send/cancel, videti
-    // friendActionInFlightIds u ProfileUiState za send/cancel guard).
+    // Guard against double taps for accept/reject, keyed by requesterId (send/cancel use
+    // friendActionInFlightIds in ProfileUiState).
     private val pendingActionJobs = mutableMapOf<String, Job>()
 
     private companion object {
@@ -144,6 +142,7 @@ class ProfileViewModel @Inject constructor(
         const val MIN_FRIEND_QUERY_LENGTH = 2
     }
 
+    /** Updates the search query and runs the search after a short debounce. */
     fun setFriendSearchQuery(query: String) {
         _uiState.value = _uiState.value.copy(friendSearchQuery = query)
 
@@ -162,8 +161,8 @@ class ProfileViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(isSearchingFriends = false, friendSearchResults = results)
                 }
                 .onFailure { e ->
-                    // CancellationException (otkazana pretraga zbog novog kucanja) ne stiže ovde -
-                    // safeApiCall je propušta dalje; ovo je prava greška (mreža/server).
+                    // A CancellationException (search cancelled by new typing) never gets here -
+                    // safeApiCall rethrows it; this is a real error (network/server).
                     _uiState.value = _uiState.value.copy(
                         isSearchingFriends = false,
                         friendSearchResults = emptyList(),
@@ -173,30 +172,26 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    /** Clears the search query and results. */
     fun clearFriendSearch() {
         friendSearchJob?.cancel()
         _uiState.value = _uiState.value.copy(friendSearchQuery = "", friendSearchResults = emptyList(), isSearchingFriends = false, friendSearchError = null)
     }
 
     /**
-     * Bugfix (2. septembar 2026, feedback - "pošalje se zahtev sa profila prijatelja, vrati se
-     * nazad na Profile, dugme u rezultatima pretrage i dalje piše staro stanje") - ponovo pokreće
-     * poslednju pretragu (bez debounce-a, bez spinnera - tiho u pozadini) da bi se status
-     * (Dodaj/Otkaži zahtev) osvežio ako je promenjen na nekom drugom ekranu dok je ova ViewModel
-     * instanca ostala živa. No-op ako trenutno nema aktivnog upita.
+     * Re-runs the last search silently (no debounce, no spinner) so the statuses (Add / Cancel
+     * request) reflect changes made on another screen while this ViewModel stayed alive. No-op
+     * without an active query.
      */
     fun refreshFriendSearchResults() {
         val userId = sessionManager.getUserId() ?: return
         val trimmed = _uiState.value.friendSearchQuery.trim()
         if (trimmed.length < MIN_FRIEND_QUERY_LENGTH) return
 
-        // Dorada (2. septembar 2026, feedback - "spor prelaz nazad na Profile, treba par sekundi
-        // dok se osveži") - `searchUsers()` ide na mrežu (Render cold-start ume da traje par
-        // sekundi), pa je prikaz dugmeta čekao ceo taj round-trip. Za rezultate čiji profil VEĆ
-        // imamo u lokalnom Room kešu (znači korisnik ga je upravo otvorio i tamo poslao/otkazao
-        // zahtev - videti FriendProfileViewModel.cacheFriendProfile), status se preuzima iz keša
-        // ODMAH, instant, bez čekanja na mrežu. Mrežni poziv ispod i dalje ide u pozadini kao
-        // autoritativna potvrda (npr. hvata promene sa DRUGOG uređaja).
+        // Results whose profile is already in the Room cache (the user just opened it and
+        // sent/cancelled a request there, see FriendProfileViewModel.cacheFriendProfile) take the
+        // status from the cache IMMEDIATELY. The network call below still runs as the authoritative
+        // confirmation (e.g. it catches changes made on ANOTHER device).
         viewModelScope.launch {
             val current = _uiState.value.friendSearchResults
             val merged = current.map { result ->
@@ -217,24 +212,18 @@ class ProfileViewModel @Inject constructor(
     }
 
     /**
-     * Otkazuje već poslat zahtev (PENDING_SENT -> NONE u rezultatima pretrage). Backend nema
-     * poseban "cancel" - isti DELETE endpoint koji se koristi za unfriend/reject briše red
-     * bez obzira na smer/status, pa radi i ovde.
+     * Cancels a sent request (PENDING_SENT -> NONE in the search results). The backend has no
+     * separate "cancel": the DELETE endpoint used for unfriend/reject removes the row regardless of
+     * direction or status.
      */
     fun cancelFriendRequest(targetUserId: String) {
-        // Bugfix (2. septembar 2026, feedback - "posalji/otkazi rapidno, dodaj posle radi sporo i
-        // nikako da osvezi") - RANIJE se prethodni let posao za isti targetUserId OTKAZIVAO da bi
-        // se odmah pokrenuo suprotni (send<->cancel). Problem: mrežni poziv može već biti poslat
-        // ka sporom Render backendu pre nego što lokalni cancel() stigne da ga prekine - server ga
-        // ipak obradi, dok klijent (zbog cancel-a) nikad ne dobije povratni poziv da sinhronizuje
-        // UI. Fix: dok je akcija za taj id u letu, novi tap se IGNORIŠE (dugme je i vizuelno
-        // onemogućeno - videti friendActionInFlightIds/UserSearchResultRow) umesto da se
-        // prethodni poziv prekida usred leta.
+        // While an action for this id is in flight, a new tap is IGNORED (the button is also
+        // disabled) instead of cancelling the running call: the call may already have reached the
+        // server, and a cancelled client would never sync the UI with the result.
         if (targetUserId in _uiState.value.friendActionInFlightIds) return
         val userId = sessionManager.getUserId() ?: return
         val previousResults = _uiState.value.friendSearchResults
-        // Korisnički zahtev (2. septembar 2026) - poslata lista se ažurira optimistički zajedno
-        // sa rezultatima pretrage, ista logika kao friendSearchResults ispod (bez mreže, odmah).
+        // The sent list is updated optimistically together with the search results.
         val previousSent = _uiState.value.sentRequests
         _uiState.value = _uiState.value.copy(
             friendSearchResults = previousResults.map { if (it.id == targetUserId) it.copy(status = "NONE") else it },
@@ -242,10 +231,8 @@ class ProfileViewModel @Inject constructor(
             friendActionInFlightIds = _uiState.value.friendActionInFlightIds + targetUserId
         )
         viewModelScope.launch {
-            // Bugfix (2. septembar 2026, feedback - "otkažem kod prijatelja, uđem na detalje - nije
-            // se promenilo, vratim se nazad - i tu bude opet pogrešno") - piše i u isti Room keš koji
-            // FriendProfileScreen čita, da se izmena odavde vidi i tamo, i da povratak ovde (preko
-            // refreshFriendSearchResults cache-merge-a) ne prepiše ispravno stanje starim kešom.
+            // Also written to the Room cache FriendProfileScreen reads, so the change is visible
+            // there and refreshFriendSearchResults' cache merge does not bring back the old state.
             userRepository.updateCachedFriendshipStatus(userId, targetUserId, "NONE")
             userRepository.removeFriend(userId, targetUserId).onFailure { e ->
                 _uiState.value = _uiState.value.copy(
@@ -259,15 +246,16 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /** Optimistički - status rezultata pretrage se odmah menja u PENDING_SENT, vraća se ako padne. */
+    /**
+     * Optimistic: the search result changes to PENDING_SENT at once and reverts if the call fails.
+     */
     fun sendFriendRequest(targetUserId: String) {
-        // Bugfix (2. septembar 2026) - videti napomenu u cancelFriendRequest().
+        // See the note in cancelFriendRequest().
         if (targetUserId in _uiState.value.friendActionInFlightIds) return
         val userId = sessionManager.getUserId() ?: return
         val previousResults = _uiState.value.friendSearchResults
-        // Korisnički zahtev (2. septembar 2026, "da mi budu vidljivi izlistani poslati zahtevi
-        // kao sto su mi izlistani prijatelji") - dodaje se odmah (optimistički, bez mreže) u
-        // sentRequests, građeno iz istog search rezultata (ima id/username/avatarUrl).
+        // Added to sentRequests immediately (optimistic, no network), built from the same search
+        // result (it has id/username/avatarUrl).
         val previousSent = _uiState.value.sentRequests
         val targetResult = previousResults.find { it.id == targetUserId }
         val newSentEntry = targetResult?.let { PendingRequest(id = it.id, username = it.username, avatarUrl = it.avatarUrl) }
@@ -277,7 +265,7 @@ class ProfileViewModel @Inject constructor(
             friendActionInFlightIds = _uiState.value.friendActionInFlightIds + targetUserId
         )
         viewModelScope.launch {
-            // Bugfix (2. septembar 2026) - videti napomenu u cancelFriendRequest().
+            // See the note in cancelFriendRequest().
             userRepository.updateCachedFriendshipStatus(userId, targetUserId, "PENDING_SENT")
             userRepository.addFriend(userId, targetUserId).onFailure { e ->
                 _uiState.value = _uiState.value.copy(
@@ -291,7 +279,7 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /** Optimistički uklanja zahtev iz liste na klik, prihvatanje osvežava listu prijatelja. */
+    /** Optimistically removes the request from the list; accepting refreshes the friend list. */
     fun acceptFriendRequest(requesterId: String) {
         val userId = sessionManager.getUserId() ?: return
         val previousPending = _uiState.value.pendingRequests
@@ -300,47 +288,40 @@ class ProfileViewModel @Inject constructor(
         pendingActionJobs[requesterId] = viewModelScope.launch {
             userRepository.acceptFriendRequest(userId, requesterId)
                 .onSuccess {
-                    // Dorada (2. septembar 2026, ista klasa buga kao sendFriendRequest/
-                    // cancelFriendRequest ranije u ovom fajlu) - RANIJE se ovde pisalo samo u
-                    // memoriju (pendingRequests/friends), NIKAD u friendprofile Room keš koji
-                    // FriendProfileScreen čita - pa bi taj ekran (ako se otvori odmah posle
-                    // prihvatanja) kratko prikazao stari "Odgovori ispod"/PENDING_RECEIVED status
-                    // dok mreža ne stigne da ispravi. Zatvara petlju u istom smeru kao dorada #5.
+                    // Also written to the friend profile cache, so FriendProfileScreen opened right
+                    // after accepting does not briefly show the old PENDING_RECEIVED status.
                     userRepository.updateCachedFriendshipStatus(userId, requesterId, "ACCEPTED")
                     userRepository.getFriends(userId).onSuccess { friends ->
                         _uiState.value = _uiState.value.copy(friends = friends)
                     }
-                    // Prihvatanje je moguće i direktno iz rezultata pretrage - osvežava status u
-                    // tim redovima ("Prihvati" -> "Već ste prijatelji").
+                    // Accepting is also possible from the search results - refresh their status
+                    // ("Accept" -> "Already friends").
                     refreshFriendSearchResults()
-                    // Osvežava keš dolaznih zahteva - iz njega čita bedž u donjoj navigaciji.
+                    // Refresh the incoming requests cache - the bottom navigation badge reads it.
                     userRepository.getPendingFriendRequests(userId)
                 }
                 .onFailure { e ->
-                    // Bugfix (E1.3) - RANIJE se stavka vraćala nazad u pendingRequests
-                    // (`previousPending`) na svaki neuspeh, pa je isti zahtev mogao ponovo da se
-                    // klikne i opet padne - baš "greške 40x/50x u krug" iz test feedback-a. Sad se
-                    // NE vraća: ako je backend odbio (npr. red uopšte nije bio pravi "meni upućen"
-                    // zahtev za prihvatanje - sumnja na sinhronizacioni bag, istražuje se), stavka
-                    // ostaje uklonjena iz liste umesto da se korisniku nudi da opet pukne na istu
-                    // grešku. Greška se samo tiho loguje, ne prikazuje se korisniku.
+                    // The item is NOT put back on failure: if the backend refused (e.g. the request
+                    // no longer exists), offering it again would only fail again in a loop. The
+                    // error is only logged.
                     Log.w("ProfileViewModel", "acceptFriendRequest nije uspeo za requesterId=$requesterId (tiho, ne prikazuje se korisniku): ${e.message}")
                 }
         }
     }
 
+    /** Rejects an incoming request (optimistically removed from the list, like accept). */
     fun rejectFriendRequest(requesterId: String) {
         val userId = sessionManager.getUserId() ?: return
         val previousPending = _uiState.value.pendingRequests
         _uiState.value = _uiState.value.copy(pendingRequests = previousPending.filterNot { it.id == requesterId })
         pendingActionJobs[requesterId]?.cancel()
         pendingActionJobs[requesterId] = viewModelScope.launch {
-            // Bugfix (E1.3) - isti princip kao acceptFriendRequest, videti napomenu tamo.
+            // Same principle as acceptFriendRequest, see the note there.
             userRepository.rejectFriendRequest(userId, requesterId)
                 .onSuccess {
-                    // Dorada (2. septembar 2026) - videti napomenu u acceptFriendRequest().
+                    // See the note in acceptFriendRequest().
                     userRepository.updateCachedFriendshipStatus(userId, requesterId, "NONE")
-                    // Osvežava keš dolaznih zahteva - iz njega čita bedž u donjoj navigaciji.
+                    // Refresh the incoming requests cache - the bottom navigation badge reads it.
                     userRepository.getPendingFriendRequests(userId)
                 }
                 .onFailure { e ->
@@ -349,6 +330,10 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Removes a friend optimistically (restored on failure); the screen asks for confirmation
+     * first.
+     */
     fun removeFriend(friendId: String) {
         val userId = sessionManager.getUserId() ?: return
         val previousFriends = _uiState.value.friends
@@ -363,19 +348,17 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    /** The screen has shown the friend action error. */
     fun consumeFriendActionError() {
         _uiState.value = _uiState.value.copy(friendActionError = null)
     }
 
     /**
-     * Čuva novi username/bio/avatar (Faza 7 redizajna + dorada) - GET/PUT /api/users/{userId}/profile.
-     * Android Retrofit ugovor šalje ceo `UserProfile` objekat (postojeći `updateUserProfile` potpis),
-     * pa ovde uzimamo trenutno učitan profil kao osnovu i menjamo username/bio (i avatar, samo ako
-     * je korisnik stvarno izabrao novu sliku - `newAvatarDataUri == null` znači "ostavi trenutnu
-     * sliku netaknutu", videti `UserDao.updateProfile` na backendu). Backend ionako ignoriše ostala
-     * polja (stats/favoriteGenres se uvek izvode server-side, ne pišu se ovom rutom). Greška (npr.
-     * "Korisničko ime je već zauzeto") se vraća sa backend-a kroz `UserRepositoryImpl.parseErrorMessage`
-     * i prikazuje se direktno korisniku.
+     * Saves the new username/bio/avatar (PUT /api/users/{userId}/profile). The whole `UserProfile`
+     * is sent, so the currently loaded profile is the base with username/bio changed; the avatar
+     * changes only if the user picked a new picture (`newAvatarDataUri == null` keeps the current
+     * one). The backend derives the other fields itself. Errors such as "Username is already taken"
+     * come from the backend via `UserRepositoryImpl.parseErrorMessage` and are shown to the user.
      */
     fun updateProfile(username: String, bio: String?, newAvatarDataUri: String? = null) {
         val userId = sessionManager.getUserId() ?: return
@@ -391,10 +374,10 @@ class ProfileViewModel @Inject constructor(
             avatar = newAvatarDataUri ?: base.avatar
         )
 
-        // UX dorada (oktobar 2026): optimistično čuvanje - nove vrednosti se prikazuju ODMAH (forma
-        // se zatvara bez čekanja servera), a sinhronizacija ide u pozadini. Ako server odbije
-        // (npr. korisničko ime je zauzeto), vraća se prethodno stanje i forma se ponovo otvara sa
-        // onim što je korisnik uneo + porukom (failedProfileDraft), pa ništa ne mora da kuca ponovo.
+        // Optimistic save: the new values are shown IMMEDIATELY (the form closes without waiting)
+        // and syncing runs in the background. If the server refuses (e.g. the username is taken),
+        // the previous state is restored and the form reopens with the user's input and a message
+        // (failedProfileDraft), so nothing has to be typed again.
         val previousProfile = current
         val previousUsername = sessionManager.getUsername()
         val previousAvatar = sessionManager.getAvatarUrl()
@@ -412,8 +395,8 @@ class ProfileViewModel @Inject constructor(
             userRepository.updateUserProfile(userId, body)
                 .onSuccess { updated ->
                     _uiState.value = _uiState.value.copy(isSavingProfile = false, userProfile = updated)
-                    // Server može da normalizuje vrednosti (npr. URL avatara posle upload-a) - keš
-                    // identiteta se usklađuje sa onim što je stvarno sačuvano.
+                    // The server may normalize values (e.g. the avatar URL after upload), so the
+                    // cached identity follows what was actually saved.
                     sessionManager.updateCachedIdentity(updated.username, updated.avatar)
                     refreshSessionUser()
                 }
@@ -430,11 +413,12 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    /** The screen has shown the profile edit error. */
     fun consumeEditProfileError() {
         _uiState.value = _uiState.value.copy(editProfileError = null)
     }
 
-    /** Korisnik je otkazao ponovno uređivanje posle neuspelog čuvanja. */
+    /** The user cancelled editing again after a failed save. */
     fun discardFailedProfileDraft() {
         _uiState.value = _uiState.value.copy(failedProfileDraft = null, editProfileError = null)
     }
@@ -444,6 +428,7 @@ class ProfileViewModel @Inject constructor(
         _savedRoutes.value = urlStorage.getSavedRoutes()
     }
 
+    /** Selects [newUrl] as the backend URL (developer settings). */
     fun updateBaseUrl(newUrl: String) {
         viewModelScope.launch {
             try {
@@ -453,14 +438,12 @@ class ProfileViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // Dorada (2. septembar 2026) - `e.message` se ranije ulepljivao direktno u
-                // poruku, bez prevoda - `friendlyMessage()` sad garantuje da nikad ne procuri
-                // sirov tehnički tekst, isti obrazac kao svuda drugde u appu.
                 _events.emit(ProfileUiEvent.ShowMessage(dev.milinko.movielens.util.friendlyMessage(e, "Greška pri čuvanju URL-a.")))
             }
         }
     }
 
+    /** Adds a backend URL to the saved list. */
     fun addSavedRoute(url: String) {
         viewModelScope.launch {
             try {
@@ -475,6 +458,7 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    /** Removes a backend URL from the saved list. */
     fun removeSavedRoute(url: String) {
         viewModelScope.launch {
             try {
@@ -489,25 +473,20 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /** Učitava profil trenutno ulogovanog korisnika (iz SessionManager-a). */
-    // Bugfix (E1.4, 2. septembar 2026) - `forceRefresh` dodat da bi pull-to-refresh mogao da
-    // zaobiđe guard ispod. Taj guard je razlog "mora da se promeni ekran" iz test feedback-a: dok
-    // je ista ViewModel instanca živa (npr. korisnik ostane na istom Profile ekranu), `userProfile`
-    // ostaje isti pa se sledeći poziv tiho ignoriše - i to je NAMERNO za normalnu navigaciju (da se
-    // ne bombarduje mreža svaki put kad se tab ponovo prikaže), ali onemogućava eksplicitan
-    // korisnički zahtev za osvežavanje.
+    /**
+     * Loads the signed-in user's profile, friends, requests, activity and taste profile (cache
+     * first, then network). Skipped if the same profile is already loaded, so returning to the tab
+     * does not hit the network every time; [forceRefresh] (pull-to-refresh, retry) bypasses that.
+     */
     fun loadProfile(forceRefresh: Boolean = false) {
         refreshSessionUser()
-        // Bugfix (2. septembar 2026, feedback - "posalje se zahtev sa profila prijatelja, vrati
-        // se nazad na Profile, a dugme u rezultatima pretrage i dalje piše staro stanje") -
-        // friendSearchResults je nezavisan od guard-a ispod (koji sprečava ponovni fetch CELOG
-        // profila), pa se poziva odvojeno na svaki ulazak na ekran - jeftino je (no-op ako nema
-        // aktivnog upita) i hvata slučaj kad je status promenjen na nekom drugom ekranu
-        // (FriendProfileScreen) dok je ova ViewModel instanca ostala živa u pozadini.
+        // The friend search results do not depend on the guard below, so they are refreshed on
+        // every entry (cheap, a no-op without an active query) in case a status changed on another
+        // screen (FriendProfileScreen) while this ViewModel stayed alive.
         refreshFriendSearchResults()
         val userId = sessionManager.getUserId() ?: return
 
-        // avoid reloading the same profile repeatedly
+        // Avoid reloading the same profile repeatedly.
         if (!forceRefresh && _uiState.value.userProfile?.userId == userId) return
 
         viewModelScope.launch {
@@ -517,12 +496,8 @@ class ProfileViewModel @Inject constructor(
                 error = null
             )
 
-            // Faza C (16. avgust 2026, korisnički zahtev "da deluje momentalno pa se pozadinski
-            // sa backom to uradi... i offline stvari") - profil/prijatelji/pending zahtevi/feed
-            // aktivnosti/taste profil su ranije uvek čekali mrežni round-trip pre prvog prikaza.
-            // Sad se prvo čita Room keš (instant, radi i offline) - mrežni pozivi ispod i dalje idu
-            // u pozadini radi osvežavanja/potvrde, `_uiState` se prepisuje svežijim podatkom kad
-            // stigne.
+            // Show the Room cache first (instant, works offline); the network calls below refresh
+            // it and `_uiState` is overwritten with fresher data when it arrives.
             _uiState.value = _uiState.value.copy(
                 userProfile = userRepository.observeCachedUserProfile(userId).first() ?: _uiState.value.userProfile,
                 friends = userRepository.observeCachedFriends(userId).first().ifEmpty { _uiState.value.friends },
@@ -533,10 +508,8 @@ class ProfileViewModel @Inject constructor(
             )
 
             try {
-                // Svih pet poziva su nezavisna - paralelno umesto sekvencijalno, inače se vreme
-                // čekanja sabira (5x round-trip umesto 1x). (Ranije je ovde bio i šesti poziv,
-                // getUserSettings - uklonjen jer backend nikad nije imao /settings rutu, pa je
-                // svaki poziv garantovano padao; tema je sad čisto lokalna, videti ThemePreferences.)
+                // All six calls are independent and run in parallel, otherwise the waiting time
+                // adds up (6 round trips instead of 1).
                 val profileDeferred = async { userRepository.getUserProfile(userId) }
                 val friendsDeferred = async { userRepository.getFriends(userId) }
                 val activityDeferred = async { userRepository.getFriendActivity(userId) }
@@ -551,16 +524,15 @@ class ProfileViewModel @Inject constructor(
                 val sentResult = sentDeferred.await()
                 val tasteProfileResult = tasteProfileDeferred.await()
 
-                // Isti bugfix kao u updateProfile() - svaki svež profil sa mreže osvežava i
-                // SessionManager keš, da se već postojeće zastarele sesije (npr. avatar promenjen
-                // pre nego što je ovaj fix postojao) same isprave čim se profil jednom uspešno učita.
+                // Every fresh profile from the network also updates the SessionManager cache, so a
+                // stale cached identity (e.g. an old avatar) fixes itself.
                 profileResult.getOrNull()?.let { fresh ->
                     sessionManager.updateCachedIdentity(fresh.username, fresh.avatar)
                 }
 
-                // Svaki poziv vraća Result (ne baca izuzetak), pa catch ispod ne hvata pad mreže -
-                // greška se izvodi iz rezultata. Prikazuje se ako ni profil ni prijatelji nisu
-                // stigli; podaci iz Room keša (ako postoje) ostaju vidljivi ispod poruke.
+                // Each call returns a Result (no exception), so the catch below never sees network
+                // failures - the error is derived from the results. It is shown if neither the
+                // profile nor the friends arrived; cached data (if any) stays visible below it.
                 val loadError = profileResult.exceptionOrNull()
                     ?.takeIf { friendsResult.isFailure }
                 _uiState.value = _uiState.value.copy(
@@ -586,16 +558,17 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /** "Pokušaj ponovo" na kartici greške - zaobilazi guard "već učitano" u loadProfile. */
+    /** "Try again" on the error card - bypasses the "already loaded" guard in loadProfile. */
     fun retry() {
         loadProfile(forceRefresh = true)
     }
 
-    /** Swipe-down na Prijatelji tabu - videti napomenu na loadProfile(forceRefresh). */
+    /** Pull-to-refresh on the Friends tab - see loadProfile(forceRefresh). */
     fun refreshFriends() {
         loadProfile(forceRefresh = true)
     }
 
+    /** Switches between the dark and light theme. */
     fun toggleDarkMode() {
         themePreferences.toggleDarkMode()
     }

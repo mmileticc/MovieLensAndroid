@@ -24,11 +24,15 @@ import dev.milinko.movielens.ui.theme.MovieLensTheme
 import dev.milinko.movielens.util.AppLocale
 import javax.inject.Inject
 
+/**
+ * The single activity: applies the app language and theme, hosts the Compose navigation and opens
+ * routes from tapped notifications and shared movie links.
+ */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    // Faza 2 (light tema) - čisto lokalno podešavanje, ne zavisi od logina/mreže, čita se odmah
-    // pri pokretanju aktivnosti (videti ThemePreferences.kt).
+    // A purely local setting (independent of sign-in and network), read immediately on start
+    // (see ThemePreferences.kt).
     @Inject
     lateinit var themePreferences: ThemePreferences
 
@@ -38,11 +42,11 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var sessionManager: SessionManager
 
-    // Ruta iz dodirnutog push obaveštenja; NavHost je otvori čim je spreman.
+    // Route from a tapped push notification; the NavHost opens it as soon as it is ready.
     private val pendingRoute = mutableStateOf<String?>(null)
 
-    // Jezik aplikacije (srpski/engleski) - ceo UI ove aktivnosti čita resurse iz ovog konteksta.
-    // Promena jezika u Podešavanjima radi recreate() aktivnosti (videti AppLocale).
+    // App language (Serbian/English): the whole UI of this activity reads resources from this
+    // context. Changing the language in Settings recreates the activity (see AppLocale).
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLocale.wrap(newBase))
     }
@@ -51,7 +55,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // App is usable without login; auth is required only for scan action.
+        // The app is usable without signing in; only account features ask for it.
         val startDestination = Screen.Home.route
         pendingRoute.value = intent?.let(::routeFromIntent)
 
@@ -72,8 +76,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Posle prijave (ponovo se proverava pri svakoj promeni ekrana) jednom se objasni
-                // čemu služe obaveštenja, pa se tek onda traži sistemska dozvola.
+                // After sign-in (checked again on every screen change) the purpose of notifications
+                // is explained once, and only then is the system permission requested.
                 val backStackEntry by navController.currentBackStackEntryAsState()
                 NotificationPermissionPrompt(
                     trigger = backStackEntry?.destination?.route,
@@ -89,7 +93,7 @@ class MainActivity : ComponentActivity() {
         routeFromIntent(intent)?.let { pendingRoute.value = it }
     }
 
-    /** Ruta iz dodirnutog obaveštenja ili iz podeljenog linka https://<host>/m/{tmdbId}. */
+    /** Route from a tapped notification or from a shared link https://<host>/m/{tmdbId}. */
     private fun routeFromIntent(intent: Intent): String? {
         intent.getStringExtra(PushNotifier.EXTRA_OPEN_ROUTE)?.let { return it }
         val uri = intent.data ?: return null

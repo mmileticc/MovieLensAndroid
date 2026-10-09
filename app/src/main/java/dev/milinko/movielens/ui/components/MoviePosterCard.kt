@@ -22,14 +22,12 @@ import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 import dev.milinko.movielens.ui.theme.MlPosterCornerRadius
 
 /**
- * Kompaktna vertikalna kartica filma (poster + naslov + opcioni natpis ispod) - za horizontalne
- * redove (Home "Predloženo za tebe"/"U bioskopima sada", Movie Night). Zamenjuje ranije privatne
- * HomeScreen.PosterCard i deo MovieNightScreen.MovieSuggestionRow (Faza 6 redizajna, videti
- * MOVIELENS_DESIGN_PLAN.md 1.4).
+ * Compact vertical movie card (poster + title + optional caption) for horizontal rows (Home, Movie
+ * Night).
  *
- * NAMERNO ne zna ništa o MovieSearchResult/NowInCinemasMovie/WatchlistItem/itd. - u appu ne
- * postoji jedan zajednički "movie" model (šest različitih data klasa dele title/posterPath/tmdbId
- * i ništa više), pa komponenta prima gole String parametre - svaki ekran sam mapira svoj model.
+ * Takes plain String parameters on purpose: the app has several movie models (MovieSearchResult,
+ * NowInCinemasMovie, WatchlistItem...) that share only title/posterPath/tmdbId, so every screen maps
+ * its own model.
  */
 @Composable
 fun MoviePosterCard(

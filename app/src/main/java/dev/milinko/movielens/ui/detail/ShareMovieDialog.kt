@@ -36,7 +36,10 @@ import dev.milinko.movielens.ui.components.RemoteAvatarImage
 
 private const val NOTE_MAX_LENGTH = 200
 
-/** Izbor prijatelja (i opciona poruka) kome se šalje film - stiže mu kao push obaveštenje. */
+/**
+ * Picks the friend (and an optional message) to send the movie to; it arrives as a push notification
+ * and in the friend's Notifications inbox.
+ */
 @Composable
 internal fun ShareWithFriendDialog(
     movieTitle: String,

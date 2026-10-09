@@ -26,8 +26,8 @@ import androidx.compose.ui.unit.dp
 import dev.milinko.movielens.R
 
 /**
- * Kartica za grešku. `onRetry` (opciono) dodaje "Pokušaj ponovo" - svaka greška koja može da se
- * ponovi treba da ga ima, inače korisnik nema drugi način osim da napusti ekran.
+ * Error card. The optional `onRetry` adds "Try again" - every error that can be retried should have
+ * it, otherwise the user's only option is to leave the screen.
  */
 @Composable
 fun ErrorCard(
@@ -74,8 +74,8 @@ fun ErrorCard(
 }
 
 /**
- * Prazno stanje (npr. prazna lista). Neutralna ikonica - prazna lista nije greška. `actionText`
- * + `onAction` (opciono) daju korisniku sledeći korak umesto ćorsokaka (npr. "Pronađi filmove").
+ * Empty state (e.g. an empty list), with a neutral icon - an empty list is not an error. The optional
+ * `actionText` + `onAction` give the user a next step instead of a dead end (e.g. "Find movies").
  */
 @Composable
 fun EmptyStateCard(

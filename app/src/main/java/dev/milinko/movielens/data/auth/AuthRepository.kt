@@ -8,23 +8,27 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+/** Firebase Authentication: Google sign-in and the Firebase ID token used to obtain the backend session. */
 class AuthRepository @Inject constructor(private val firebaseAuth: FirebaseAuth) {
 
     val currentFirebaseUser: FirebaseUser?
         get() = firebaseAuth.currentUser
 
+    /** Signs in to Firebase with a Google ID token and returns the Firebase user. */
     suspend fun signInWithGoogleIdToken(idToken: String) = withContext(Dispatchers.IO) {
         val credential = GoogleAuthProvider.getCredential(idToken, null)
         firebaseAuth.signInWithCredential(credential).awaitTask()
         firebaseAuth.currentUser ?: throw IllegalStateException("No user after sign-in")
     }
 
+    /** Current Firebase ID token (exchanged for the backend JWT), or null when signed out. */
     suspend fun getFirebaseIdToken(forceRefresh: Boolean = false): String? = withContext(Dispatchers.IO) {
         val user = firebaseAuth.currentUser ?: return@withContext null
         val tokenResult = user.getIdToken(forceRefresh).awaitTask()
         tokenResult.token
     }
 
+    /** Signs out of Firebase only; the backend session is cleared by SessionManager. */
     fun signOut() {
         firebaseAuth.signOut()
     }

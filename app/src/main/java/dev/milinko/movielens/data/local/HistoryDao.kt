@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
+/** Cached watched movies, per user. */
 @Dao
 interface HistoryDao {
 

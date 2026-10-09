@@ -2,7 +2,7 @@ package dev.milinko.movielens.data.remote.user
 
 import com.google.gson.annotations.SerializedName
 
-// User Profile
+/** The signed-in user's profile with statistics and top genres. */
 data class UserProfile(
     @SerializedName("user_id")
     val userId: String,
@@ -12,7 +12,7 @@ data class UserProfile(
     val email: String,
     @SerializedName("avatar")
     val avatar: String? = null,
-    // Faza 7 redizajna - kratak, korisnički konfigurabilan "mini status" ispod imena.
+    // Short status line under the name, set by the user.
     @SerializedName("bio")
     val bio: String? = null,
     @SerializedName("favorite_genres")
@@ -30,11 +30,7 @@ data class UserStats(
     val friendCount: Int = 0
 )
 
-// Napomena: UserSettings/postavke sa backenda su uklonjene (16. avgust 2026, Faza 2) - backend
-// nikad nije imao /settings rutu (potvrđeno pretragom), pa je svaki GET/PUT poziv na nju uvek
-// padao. "Tamna tema" je sad čisto lokalno podešavanje (videti data/pref/ThemePreferences.kt).
-
-// Friends
+/** A friend with the taste match and shared genres. */
 data class FriendInfo(
     @SerializedName("friend_id")
     val friendId: String,
@@ -62,7 +58,7 @@ data class FriendsResponse(
     val friends: List<FriendInfo> = emptyList()
 )
 
-// Pretraga korisnika za dodavanje prijatelja (search-as-you-type)
+/** A user search result for adding friends. */
 data class UserSearchResult(
     @SerializedName("id")
     val id: String,
@@ -70,7 +66,7 @@ data class UserSearchResult(
     val username: String? = null,
     @SerializedName("avatar_url")
     val avatarUrl: String? = null,
-    // NONE / PENDING_SENT / PENDING_RECEIVED / ACCEPTED - videti FriendshipStatus na backendu
+    // NONE / PENDING_SENT / PENDING_RECEIVED / ACCEPTED - see FriendshipStatus on the backend
     @SerializedName("status")
     val status: String = "NONE"
 )
@@ -80,7 +76,7 @@ data class UserSearchResponse(
     val users: List<UserSearchResult> = emptyList()
 )
 
-// Dolazni (nerešeni) zahtevi za prijateljstvo
+/** A pending friend request (incoming or sent). */
 data class PendingRequest(
     @SerializedName("id")
     val id: String,
@@ -95,11 +91,10 @@ data class PendingRequestsResponse(
     val requests: List<PendingRequest> = emptyList()
 )
 
-// Telo POST /friends/{friendId} - "add" | "accept" | "reject". Pravi tip umesto Map<String, Any> -
-// videti napomenu u UserApiService.kt o Kotlin Map<K, out V> + Retrofit wildcard bug-u.
+// Body of POST /friends/{friendId}: "add" | "accept" | "reject" (a real type, see UserApiService).
 data class FriendActionBody(val action: String)
 
-// Profil prijatelja - osnovni info + WATCHED lista (watchlist ostaje privatan, nikad se ne vraća).
+/** A movie from a friend's watched list (watchlists are never shown to others). */
 data class FriendProfileMovie(
     @SerializedName("tmdb_id")
     val tmdbId: Int,
@@ -122,33 +117,26 @@ data class FriendProfileResponse(
     val username: String,
     @SerializedName("avatar_url")
     val avatarUrl: String? = null,
-    // Faza 7 redizajna - prijateljev "mini status", isto polje kao sopstveni UserProfile.bio.
+    // The friend's status line, same field as UserProfile.bio.
     @SerializedName("bio")
     val bio: String? = null,
     @SerializedName("watched_movies")
     val watchedMovies: List<FriendProfileMovie> = emptyList(),
-    // E1.5 dorada (2. septembar 2026) - ograničen preview PRE prihvaćenog prijateljstva. Kad
-    // friendshipStatus != "ACCEPTED", watchedMovies je uvek prazna (backend je nikad ne popunjava)
-    // - email/commonGenres su ono što se umesto toga prikazuje. Videti FriendsRouting.kt na backendu.
+    // Before the friendship is accepted (friendshipStatus != "ACCEPTED") the backend returns a
+    // limited preview: watchedMovies is empty and email is null; commonGenres is shown instead.
     @SerializedName("email")
     val email: String? = null,
-    // Bugfix (2. septembar 2026, logcat crash - "Attempt to invoke virtual method
-    // 'int java.lang.String.hashCode()' on a null object reference" u FriendProfileScreen.kt).
-    // Uzrok: Gson (Retrofit konverter) NE poziva Kotlin konstruktor kad popunjava polja iz JSON-a
-    // (koristi refleksiju/Unsafe), pa Kotlin default vrednosti (npr. "ACCEPTED" ovde) VAŽE SAMO
-    // pri direktnoj konstrukciji iz koda (npr. .copy(...) u ViewModel-u) - NE i kad polje
-    // nedostaje u JSON-u. Stari keš zapisi u Room bazi (snimljeni PRE nego što je ovo polje
-    // dodato u E1.5) zato daju friendshipStatus = null uprkos deklarisanom ne-null tipu, što
-    // ruši `when` na tom polju (String `when` se kompajlira preko hashCode()). Polja su zato
-    // eksplicitno nullable - stvarnost onoga što Gson može da vrati - a mesta koja ih čitaju
-    // (FriendProfileScreen.kt) koriste `?:`/`.orEmpty()` fallback.
+    // Nullable on purpose: Gson fills fields via reflection without calling the constructor, so a
+    // Kotlin default applies only when the object is created in code - not when the key is missing
+    // in JSON (e.g. old Room cache entries). A non-null String that is actually null crashes a
+    // `when` on it; readers use `?:` / `.orEmpty()`.
     @SerializedName("friendship_status")
     val friendshipStatus: String? = "ACCEPTED",
     @SerializedName("common_genres")
     val commonGenres: List<String>? = emptyList()
 )
 
-// Taste profile (Faza 4) - prosečna ocena po žanru, izvedeno direktno iz korisnikovih ocena.
+/** Average rating per genre, derived from the user's ratings. */
 data class GenreAffinity(
     @SerializedName("genre_id")
     val genreId: Int,
@@ -165,7 +153,7 @@ data class TasteProfileResponse(
     val genres: List<GenreAffinity> = emptyList()
 )
 
-// "Prijatelji su gledali ovaj film" bedž na Movie Detail-u
+/** A friend who watched the movie ("friends watched" badge on the detail screen). */
 data class FriendWatched(
     @SerializedName("friend_id")
     val friendId: String,
@@ -182,7 +170,7 @@ data class FriendsWatchedResponse(
     val friends: List<FriendWatched> = emptyList()
 )
 
-// Friend Activity
+/** One entry of the friend activity feed. */
 data class FriendActivity(
     @SerializedName("activity_id")
     val activityId: String,
@@ -196,7 +184,7 @@ data class FriendActivity(
     val tmdbId: Int,
     @SerializedName("movie_title")
     val movieTitle: String,
-    // Faza 7 dorada - Profile ekran prikazuje poster umesto plain ikonice/rečenice.
+    // Shown in the activity feed instead of a plain icon.
     @SerializedName("poster_path")
     val posterPath: String? = null,
     @SerializedName("metadata")
@@ -219,7 +207,7 @@ data class FriendActivityResponse(
     val activities: List<FriendActivity> = emptyList()
 )
 
-// MovieNight Suggestions
+/** A Movie Night suggestion for the user and a friend. */
 data class MovieSuggestion(
     @SerializedName("tmdb_id")
     val tmdbId: Int,
@@ -231,8 +219,7 @@ data class MovieSuggestion(
     val matchReason: String, // "Both rated 8+", "Common genre", etc.
     @SerializedName("scores")
     val scores: SuggestionScores = SuggestionScores(),
-    // UX dorada (oktobar 2026) - nullable iz istog Gson razloga kao MovieSearchResult.genreIds
-    // (stariji backend ih ne šalje).
+    // Nullable for the same Gson reason as MovieSearchResult.genreIds (older backends do not send it).
     @SerializedName("release_date")
     val releaseDate: String? = null,
     @SerializedName("vote_average")
@@ -253,13 +240,11 @@ data class SuggestionScores(
 data class MovieNightResponse(
     @SerializedName("suggestions")
     val suggestions: List<MovieSuggestion> = emptyList(),
-    // Dorada (25. avgust 2026, korisnička žalba "za neke prijatelje se predlozi ponavljaju posle
-    // 3-4 ekrana") - da li backend ima još TMDB discover stranica za ovaj par žanrova NAKON ove
-    // koja je upravo vraćena. Videti MovieNightViewModel.refreshSuggestions - ranije se umesto
-    // ovoga koristio izmišljen fiksan broj stranica (5), pogrešan za većinu parova žanrova.
+    // Whether the backend has more TMDB pages for this genre mix after the returned one
+    // (see MovieNightViewModel.refreshSuggestions).
     @SerializedName("has_more")
     val hasMore: Boolean = false,
-    // Zaglavlje Movie Night ekrana (isto za sve predloge) - nullable, videti MovieSuggestion.
+    // Movie Night header (the same for all suggestions) - nullable, see MovieSuggestion.
     @SerializedName("friend_username")
     val friendUsername: String? = null,
     @SerializedName("shared_genres")
@@ -282,7 +267,7 @@ data class ShareMovieBody(
     val note: String? = null
 )
 
-// Istorija obaveštenja (GET /api/users/{id}/notifications). `data` su isti podaci kao u push poruci.
+/** One stored notification (GET /api/users/{id}/notifications); `data` holds the same values as the push message. */
 data class NotificationItem(
     @SerializedName("id")
     val id: Int,

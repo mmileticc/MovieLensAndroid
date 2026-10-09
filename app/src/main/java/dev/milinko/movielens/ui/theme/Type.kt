@@ -10,13 +10,11 @@ import androidx.compose.ui.unit.sp
 import dev.milinko.movielens.R
 
 /**
- * Inter preko Android "Downloadable Fonts" API-ja (Faza 6 redizajna) - font se preuzima sa
- * Google Play services na uređaju, ne bandluje se .ttf u repo. Sertifikat provajdera je u
- * res/values/font_certs.xml (standardan Google-ov, ne nešto specifično za ovaj projekat).
+ * Inter via Android's Downloadable Fonts API: the font is fetched from Google Play services on the
+ * device instead of bundling a .ttf. The provider certificates are in res/values/font_certs.xml.
  *
- * NAPOMENA: zahteva Google Play services na uređaju/emulatoru da bi se font stvarno preuzeo -
- * ako services nisu prisutni (npr. neki AVD image bez Play services), Compose tiho pada nazad na
- * sistemski font (FontFamily.Default) dok se ne uspe preuzimanje - ne ruši app.
+ * Without Play services (e.g. some emulator images) Compose silently falls back to the system font;
+ * the app does not crash.
  */
 private val interFontProvider = GoogleFont.Provider(
     providerAuthority = "com.google.android.gms.fonts",
@@ -34,9 +32,8 @@ private val InterFontFamily = FontFamily(
 )
 
 /**
- * Dosledna skala (videti MOVIELENS_DESIGN_PLAN.md 1.2) - pre redizajna je samo bodyLarge bio
- * override-ovan, sve ostalo je padalo na Material3 default (Roboto). Sad je SVAKI stil eksplicitan
- * i koristi Inter, da nigde ne "procuri" stari sistemski font.
+ * The full type scale. Every style is set explicitly with Inter so the Material 3 default font
+ * (Roboto) never leaks in anywhere.
  */
 val Typography = Typography(
     displayLarge = TextStyle(fontFamily = InterFontFamily, fontWeight = FontWeight.Bold, fontSize = 34.sp, lineHeight = 40.sp, letterSpacing = 0.sp),
@@ -51,9 +48,8 @@ val Typography = Typography(
     titleMedium = TextStyle(fontFamily = InterFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 22.sp, letterSpacing = 0.sp),
     titleSmall = TextStyle(fontFamily = InterFontFamily, fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.sp),
 
-    // UX dorada (oktobar 2026): body stilovi podignuti na Material 3 standard (16/14sp, ranije
-    // 15/13sp) - bodyMedium je glavni tekst opisa/poruka kroz celu aplikaciju i na 13sp je bio
-    // sitan za čitanje. bodySmall ostaje 12sp (sporedni natpisi).
+    // Body styles follow the Material 3 standard (16/14sp): bodyMedium is the main text for
+    // descriptions and messages across the app. bodySmall stays 12sp (secondary captions).
     bodyLarge = TextStyle(fontFamily = InterFontFamily, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp, letterSpacing = 0.2.sp),
     bodyMedium = TextStyle(fontFamily = InterFontFamily, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.2.sp),
     bodySmall = TextStyle(fontFamily = InterFontFamily, fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.2.sp),

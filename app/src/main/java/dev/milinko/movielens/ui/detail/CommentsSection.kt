@@ -89,12 +89,10 @@ import dev.milinko.movielens.ui.components.SectionHeader
 import dev.milinko.movielens.ui.components.YouTubeTrailerPlayer
 
 /**
- * Javni komentari na film (E2.2 dorada, 3. septembar 2026) - zamenjuje stari privatan "komentar
- * uz ocenu". Sadrži polje za pisanje novog komentara + listu postojećih ("prijatelji" uvek prvi,
- * sortiranje je već urađeno na backendu - videti CommentsRepository.getForMovie) + "Prikaži više/
- * manje" dugmad. `uiState`/`viewModel` se prosleđuju direktno (umesto da se svaka funkcija
- * pojedinačno prosledi) jer sekcija treba dosta različitih polja/akcija odjednom - isti kompromis
- * kao drugi veći item blokovi na ovom ekranu.
+ * Public comments on the movie: a field for writing a new comment, the list of existing ones
+ * (friends first - sorted by the backend, see CommentsRepository.getForMovie) and "Show more/less".
+ * `uiState`/`viewModel` are passed directly because the section needs many fields and actions at
+ * once.
  */
 @Composable
 internal fun CommentsSection(
@@ -113,7 +111,8 @@ internal fun CommentsSection(
         )
 
         var commentText by remember { mutableStateOf("") }
-        // Server nije prihvatio komentar (optimistična objava) - tekst se vraća u polje.
+    // The server rejected the comment (it was posted optimistically) - the text goes back into
+    // the field.
         LaunchedEffect(uiState.failedCommentText) {
             uiState.failedCommentText?.let { failed ->
                 if (commentText.isBlank()) commentText = failed
@@ -158,8 +157,7 @@ internal fun CommentsSection(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Dorada (3. septembar 2026, korisnički zahtev - "pre brisanja komentara treba samo da
-        // pita da li je siguran") - isti obrazac kao friendPendingRemoval u ProfileScreen.kt.
+    // Asks for confirmation before deleting a comment.
         var commentPendingDeletion by remember { mutableStateOf<MovieComment?>(null) }
 
         if (uiState.isLoadingComments) {
@@ -241,21 +239,16 @@ internal fun CommentsSection(
 }
 
 /**
- * Jedan komentar - avatar/ime (+ "Prijatelj" bedž ako je isFriend), tekst, i lajk/brisanje na dnu.
- * Kanta za smeće se prikazuje samo za `isOwn` komentare; srce za lajk je onemogućeno za sopstveni
- * komentar (backend ionako odbija - videti CommentsRepository.toggleLike - ovde je samo vizuelna
- * potvrda iste odluke, da korisnik ne klikne pa dobije tihu grešku).
+ * One comment: avatar/name (+ a "Friend" badge if isFriend), the text, and like/delete at the bottom.
+ * The trash icon is shown only for `isOwn` comments; the like heart is disabled on one's own comment
+ * (the backend rejects it anyway, see CommentsRepository.toggleLike).
  */
 @Composable
 internal fun CommentCard(comment: MovieComment, onLikeClick: () -> Unit, onDeleteClick: () -> Unit) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Bugfix (3. septembar 2026, korisnički bug report - "slika ljudi koji su
-                // komentarisali se ne prikazuje") - avatar polje je često `data:image/...;base64,...`
-                // (videti util/AvatarImage.kt), a plain AsyncImage(model=url) (Coil 2.x) nema podršku
-                // za `data:` šemu pa je tiho ništa ne prikazivao. RemoteAvatarImage je deljena
-                // komponenta koja već rešava ovo za ostatak app-a (feed prijatelja, profil, itd.).
+                // RemoteAvatarImage, because the avatar can be a `data:` URI that Coil cannot load.
                 Box(
                     modifier = Modifier
                         .size(32.dp)

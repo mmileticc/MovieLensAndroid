@@ -101,7 +101,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Sadržaj "Prijatelji" stranice pagera - sopstveni LazyColumn (svaka stranica se skroluje nezavisno). */
+/** Content of the Friends page - its own LazyColumn (each page scrolls independently). */
 @Composable
 internal fun FriendsTabContent(
     uiState: ProfileUiState,
@@ -112,18 +112,15 @@ internal fun FriendsTabContent(
     onRejectRequest: (PendingRequest) -> Unit,
     onCancelSentRequest: (id: String, name: String?) -> Unit
 ) {
-    // Bugfix (E1.4, 2. septembar 2026, feedback testera - "lista prijatelja se ne ažurira odmah,
-    // nema pull-down") - swipe-down gest kao dodatna sigurnosna mreža uz automatski refresh posle
-    // prihvatanja zahteva (videti ProfileViewModel.acceptFriendRequest/refreshFriends).
+    // Swipe-down refresh as a safety net in addition to the automatic refresh after accepting a
+    // request (see ProfileViewModel.acceptFriendRequest/refreshFriends).
     PullToRefreshBox(
         isRefreshing = uiState.isRefreshingFriends,
         onRefresh = { viewModel.refreshFriends() },
         modifier = Modifier.fillMaxSize()
     ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        // UX dorada (oktobar 2026): zaglavlje profila i "Tvoj ukus" su samo na tabu "Moj profil" -
-        // ovde su ranije bili duplirani i gurali pretragu ~250dp niže. Dolazni zahtevi su PRVI
-        // (ranije ispod pretrage, pa ih je kucanje u pretragu guralo van ekrana).
+        // Incoming requests come FIRST, so typing in the search below never pushes them off screen.
         if (uiState.pendingRequests.isNotEmpty()) {
             item {
                 SectionHeader(
@@ -156,10 +153,8 @@ internal fun FriendsTabContent(
             )
         }
 
-        // Korisnički zahtev (2. septembar 2026, "da mi budu vidljivi izlistani poslati zahtevi
-        // kao sto su mi izlistani prijatelji, a ne samo da kad ponovo pretrazim osobu vidim da
-        // sam mu vec poslao zahtev") - odvojena sekcija, analogno prijateljima/primljenim
-        // zahtevima iznad, umesto da se status otkriva samo ponovnom pretragom te osobe.
+        // Sent requests in their own section (like friends and incoming requests), so their status
+        // is visible without searching for the person again.
         if (uiState.sentRequests.isNotEmpty()) {
             item {
                 SectionHeader(
@@ -183,9 +178,8 @@ internal fun FriendsTabContent(
             )
         }
         if (uiState.isLoading && uiState.friends.isEmpty()) {
-            // Dok se prvi ikad poziv ne vrati, ne pokazujemo "nemaš prijatelja" - to bi bilo
-            // lažno ako korisnik zapravo ima prijatelje, samo se lista još nije stigla da učita
-            // (npr. brz prelazak/svajp na ovaj tab).
+            // Until the first call returns, "you have no friends" is not shown - it would be false
+            // if the list simply has not loaded yet (e.g. a quick swipe to this tab).
             item {
                 Box(
                     modifier = Modifier
@@ -234,12 +228,7 @@ internal fun FriendsTabContent(
     }
 }
 
-/**
- * Faza 7 redizajna (MOVIELENS_DESIGN_PLAN.md 2.6): "avatar, ime, match%, zajednički žanrovi kao
- * mali chip-ovi". Usput ispravljen postojeći propust - `friend.avatar` polje je postojalo u
- * `FriendInfo` modelu ali ga kartica nikad nije koristila, uvek je prikazivala placeholder
- * ikonicu čak i kad je pravi avatar dostupan.
- */
+/** Friend card: avatar, name, taste match % and shared genres as small chips. */
 @Composable
 internal fun FriendCard(
     friend: FriendInfo,
@@ -283,8 +272,8 @@ internal fun FriendCard(
                     .padding(start = 12.dp)
             ) {
                 Text(friend.username, style = MaterialTheme.typography.titleSmall)
-                // match_score/common_genres su placeholder (0f/prazno) dok se ne uradi Faza 4
-                // (profilisanje) - prikazujemo ih samo kad je backend stvarno popunio vrednosti.
+                // Shown only when the backend computed a match (it is 0 when there is not enough
+                // rating data).
                 if (friend.matchScore > 0f) {
                     Text(
                         text = stringResource(R.string.profile_match_percent, friend.matchScore),
@@ -304,8 +293,8 @@ internal fun FriendCard(
                     }
                 }
             }
-            // UX dorada (oktobar 2026): "Ukloni" je ranije stajalo kao vidljivo crveno dugme odmah
-            // pored klikabilne kartice - lako se promaši. Sad je iza menija (⋮); potvrda ostaje.
+            // "Remove" is behind the overflow menu (⋮) so it is not hit by accident next to the
+            // clickable card; it still asks for confirmation.
             var menuExpanded by remember { mutableStateOf(false) }
             Box {
                 IconButton(onClick = { menuExpanded = true }) {
@@ -328,6 +317,10 @@ internal fun FriendCard(
     }
 }
 
+/**
+ * User search for adding friends (search as you type) with the results and their friendship
+ * actions.
+ */
 @Composable
 internal fun FriendSearchSection(
     query: String,
@@ -365,17 +358,14 @@ internal fun FriendSearchSection(
                         onAdd = { onAdd(result.id) },
                         onAccept = { onAccept(result.id) },
                         onCancelRequest = { onCancelRequest(result.id, result.username) },
-                        // Bugfix (E1.5, 2. septembar 2026, feedback testera - "nemogućnost pregleda
-                        // profila pre slanja zahteva") - RANIJE klik nije radio dok status nije
-                        // ACCEPTED. FriendProfileScreen sad prikazuje ograničen preview za bilo koji
-                        // status (videti FriendsRouting.kt/FriendProfileScreen.kt), pa je klik uvek
-                        // dozvoljen.
+                        // Always clickable: FriendProfileScreen shows a limited preview for any
+                        // friendship status.
                         onClick = { onOpenProfile(result.id) }
                     )
                 }
             }
         } else if (error != null && !isSearching) {
-            // Pad mreže ne sme da izgleda kao "nema korisnika sa tim imenom".
+            // A network failure must not look like "no users with that name".
             Text(
                 text = error,
                 style = MaterialTheme.typography.bodyMedium,
@@ -393,6 +383,7 @@ internal fun FriendSearchSection(
     }
 }
 
+/** One search result: avatar, name and the action button matching the friendship status. */
 @Composable
 internal fun UserSearchResultRow(
     result: UserSearchResult,
@@ -420,18 +411,16 @@ internal fun UserSearchResultRow(
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.weight(1f)
             )
-            // Bugfix (2. septembar 2026, feedback - "posalji/otkazi rapidno, dodaj posle radi sporo
-            // i nikako da osvezi") - dugme se onemogući dok je akcija za ovaj id u letu (videti
-            // friendActionInFlightIds/ProfileViewModel) - sprečava rapidno naizmenično
-            // slanje/otkazivanje koje je ranije otkazivalo prethodni mrežni poziv usred leta.
+            // The button is disabled while an action for this id is in flight (see
+            // friendActionInFlightIds in ProfileViewModel), so rapid add/cancel taps cannot
+            // overlap.
             when (result.status) {
                 "NONE" -> AppButton(text = stringResource(R.string.profile_add_friend), onClick = onAdd, variant = AppButtonVariant.Primary, enabled = !isActionInFlight)
                 "PENDING_SENT" -> TextButton(onClick = onCancelRequest, enabled = !isActionInFlight) {
                     Text(stringResource(R.string.profile_cancel_request), color = MaterialTheme.colorScheme.error)
                 }
-                // UX dorada (oktobar 2026): ranije onemogućeno dugme "Poslao ti je zahtev" koje je
-                // izgledalo pokvareno - sad pravo "Prihvati" (odbijanje i dalje ide preko profila
-                // ili kartice zahteva na vrhu taba, gde postoji potvrda).
+                // A real "Accept" button; rejecting goes through the profile or the request card at
+                // the top of the tab, where a confirmation exists.
                 "PENDING_RECEIVED" -> AppButton(text = stringResource(R.string.profile_accept_request), onClick = onAccept, variant = AppButtonVariant.Primary, enabled = !isActionInFlight)
                 "ACCEPTED" -> AppButton(text = stringResource(R.string.profile_already_friends), onClick = {}, variant = AppButtonVariant.Secondary, enabled = false)
                 else -> AppButton(text = stringResource(R.string.profile_add_friend), onClick = onAdd, variant = AppButtonVariant.Primary, enabled = !isActionInFlight)
@@ -441,19 +430,12 @@ internal fun UserSearchResultRow(
 }
 
 /**
- * Faza 7 dorada #2 (korisnička žalba: prvi pokušaj - ikonica + rečenica - i dalje je izgledao kao
- * "samo pobrojano"). Prebačeno na deljeni `MovieListRow` (isti poster-red obrazac kao Library/
- * Search/Movie Night/Friend Profile) - film je sad glavni vizuelni element (poster + naslov), a
- * "ko i šta" ide kao `description` ispod, umesto da cela stvar bude jedna generička rečenica sa
- * ikonicom. `FriendActivityDto`/`FriendActivity` su dobili `posterPath` (backend red ga je već
- * imao iz JOIN-a na `movies`, samo nije bio prosleđen kroz DTO).
+ * One activity feed entry, using the shared MovieListRow: the movie (poster + title) is the main
+ * element and "who did what" is the description below. Tapping opens the movie.
  */
 @Composable
 internal fun FriendActivityRow(activity: FriendActivity, onClick: () -> Unit) {
-    // Faza B bugfix (16. avgust 2026) - ranije `rating!!` teoretski bezbedno (uslov `isRated`
-    // proverava != null gore), ali oslanja se na to da dva mesta (uslov i upotreba) OSTANU
-    // sinhronizovana - lako pući ako se logika ikad refaktoriše nezavisno. Sad je `rating` jedna
-    // promenljiva koja i JESTE null-provera, nema odvojenog `!!`.
+    // The rating is shown only for "rated" entries.
     val rating = activity.metadata.rating?.takeIf { activity.action == "rated" }
     val metaText = if (rating != null) {
         stringResource(R.string.profile_activity_row_rated, activity.friendName, rating.toInt())
@@ -461,15 +443,10 @@ internal fun FriendActivityRow(activity: FriendActivity, onClick: () -> Unit) {
         stringResource(R.string.profile_activity_row_watched, activity.friendName)
     }
 
-    // Dorada (17. avgust 2026, korisnička žalba "nek i to na klik vodi na taj film") - red je već
-    // imao poster preko MovieListRow, samo nije prosleđivan onClick (parametar koji MovieListRow
-    // već podržava, isti obrazac kao Friend Profile "odgledano" lista).
     MovieListRow(
         title = activity.movieTitle,
         posterPath = activity.posterPath,
         metaText = metaText,
-        // E2.2 dorada (3. septembar 2026) - stari privatan review prikaz uklonjen iz feed-a
-        // aktivnosti (zamenjen javnim komentarima na Movie Detail ekranu).
         onClick = onClick,
         modifier = Modifier.padding(horizontal = 16.dp)
     )

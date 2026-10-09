@@ -20,39 +20,41 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** State of the Home screen: every row, its loading flags and paging. */
 data class HomeUiState(
     val isLoading: Boolean = false,
     val selectedImageUri: String? = null,
     val visionResult: VisionSearchResponse? = null,
     val trendingMovies: List<MovieSearchResult> = emptyList(),
-    // Odvojeno od isLoading (koji je za vision detekciju) da ensureTrendingLoaded ne bude
-    // slučajno blokiran dok korisnik analizira sliku, i obrnuto.
+    // Separate from isLoading (image recognition), so neither blocks the other.
     val isTrendingLoading: Boolean = false,
-    // Beskonačan skrol - odvojeno od isTrendingLoading (koji je samo za prvu stranu/spinner
-    // preko cele liste) da se footer spinner prikazuje samo na dnu liste, ne preko svega.
+    // Infinite scroll - separate from isTrendingLoading (first page / full-list spinner), so the
+    // footer spinner shows only at the bottom of the list.
     val isLoadingMore: Boolean = false,
-    // false kad je poslednja strana vratila prazan rezultat - nema smisla dalje tražiti sledeću.
+    // false when the last page came back empty - no point requesting more.
     val canLoadMore: Boolean = true,
-    // "Predloženo za tebe" - lična personalizacija (Faza 4, taste profile po žanru), NAMERNO
-    // odvojeno od trendingMovies (koji je uvek čist TMDB popular, bez obzira na login) - to su
-    // dve različite stvari i obe treba da se vide, ne jedna umesto druge. Prazno ako korisnik
-    // nije ulogovan (nema profil za personalizaciju).
+    // "Suggested for you" - personalized by the genre taste profile, deliberately separate from
+    // trendingMovies (always plain TMDB popular). Empty when signed out.
     val personalizedMovies: List<MovieSearchResult> = emptyList(),
-    // "U bioskopima sada" traka - bonus sadržaj, tiho ostaje prazna lista ako poziv padne (ne
-    // blokira ni ne kvari ostatak Home ekrana).
+    // "In cinemas now" row - extra content; silently stays empty if the call fails.
     val nowInCinemas: List<NowInCinemasMovie> = emptyList(),
-    // "Nastavi da gledaš" - iz Room keša (isti izvor kao Library, Faza 3.5), prazno ako korisnik
-    // nije ulogovan ili nema ništa na watchlisti.
+    // "Continue watching" - from the Room cache (same source as Library); empty when signed out or
+    // when the watchlist is empty.
     val watchlistPreview: List<WatchlistItem> = emptyList(),
-    // "Prijatelji gledaju" - poslednji filmovi koje su prijatelji odgledali/ocenili (keš aktivnosti,
-    // isti kao na ekranu Prijatelji). Prazno za gosta ili korisnika bez prijatelja - traka se ne prikazuje.
+    // "Friends are watching" - the latest movies friends watched/rated (same activity cache as the
+    // Friends screen). Empty for guests or users without friends - the row is then hidden.
     val friendsActivity: List<FriendActivity> = emptyList(),
-    // Swipe-down (pull-to-refresh) na Home ekranu - odvojeno od isTrendingLoading da ne prikazuje
-    // duplirane spinnere (PullToRefreshBox ima sopstveni indikator preko ovog flag-a).
+    // Pull-to-refresh - separate from isTrendingLoading to avoid duplicate spinners
+    // (PullToRefreshBox has its own indicator driven by this flag).
     val isRefreshing: Boolean = false,
     val error: String? = null
 )
 
+/**
+ * Home screen data: popular movies (infinite scroll), personalized suggestions, the cinema row,
+ * the watchlist preview and friends' activity. Most rows are optional extras: their failures are
+ * silent and never break the rest of the screen.
+ */
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val movieRepository: MovieRepository,
@@ -64,12 +66,11 @@ class HomeViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    // Trenutna strana za trending/featured - ne ide u uiState jer UI-ju ne treba direktno,
-    // samo loadMoreTrending() računa sledeću.
+    // Current trending page - not in uiState because only loadMoreTrending() needs it.
     private var currentPage = 1
 
-    // Trenutna strana za "Predloženo za tebe" - swipe-down na Home-u rotira 1..MAX_PERSONALIZED_PAGE
-    // pa se vrati na početak, isto kao "Osveži predloge" na Movie Night ekranu (MovieNightViewModel).
+    // Current "Suggested for you" page - pull-to-refresh cycles 1..MAX_PERSONALIZED_PAGE and starts
+    // over, like "Refresh suggestions" on Movie Night (MovieNightViewModel).
     private var personalizedPage = 1
 
     private companion object {
@@ -87,10 +88,9 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * Poziva se svaki put kad se Home ekran (ponovo) prikaže. HomeViewModel živi koliko i cela
-     * sesija (Home je start destinacija), pa je init{} pozvan samo jednom - ako taj prvi poziv
-     * ne uspe (npr. hladan start backend-a), lista bi ostala prazna zauvek bez ovoga. Ne dira
-     * podatke ako već postoje ili ako je poziv u toku.
+     * Called every time Home is shown. HomeViewModel lives for the whole session (Home is the start
+     * destination), so init{} runs only once; if that first load failed (e.g. a cold backend) the
+     * list would stay empty forever without this. Does nothing if data exists or a load is running.
      */
     fun ensureTrendingLoaded() {
         if (_uiState.value.trendingMovies.isEmpty() && !_uiState.value.isTrendingLoading) {
@@ -101,6 +101,8 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    // Image recognition (legacy - the Search screen uses SearchViewModel for this; HomeScreen does
+    // not call these).
     fun onImageSelected(uri: String?) {
         _uiState.value = _uiState.value.copy(
             selectedImageUri = uri,
@@ -132,8 +134,8 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * "Popularni filmovi" - UVEK čist TMDB popular (ne personalizovano), bez obzira na login.
-     * Personalizacija je odvojen red - videti loadPersonalizedMovies().
+     * "Popular movies" - ALWAYS plain TMDB popular, regardless of sign-in. Personalization is a
+     * separate row, see loadPersonalizedMovies().
      */
     private fun loadTrendingMovies() {
         currentPage = 1
@@ -148,18 +150,17 @@ class HomeViewModel @Inject constructor(
                     )
                 }
                 .onFailure {
-                    // Ne pišemo u `error` (to polje je vezano za vision UI) - samo gasimo loading
-                    // flag da bi ensureTrendingLoaded() mogao da pokuša ponovo sledeći put kad se
-                    // korisnik vrati na Home (npr. posle hladnog starta backend-a).
+                    // `error` is not set (that field belongs to the image recognition UI); only the
+                    // loading flag is cleared so ensureTrendingLoaded() can retry when the user
+                    // returns to Home.
                     _uiState.value = _uiState.value.copy(isTrendingLoading = false)
                 }
         }
     }
 
     /**
-     * Beskonačan skrol - poziva se sa Home ekrana kad korisnik dođe blizu dna liste. Tiho ne radi
-     * ništa ako je učitavanje već u toku (bilo prve strane ili prethodnog loadMore poziva) ili ako
-     * je poslednja strana bila prazna (canLoadMore = false, verovatno kraj TMDB rezultata).
+     * Infinite scroll - called when the user nears the bottom of the list. Does nothing while a load
+     * is running or after an empty last page (canLoadMore = false, likely the end of TMDB results).
      */
     fun loadMoreTrending() {
         val state = _uiState.value
@@ -171,8 +172,8 @@ class HomeViewModel @Inject constructor(
             movieRepository.getTrendingMovies(nextPage)
                 .onSuccess { movies ->
                     currentPage = nextPage
-                    // Dedupe po tmdbId - TMDB stranice se teorijski mogu preklopiti ako se
-                    // popularity poredak filmova promeni između dva poziva.
+                    // Dedupe by tmdbId - TMDB pages can overlap if the popularity order changes
+                    // between two calls.
                     val existingIds = _uiState.value.trendingMovies.map { it.tmdbId }.toSet()
                     val newMovies = movies.filter { it.tmdbId !in existingIds }
                     _uiState.value = _uiState.value.copy(
@@ -188,11 +189,9 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * "Predloženo za tebe" - lična personalizacija (Faza 4), samo za ulogovane korisnike. Backend
-     * sam radi fallback na popularne ako korisnik još nema dovoljno ocena za taste profile (videti
-     * MovieRouting.kt /featured) - u tom slučaju ovaj red može ličiti na "Popularni filmovi" dok
-     * korisnik ne oceni par filmova, što je očekivano i samo se rešava vremenom. Bez paginacije
-     * (jedna strana, ~20 filmova) - ovo je horizontalna traka, ne beskonačna vertikalna lista.
+     * "Suggested for you" - signed-in users only. The backend falls back to popular movies until the
+     * user has enough ratings for a taste profile (see MovieRouting.kt /featured), so early on this
+     * row can look like "Popular". One page (~20 movies), no paging - it is a horizontal row.
      */
     private fun loadPersonalizedMovies() {
         val userId = sessionManager.getUserId() ?: return
@@ -205,8 +204,8 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * "U bioskopima sada" traka - tiho ignoriše grešku, ovo je bonus sadržaj, ne kritičan poziv.
-     * Backend sad vraća CEO repertoar (za "Vidi sve" ekran), traka prikazuje samo prvih 20.
+     * "In cinemas now" row - errors are ignored (extra content). The backend returns the WHOLE
+     * programme (for the "See all" screen); the row shows only the first 20.
      */
     private fun loadNowInCinemas() {
         viewModelScope.launch {
@@ -217,10 +216,9 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * "Nastavi da gledaš" red - čita direktno iz Room keša (observeWatchlist), isti izvor kao
-     * Library ekran (Faza 3.5 offline keš), instant i radi i bez interneta. Uz to, jednom u
-     * pozadini osvežimo sa mreže (write-through u Room) da red ne bude zastareo ako korisnik
-     * ovu sesiju još nije otvarao Library.
+     * "Continue watching" row - read from the Room cache (observeWatchlist), same source as Library,
+     * instant and offline. It is also refreshed once from the network (written through to Room) so it
+     * is not stale if Library has not been opened in this session.
      */
     private fun observeWatchlistPreview() {
         val userId = sessionManager.getUserId() ?: return
@@ -238,8 +236,8 @@ class HomeViewModel @Inject constructor(
         val userId = sessionManager.getUserId() ?: return
         viewModelScope.launch {
             userRepository.observeCachedFriendActivity(userId).collect { activity ->
-                // Jedna kartica po filmu (najsvežija aktivnost), da isti film ne zauzme celu traku
-                // kad ga je pogledalo više prijatelja.
+                // One card per movie (the latest activity), so one movie watched by several friends
+                // does not fill the whole row.
                 _uiState.value = _uiState.value.copy(
                     friendsActivity = activity
                         .sortedByDescending { it.timestamp }
@@ -258,12 +256,10 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * Swipe-down (pull-to-refresh) na Home ekranu. NAMERNO menja samo "Predloženo za tebe" (rotira
-     * TMDB discover stranu 1..MAX_PERSONALIZED_PAGE, isto kao "Osveži predloge" na Movie Night
-     * ekranu) - "Popularni filmovi" i "U bioskopima sada" se ne diraju, tu nema šta novo da se
-     * izvuče na zahtev (TMDB popular lista i skrapovani repertoar se ne menjaju sa svakim swipe-om),
-     * pa bi ponovni fetch samo vratio isti sadržaj bez ikakve vidljive promene. Za neulogovanog
-     * korisnika (nema personalizaciju) gesta i dalje kratko pokaže indikator umesto da deluje mrtvo.
+     * Pull-to-refresh on Home. Deliberately changes only "Suggested for you" (cycles the TMDB discover
+     * page 1..MAX_PERSONALIZED_PAGE, like "Refresh suggestions" on Movie Night): "Popular" and "In
+     * cinemas now" do not change on demand, so refetching them would show the same content. Signed out
+     * (no personalization), the gesture still shows the indicator briefly instead of feeling dead.
      */
     fun refreshAll() {
         val userId = sessionManager.getUserId()

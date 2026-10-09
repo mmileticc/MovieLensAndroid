@@ -5,7 +5,7 @@ import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
-/** Prima FCM poruke (i kad je aplikacija u pozadini - backend šalje data poruke visokog prioriteta). */
+/** Receives FCM messages (also in the background - the backend sends high-priority data messages). */
 @AndroidEntryPoint
 class MovieneeMessagingService : FirebaseMessagingService() {
 

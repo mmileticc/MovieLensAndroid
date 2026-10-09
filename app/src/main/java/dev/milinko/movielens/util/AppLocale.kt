@@ -8,21 +8,20 @@ import androidx.annotation.StringRes
 import androidx.core.content.edit
 import java.util.Locale
 
-/** Izbor jezika u Podešavanjima. */
+/** Language choice in Settings. */
 enum class AppLanguageOption { SYSTEM, SERBIAN, ENGLISH }
 
 /**
- * Jezik aplikacije (oktobar 2026 - dodat engleski). Srpski tekstovi su u `res/values/`, engleski u
- * `res/values-en/`.
+ * The app language. Serbian strings are in `res/values/`, English in `res/values-en/`.
  *
- * Namerno običan `object` sa SharedPreferences (ne Hilt): jezik mora biti poznat već u
- * `MainActivity.attachBaseContext`, pre nego što Hilt ubaci zavisnosti.
+ * A plain `object` with SharedPreferences (not Hilt) on purpose: the language must be known already
+ * in `MainActivity.attachBaseContext`, before Hilt injects anything.
  *
- * - [AppLanguageOption.SYSTEM] (podrazumevano): telefon na srpskom/hrvatskom/bosanskom/
- *   crnogorskom -> srpski, sve ostalo -> engleski. Ne može se prepustiti samom Android-u: za npr.
- *   nemački telefon bi uzeo `values/` (srpski) jer `values-de` ne postoji.
- * - Ekrani dobijaju jezik preko [wrap] (MainActivity), a ViewModel-i i ostali ne-UI kod preko
- *   [string] (lokalizovan aplikacioni kontekst).
+ * - [AppLanguageOption.SYSTEM] (default): a phone set to Serbian/Croatian/Bosnian/Montenegrin ->
+ *   Serbian, anything else -> English. This cannot be left to Android: e.g. a German phone would
+ *   get `values/` (Serbian) because `values-de` does not exist.
+ * - Screens get the language through [wrap] (MainActivity); ViewModels and other non-UI code use
+ *   [string] (a localized application context).
  */
 object AppLocale {
     private const val PREFS = "language_prefs"
@@ -35,28 +34,30 @@ object AppLocale {
     @Volatile
     private var currentLocale: Locale = Locale.ENGLISH
 
-    /** Poziva se jednom iz Application.onCreate. */
+    /** Called once from Application.onCreate. */
     fun init(appContext: Context) {
         refresh(appContext.applicationContext)
     }
 
+    /** The stored language choice ([AppLanguageOption.SYSTEM] if none). */
     fun getOption(context: Context): AppLanguageOption {
         val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_LANGUAGE, null)
         return AppLanguageOption.entries.firstOrNull { it.name == stored } ?: AppLanguageOption.SYSTEM
     }
 
-    /** Čuva izbor i osvežava lokalizovan kontekst; aktivnost posle toga treba `recreate()`. */
+    /** Stores the choice and refreshes the localized context; the activity should `recreate()` afterwards. */
     fun setOption(context: Context, option: AppLanguageOption) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putString(KEY_LANGUAGE, option.name) }
         refresh(context.applicationContext)
     }
 
-    /** "sr" ili "en" - šalje se backendu kao Accept-Language. */
+    /** "sr" or "en" - sent to the backend as Accept-Language. */
     fun currentTag(): String = currentLocale.language
 
+    /** The resolved locale currently used by the app. */
     fun currentLocale(): Locale = currentLocale
 
-    /** Kontekst sa izabranim jezikom - za MainActivity.attachBaseContext. */
+    /** A context with the selected language - for MainActivity.attachBaseContext. */
     fun wrap(base: Context): Context {
         val locale = resolveLocale(base)
         Locale.setDefault(locale)
@@ -65,7 +66,7 @@ object AppLocale {
         return base.createConfigurationContext(config)
     }
 
-    /** Lokalizovan tekst za kod koji nema Compose/Activity kontekst (ViewModel-i, util). */
+    /** Localized text for code without a Compose/Activity context (ViewModels, util). */
     fun string(@StringRes id: Int, vararg args: Any): String {
         val ctx = localizedAppContext ?: return Resources.getSystem().getString(android.R.string.unknownName)
         return if (args.isEmpty()) ctx.getString(id) else ctx.getString(id, *args)
@@ -88,6 +89,6 @@ object AppLocale {
         }
     }
 
-    // Srpski latinicom - za resurse se ionako uzima podrazumevani values/ (nema values-sr).
+    // Serbian in Latin script; resources come from the default values/ anyway (there is no values-sr).
     private val SERBIAN: Locale = Locale.forLanguageTag("sr-Latn-RS")
 }

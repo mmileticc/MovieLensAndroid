@@ -102,9 +102,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Tab "Prijatelji" u donjoj navigaciji: dolazni i poslati zahtevi, pretraga korisnika, lista
- * prijatelja i njihova aktivnost. Ranije je ovo bio tab unutar Profila; deli [ProfileViewModel]
- * (isti podaci i akcije), a Profil je ostao za sopstveni profil i podešavanja.
+ * The "Friends" tab of the bottom navigation: incoming and sent requests, user search, the friend
+ * list and their activity. Shares [ProfileViewModel] (same data and actions); Profile is for one's
+ * own profile and settings.
  */
 @Composable
 fun FriendsScreen(
@@ -119,11 +119,11 @@ fun FriendsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val sessionUser by viewModel.sessionUser.collectAsStateWithLifecycle()
-    // Potvrda pre nego što se prijatelj stvarno ukloni - nema pravog "undo" jer bi ponovno
-    // dodavanje zahtevalo da druga strana opet prihvati zahtev (nije simetrično kao watched-undo).
+    // Confirmation before actually removing a friend - there is no real undo, because adding them
+    // again would require the other side to accept a new request.
     var friendPendingRemoval by remember { mutableStateOf<FriendInfo?>(null) }
-    // Odbijanje i otkazivanje zahteva su isto nepovratni (druga strana bi morala ponovo da pošalje
-    // ili dobije zahtev), pa traže istu potvrdu. Par (id, ime za poruku).
+    // Rejecting and cancelling requests are just as irreversible (the other side would have to
+    // send or receive a request again), so they ask for the same confirmation.
     var requestPendingRejection by remember { mutableStateOf<PendingRequest?>(null) }
     var sentRequestPendingCancel by remember { mutableStateOf<Pair<String, String?>?>(null) }
 
@@ -257,8 +257,7 @@ fun FriendsScreen(
             )
         }
 
-        // Dorada (2. septembar 2026, korisnički zahtev - potvrda pre odbijanja zahteva za
-        // prijateljstvo) - isti obrazac kao friendPendingRemoval iznad.
+    // Same pattern as friendPendingRemoval above.
         requestPendingRejection?.let { request ->
             AlertDialog(
                 onDismissRequest = { requestPendingRejection = null },

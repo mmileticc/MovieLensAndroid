@@ -18,28 +18,31 @@ import retrofit2.HttpException
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Public movie data from the backend: search, details, trending/featured lists, the cinema
+ * programme, people and comments. Every call returns a [Result] whose failure carries an
+ * HttpException/IOException, which the ViewModels turn into text with `friendlyMessage()`.
+ */
 interface MovieRepository {
     suspend fun searchMovies(query: String): Result<List<MovieSearchResult>>
-    // lat/lon: opciono, prosleđuje se dalje backend-u za sortiranje bioskopa po udaljenosti.
+    // lat/lon are optional and passed to the backend to sort cinemas by distance.
     suspend fun getMovieDetail(tmdbId: Int, lat: Double? = null, lon: Double? = null): Result<MovieDetail>
-    // page: podržava beskonačan skrol na Home-u (HomeViewModel akumulira stranice).
+    // `page` supports infinite scrolling on Home (HomeViewModel accumulates the pages).
     suspend fun getTrendingMovies(page: Int = 1): Result<List<MovieSearchResult>>
-    // Personalizovano (Faza 4) ako je userId poslat i korisnik ima taste profile - backend sam
-    // radi fallback na popularne filmove ako ne postoji dovoljno podataka. Videti MovieRouting.kt.
+    // Personalized when userId is given and the user has a taste profile; otherwise the backend
+    // falls back to popular movies (see MovieRouting.kt).
     suspend fun getFeaturedMovies(userId: String?, page: Int = 1): Result<List<MovieSearchResult>>
     suspend fun getFriendsWhoWatched(tmdbId: Int): Result<List<FriendWatched>>
     suspend fun getNowInCinemas(): Result<List<NowInCinemasMovie>>
-    // Svi TMDB žanrovi - keširani u memoriji posle prvog uspešnog poziva.
+    // All TMDB genres, cached in memory after the first successful call.
     suspend fun getGenres(): Result<List<Genre>>
-    // Faza D (17. avgust 2026) - semantička pretraga svedena na filmove trenutno na repertoaru
-    // (videti CinemaSemanticIndex na backendu) - ista lista forma kao getNowInCinemas.
-    // Faza D dorada - `engine` bira embedding provajder na backendu ("gemini" ili "local"), radi
-    // poređenja kvaliteta pretrage.
+    // Semantic search over the movies currently in cinemas (same shape as getNowInCinemas).
+    // `engine` selects the backend's embedding provider ("gemini" or "local").
     suspend fun semanticSearchNowInCinemas(query: String, engine: String = "gemini"): Result<List<NowInCinemasMovie>>
-    // E2.3 (2. septembar 2026) - stranica glumca (foto, biografija, filmografija).
+    // Person page: photo, biography, filmography.
     suspend fun getPersonDetail(personId: Int): Result<PersonDetail>
 
-    // E2.2 dorada (3. septembar 2026) - javni komentari na film, videti MovieModels.kt/MovieComment.
+    // Public movie comments (see MovieComment).
     suspend fun getComments(tmdbId: Int, offset: Int = 0, limit: Int = 3): Result<MovieCommentsResponse>
     suspend fun addComment(tmdbId: Int, body: String): Result<MovieComment>
     suspend fun deleteComment(commentId: Int): Result<Unit>
@@ -51,13 +54,9 @@ class MovieRepositoryImpl @Inject constructor(
     private val movieApiService: MovieApiService
 ) : MovieRepository {
 
-    // Dorada (2. septembar 2026, korisnički zahtev - "nijedna sirova poruka ne sme da postoji
-    // nigde") - SVE metode ispod su ranije na neuspešan odgovor bacale generički `Exception("X
-    // failed: ${response.code()}")` - taj tekst NIJE HttpException, pa `friendlyMessage()`
-    // (util/FriendlyError.kt) nije mogao da prepozna status kod i taj sirovi engleski tekst je
-    // prolazio direktno do korisnika. Sad se svuda baca pravi `HttpException(response)` - isti
-    // obrazac kao `VisionRepository`/`UserRepository` - da gornja HTTP-kod grana u
-    // `friendlyMessage()` stvarno uhvati 401/403/404/5xx i vrati razumljivu srpsku poruku.
+    // Failed responses always throw a real `HttpException(response)` (never a plain Exception with
+    // a message), so `friendlyMessage()` can map the status code (401/403/404/5xx) to a readable
+    // message instead of showing raw technical text.
 
     override suspend fun searchMovies(query: String): Result<List<MovieSearchResult>> = safeApiCall {
         val response = movieApiService.searchMovies(query)
@@ -104,7 +103,7 @@ class MovieRepositoryImpl @Inject constructor(
         }
     }
 
-    // Lista žanrova se ne menja tokom sesije - jedan poziv po pokretanju aplikacije.
+    // Genres do not change during a session: one call per app start.
     @Volatile
     private var cachedGenres: List<Genre>? = null
 

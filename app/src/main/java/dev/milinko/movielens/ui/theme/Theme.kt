@@ -6,16 +6,8 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-/**
- * Faza 6 redizajna: MovieLens NAMERNO nema dynamicColor (ranije je bilo uključeno, pa je app
- * slučajno menjala boje prema korisnikovoj pozadini na Android 12+ telefonima umesto da ima
- * sopstveni identitet) - to ostaje isključeno i dalje.
- *
- * Faza 2 (16. avgust 2026, MOVIELENS_DESIGN_PLAN.md): dodata prava light tema. "Tamna tema"
- * prekidač u Podešavanjima je ranije bio ožičen na backend /settings rutu koja nikad nije
- * postojala, pa nikad nije bio ni vidljiv - sad je čisto lokalno podešavanje
- * (`ThemePreferences`), a `MovieLensTheme` bira paletu na osnovu `darkTheme` parametra.
- */
+// No dynamicColor on purpose: the app keeps its own identity instead of following the wallpaper
+// on Android 12+. The theme (dark/light) is a local setting (ThemePreferences).
 private val MovieLensDarkColorScheme = darkColorScheme(
     primary = MlAccentPrimary,
     onPrimary = Color.White,
@@ -70,6 +62,7 @@ private val MovieLensLightColorScheme = lightColorScheme(
     onError = Color.White,
 )
 
+/** The app theme: picks the dark or light palette and applies the shared typography and shapes. */
 @Composable
 fun MovieLensTheme(darkTheme: Boolean = true, content: @Composable () -> Unit) {
     MaterialTheme(

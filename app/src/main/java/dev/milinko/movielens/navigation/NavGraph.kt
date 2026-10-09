@@ -22,6 +22,7 @@ import dev.milinko.movielens.ui.profile.FriendsScreen
 import dev.milinko.movielens.ui.profile.ProfileScreen
 import dev.milinko.movielens.ui.search.SearchScreen
 
+/** All navigation destinations; screens with arguments expose `createRoute(...)` to build the route. */
 sealed class Screen(val route: String) {
     object SignIn : Screen("sign_in?next={next}") {
         const val baseRoute = "sign_in"
@@ -34,12 +35,12 @@ sealed class Screen(val route: String) {
         fun createRoute(tmdbId: Int) = "detail/$tmdbId"
     }
 
-    // E2.3 (2. septembar 2026) - stranica glumca, otvara se sa Movie Detail-a.
+    // Person page, opened from Movie Detail.
     object ActorDetail : Screen("actor/{actorId}") {
         fun createRoute(actorId: Int) = "actor/$actorId"
     }
 
-    // "Vidi sve" ekrani za Home trake "Predloženo za tebe" i "U bioskopima sada".
+    // "See all" screens for the Home rows "Suggested for you" and "In cinemas now".
     object Suggested : Screen("browse/suggested")
     object NowInCinemas : Screen("browse/now_in_cinemas")
 
@@ -65,6 +66,10 @@ private fun NavHostController.navigateBottomTab(route: String) {
     }
 }
 
+/**
+ * The app's navigation graph. Most of the app works signed out; account features navigate to
+ * SignIn with a `next` route to return to after signing in.
+ */
 @Composable
 fun MovieLensNavHost(
     navController: NavHostController,
@@ -90,10 +95,10 @@ fun MovieLensNavHost(
                         launchSingleTop = true
                     }
                 },
-                // Zatvaranje bez prijave - ako ima šta u back stack-u (npr. stiglo se ovde iz
-                // Search/Movie Detail preko onRequireSignIn), ponašaj se kao obično "nazad". Ako
-                // nema (npr. posle odjave iz Profile-a, gde se ceo stack briše - videti onSignOut
-                // ispod), idi na Home umesto da se aplikacija ugasi.
+                    // Closing without signing in: behave like a normal "back" if there is a back
+                    // stack (e.g. SignIn was opened from Search/Movie Detail via onRequireSignIn);
+                    // otherwise (e.g. after sign-out, which clears the whole stack - see onSignOut
+                    // below) go to Home instead of closing the app.
                 onDismiss = {
                     if (!navController.popBackStack()) {
                         navController.navigate(Screen.Home.route) {

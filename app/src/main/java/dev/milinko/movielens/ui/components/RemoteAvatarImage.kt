@@ -21,31 +21,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Bugfix (E2.5, 2. septembar 2026, feedback testera - "sporo skrolovanje, možda zbog sporijeg
- * učitavanja slike") - deljen keš dekodiranih bitmapa za `data:image/...;base64,...` avatare, po
- * ceo proces aplikacije. RANIJE se dekodiranje radilo iznova pri SVAKOM ulasku stavke liste u
- * prikaz (svaki put kad Lazy lista reciklira composable za istog korisnika tokom skrola - isti
- * avatar bi se dekodirao desetine puta u jednoj sesiji skrolovanja). Malo (20 stavki) - avatari su
- * mali dekodirani bitmapi, ne treba mnogo da se pokrije tipičan feed/listu prijatelja.
+ * Process-wide cache of decoded `data:image/...;base64,...` avatars, so a list item scrolling back
+ * into view does not decode the same avatar again. Small (20 entries): avatars are tiny bitmaps.
  */
 private val dataUriBitmapCache = LruCache<String, Bitmap>(20)
 
 /**
- * Zamena za `AsyncImage(model = avatarUrl, ...)` svuda gde avatar polje može biti i "obična"
- * https:// slika (Google avatar) I novi `data:image/...;base64,...` URI (Uredi profil - videti
- * `util/AvatarImage.kt` kompresiju pri slanju). Coil 2.x nema ugrađenu podršku za `data:` scheme,
- * pa se taj slučaj dekodira direktno u Bitmap (`DataUriImage.decode`) i prikazuje preko `Image`,
- * mimoilazeći Coil samo za taj jedan slučaj - obični URL-ovi i dalje idu kroz `AsyncImage`/Coil
- * (keširanje, placeholder, itd.) potpuno nepromenjeno.
+ * Avatar image that accepts both a regular https:// URL (e.g. a Google avatar or the backend's avatar
+ * endpoint) and a `data:image/...;base64,...` URI. Coil 2 cannot load `data:` URIs, so those are
+ * decoded with `DataUriImage.decode` and shown with `Image`; regular URLs still go through Coil.
  *
- * Bugfix (E2.5, 2. septembar 2026) - RANIJE je `DataUriImage.decode(url)` (Base64 dekodiranje +
- * `BitmapFactory.decodeByteArray`, CPU-teška operacija) bio pozivan SINHRONO unutar `remember {}`
- * - to blokira glavnu (UI) nit tokom kompozicije, tačno u trenutku kad stavka liste ulazi u prikaz
- * pri skrolovanju - uzrok "trzanja"/sporog skrola na ekranima sa više avatara (feed aktivnosti
- * prijatelja, lista prijatelja, zahtevi). Sad se dekodiranje radi u `LaunchedEffect` na
- * `Dispatchers.Default` (van glavne niti) i rezultat se čuva u `dataUriBitmapCache` - stavka se
- * kratko prikaže prazna dok traje prvo dekodiranje tog avatara, ali skrol se više ne zaglavljuje, i
- * ponovni ulazak iste stavke u prikaz čita iz keša (instant, bez ponovnog dekodiranja).
+ * Decoding runs in a `LaunchedEffect` on `Dispatchers.Default` (off the main thread) and the result
+ * is kept in `dataUriBitmapCache`. Decoding synchronously during composition made scrolling stutter
+ * on screens with many avatars.
  */
 @Composable
 fun RemoteAvatarImage(
@@ -75,9 +63,8 @@ fun RemoteAvatarImage(
         }
     } else {
         val context = LocalContext.current
-        // Avatari koje je korisnik sam postavio stižu kao putanja na backendu
-        // (/api/users/{id}/avatar?v=...) kad server nema podešen PUBLIC_BASE_URL - dopunjuje se
-        // trenutno izabranim backendom.
+    // Avatars uploaded by the user arrive as a backend path (/api/users/{id}/avatar?v=...) when the
+    // server has no PUBLIC_BASE_URL configured; it is completed with the currently selected backend.
         val resolvedUrl = remember(url) {
             if (url != null && url.startsWith("/")) UrlStorage.readBaseUrl(context).trimEnd('/') + url else url
         }

@@ -18,8 +18,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** Now showing / upcoming filter. */
 enum class CinemaStatusFilter { ALL, NOW, UPCOMING }
 
+/** Sort order of the In cinemas list. */
 enum class CinemaSort { RATING, TITLE, CINEMA_COUNT }
 
 private data class NowInCinemasState(
@@ -34,6 +36,7 @@ private data class NowInCinemasState(
     val error: String? = null
 )
 
+/** State of the In cinemas screen: the filtered and sorted list plus the active filters. */
 data class NowInCinemasUiState(
     val movies: List<BrowseMovie> = emptyList(),
     val availableGenres: List<Genre> = emptyList(),
@@ -51,8 +54,8 @@ data class NowInCinemasUiState(
 )
 
 /**
- * "U bioskopima" - Vidi sve. Ceo skrapovani repertoar u jednom pozivu (/now-in-cinemas), a svi
- * filteri (naziv, žanr, bioskop/lanac, Sada/Uskoro) i sortiranje su lokalni, bez mreže.
+ * "In cinemas" - See all. The whole scraped programme comes in one call (/now-in-cinemas); all
+ * filters (title, genre, cinema/chain, Now/Upcoming) and sorting are local, without network calls.
  */
 @HiltViewModel
 class NowInCinemasViewModel @Inject constructor(
@@ -93,10 +96,13 @@ class NowInCinemasViewModel @Inject constructor(
         }
     }
 
+    /** Pull-to-refresh. */
     fun refresh() = load(isRefresh = true)
 
+    /** Reloads after an error. */
     fun retry() = load(isRefresh = false)
 
+    // Filter and sort events - applied locally to the loaded list.
     fun onQueryChange(query: String) = state.update { it.copy(query = query) }
 
     fun onToggleGenre(genreId: Int) = state.update {

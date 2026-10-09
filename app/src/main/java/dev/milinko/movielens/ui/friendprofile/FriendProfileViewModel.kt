@@ -16,17 +16,22 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** State of the friend profile screen. */
 data class FriendProfileUiState(
     val profile: FriendProfileResponse? = null,
     val isLoading: Boolean = false,
     val error: String? = null,
-    // "Movie Night" dugme ima smisla samo kad gledaš tuđi profil, ne sopstveni.
+    // The "Movie Night" button makes sense only on someone else's profile.
     val isSelf: Boolean = false,
-    // E1.5 dorada - dok se šalje/otkazuje zahtev sa OVOG ekrana, dugme se privremeno onemogući
-    // (sprečava dupli tap dok zahtev leti, isti princip kao ProfileViewModel).
+    // While a friend request is being sent/cancelled from this screen the button is disabled
+    // (prevents a double tap while the request is in flight).
     val isRequestActionInFlight: Boolean = false
 )
 
+/**
+ * Another user's profile and the friendship actions available on it. The profile is shown from the
+ * Room cache first and refreshed from the network; friendship changes are written to the cache too.
+ */
 @HiltViewModel
 class FriendProfileViewModel @Inject constructor(
     private val userRepository: UserRepository,
@@ -43,13 +48,14 @@ class FriendProfileViewModel @Inject constructor(
 
     private var requestActionJob: Job? = null
 
+    /** Loads the profile (cache first, then network) and prefetches Movie Night suggestions. */
     fun loadProfile() {
         val myUserId = sessionManager.getUserId() ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
-            // Faza C (16. avgust 2026) - instant prikaz iz Room keša (radi i offline) dok mreža
-            // osvežava u pozadini, isti obrazac kao ProfileViewModel/MovieDetailViewModel.
+            // Instant display from the Room cache (works offline) while the network refreshes in
+            // the background, same pattern as ProfileViewModel/MovieDetailViewModel.
             userRepository.observeCachedFriendProfile(myUserId, friendId).first()?.let { cached ->
                 _uiState.value = _uiState.value.copy(profile = cached)
             }
@@ -66,10 +72,10 @@ class FriendProfileViewModel @Inject constructor(
                 }
         }
 
-        // Prefetch movienight predloga u pozadini čim se otvori profil prijatelja - dok korisnik
-        // gleda profil/odgledane filmove, MovieNightViewModel kasnije samo čita iz keša (vidi
-        // UserRepository.prefetchMovieNightSuggestions), umesto da čeka mrežu tek na klik dugmeta.
-        // Nema uticaja na uiState/loading - potpuno tiho, ne blokira ni ne signalizira ništa ako padne.
+        // Prefetch Movie Night suggestions in the background while the user looks at the profile,
+        // so MovieNightViewModel can read them from the cache instead of waiting on the button tap
+        // (see UserRepository.prefetchMovieNightSuggestions). Completely silent - no loading state,
+        // nothing shown if it fails.
         if (myUserId != friendId) {
             viewModelScope.launch {
                 userRepository.prefetchMovieNightSuggestions(myUserId, friendId)
@@ -78,33 +84,23 @@ class FriendProfileViewModel @Inject constructor(
     }
 
     /**
-     * E1.5 dorada (2. septembar 2026, feedback testera - "nemogućnost pregleda profila pre slanja
-     * zahteva") - sad se do ovog ekrana može stići i za korisnika koji NIJE prijatelj (ograničen
-     * preview, videti FriendsRouting.kt na backendu), pa ekran treba i dugme za slanje zahteva
-     * direktno odavde, ne samo sa Profile/Pretraga ekrana. Optimistički menja `friendshipStatus`
-     * na profilu, isti obrazac kao ProfileViewModel.sendFriendRequest.
+     * Sends a friend request from this screen (the profile can be opened before becoming friends).
+     * Optimistically updates `friendshipStatus`, like ProfileViewModel.sendFriendRequest.
      */
     fun sendFriendRequest() {
-        // Bugfix (2. septembar 2026, feedback - "posalji/otkazi rapidno, dodaj posle radi sporo i
-        // nikako da osvezi") - RANIJE se prethodni let (in-flight) posao OTKAZIVAO da bi se odmah
-        // pokrenuo suprotni. Problem: Retrofit suspend poziv već može biti poslat na spor Render
-        // backend pre nego što lokalni cancel() stigne da ga prekine - server ga onda ipak
-        // obradi, dok klijent (zbog cancel-a) NIKAD ne dobije onSuccess/onFailure da sinhronizuje
-        // UI/keš sa stvarnim stanjem. Rezultat: klijent i server se rasinhronizuju posle par brzih
-        // uzastopnih tapova, i dugme ostaje "zaglavljeno" pogrešno dok se ekran ne osveži iz nule.
-        // Fix: dok je akcija u letu, novi tap se IGNORIŠE (dugme je i vizuelno onemogućeno preko
-        // isRequestActionInFlight) umesto da otkazuje/preklapa poziv - svaka akcija mora da se
-        // završi (uspešno ili ne) pre sledeće, pa se stanje uvek na kraju ispravno sinhronizuje.
+        // While an action is in flight, a new tap is IGNORED (the button is also disabled via
+        // isRequestActionInFlight) instead of cancelling the running call: a Retrofit call may
+        // already have reached the server, and a cancelled client would never get the result to
+        // sync the UI/cache, leaving client and server out of sync after a few fast taps.
         if (_uiState.value.isRequestActionInFlight) return
         val myUserId = sessionManager.getUserId() ?: return
         val previousProfile = _uiState.value.profile ?: return
         val updatedProfile = previousProfile.copy(friendshipStatus = "PENDING_SENT")
         _uiState.value = _uiState.value.copy(profile = updatedProfile, isRequestActionInFlight = true)
         requestActionJob = viewModelScope.launch {
-            // Bugfix (2. septembar 2026) - piše i u Room keš, ne samo u _uiState, da ponovno
-            // otvaranje ovog profila (sveža ViewModel instanca) odmah pokaže "Otkaži zahtev"
-            // umesto starog keš zapisa dok mreža (spor Render cold-start) ne stigne da ispravi.
-            // Videti napomenu uz cacheFriendProfile u UserRepository.kt.
+            // Also written to the Room cache, not only _uiState, so reopening this profile (a new
+            // ViewModel) immediately shows "Cancel request" instead of a stale cache entry (see
+            // cacheFriendProfile in UserRepository.kt).
             userRepository.cacheFriendProfile(myUserId, friendId, updatedProfile)
             userRepository.addFriend(myUserId, friendId)
                 .onSuccess {
@@ -118,10 +114,9 @@ class FriendProfileViewModel @Inject constructor(
         }
     }
 
-    /** Otkazuje već poslat zahtev - isti DELETE endpoint kao unfriend/reject (videti ProfileViewModel). */
+    /** Cancels a sent request - the same DELETE endpoint as unfriend/reject (see ProfileViewModel). */
     fun cancelFriendRequest() {
-        // Bugfix (2. septembar 2026) - videti napomenu u sendFriendRequest() - isti "ignoriši dok
-        // je u letu" princip umesto cancel-i-pa-pokreni-suprotno.
+        // Ignore taps while an action is in flight (see sendFriendRequest()).
         if (_uiState.value.isRequestActionInFlight) return
         val myUserId = sessionManager.getUserId() ?: return
         val previousProfile = _uiState.value.profile ?: return
@@ -142,13 +137,8 @@ class FriendProfileViewModel @Inject constructor(
     }
 
     /**
-     * Bugfix (2. septembar 2026, korisnički zahtev - "dugme 'Odgovori ispod' pokazuje nadole ali
-     * ispod nema ničega") - RANIJE je za PENDING_RECEIVED status ovaj ekran prikazivao samo
-     * onemogućeno dugme koje je upućivalo na prihvatanje/odbijanje "ispod" - ali taj UI je
-     * postojao SAMO na Profile ekranu (PendingRequestCard), ne i ovde, pa je uputstvo bilo
-     * netačno kad god bi korisnik do ovog profila stigao klikom na karticu zahteva (E2 dorada -
-     * "pregled profila pre prihvatanja/odbijanja"). Sad ekran sam ume da prihvati/odbije, isti
-     * network poziv i cache write-through (updateCachedFriendshipStatus) kao ProfileViewModel.
+     * Accepts an incoming request from this screen, with the same network call and cache
+     * write-through (updateCachedFriendshipStatus) as ProfileViewModel.
      */
     fun acceptFriendRequest() {
         if (_uiState.value.isRequestActionInFlight) return
@@ -159,8 +149,8 @@ class FriendProfileViewModel @Inject constructor(
                 .onSuccess {
                     userRepository.updateCachedFriendshipStatus(myUserId, friendId, "ACCEPTED")
                     _uiState.value = _uiState.value.copy(isRequestActionInFlight = false)
-                    // Osvežava profil sa mreže - tek sad (posle prihvatanja) backend vraća punu
-                    // (otključanu) listu odgledanih filmova, ranije je bila namerno prazna.
+                    // Reload from the network - only now does the backend return the full (unlocked)
+                    // list of watched movies.
                     loadProfile()
                 }
                 .onFailure { e ->
@@ -173,7 +163,7 @@ class FriendProfileViewModel @Inject constructor(
         }
     }
 
-    /** Odbija dolazni zahtev - `onRejected` se poziva samo posle uspešnog odbijanja (navigacija nazad). */
+    /** Rejects an incoming request; `onRejected` is called only after success (to navigate back). */
     fun rejectFriendRequest(onRejected: () -> Unit) {
         if (_uiState.value.isRequestActionInFlight) return
         val myUserId = sessionManager.getUserId() ?: return

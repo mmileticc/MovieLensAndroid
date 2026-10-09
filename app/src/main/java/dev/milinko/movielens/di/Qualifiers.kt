@@ -3,10 +3,9 @@ package dev.milinko.movielens.di
 import javax.inject.Qualifier
 
 /**
- * Označava OkHttpClient/Retrofit/AuthApi instancu namenjenu SAMO za osvežavanje backend JWT-a
- * (TokenAuthenticator). Mora biti odvojena od glavnog OkHttpClient-a (koji koristi AuthInterceptor
- * + TokenAuthenticator) da bi se izbegla beskonačna petlja i Dagger ciklus - videti komentar u
- * TokenAuthenticator.kt.
+ * Marks the OkHttpClient/Retrofit/AuthApi instances used ONLY to refresh the backend JWT
+ * (TokenAuthenticator). They must be separate from the main client to avoid an endless 401 loop
+ * and a Dagger cycle (see TokenAuthenticator.kt).
  */
 @Qualifier
 @Retention(AnnotationRetention.BINARY)

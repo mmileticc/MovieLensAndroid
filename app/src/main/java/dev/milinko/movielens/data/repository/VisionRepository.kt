@@ -26,7 +26,13 @@ import java.net.UnknownHostException
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Recognizes a movie from a photo (poster or film still) via the backend's Gemini vision endpoint. */
 interface VisionRepository {
+    /**
+     * Shrinks and uploads the image at [imageUri] and returns the recognized movie. Throws
+     * [TransientServiceException] when Gemini is overloaded (503) and IllegalStateException with
+     * a user-facing message for every other failure.
+     */
     suspend fun detect(imageUri: String): VisionSearchResponse
 }
 
@@ -37,29 +43,24 @@ class VisionRepositoryImpl @Inject constructor(
 ) : VisionRepository {
 
     private companion object {
-        // Backend odbija sve preko 8MB (videti Routing.kt, /chat/vision) - ciljamo mnogo manje,
-        // i zbog sigurnosne margine i da upload bude brz na mobilnom internetu.
+        // The backend rejects anything over 8MB (see Routing.kt, /chat/vision); aim much lower for
+        // a safety margin and a fast upload on mobile data.
         const val MAX_UPLOAD_BYTES = 3 * 1024 * 1024
-        // TMDB/Gemini ne treba full-res kameru (često 3000-4000px) - 1600px duža strana je i
-        // dalje sasvim dovoljno da Gemini prepozna plakat, a drastično smanjuje veličinu fajla.
+        // Gemini does not need a full-resolution camera image (often 3000-4000px); 1600px on the
+        // longer side is enough to recognize a poster and makes the file much smaller.
         const val MAX_DIMENSION_PX = 1600
     }
 
     override suspend fun detect(imageUri: String): VisionSearchResponse {
         try {
-            // Bugfix (E2.5 dorada, 2. septembar 2026) - iako je ova funkcija `suspend`,
-            // `viewModelScope.launch` je i dalje pokreće na Dispatchers.Main.immediate ako se
-            // dispečer eksplicitno ne promeni - `getFileFromUri` (dva BitmapFactory.decodeStream
-            // prolaza, EXIF čitanje/rotacija, petlja JPEG kompresije + upis fajla) je zato RANIJE
-            // blokirao glavnu nit u celosti dok korisnik skenira plakat filma preko kamere - za
-            // punu kamera sliku (8-15MB pre downsample-a) primetno zamrzavanje UI-ja. Isti obrazac
-            // bug-a kao RemoteAvatarImage.kt (E2.5) - fix je isti princip, samo `withContext`
-            // umesto `LaunchedEffect`, pošto ovo NIJE pozivano direktno iz kompozicije.
+            // Image processing (two decode passes, EXIF rotation, the JPEG compression loop and
+            // the file write) runs on Dispatchers.IO: viewModelScope.launch starts on the main
+            // thread, and a full camera image would otherwise freeze the UI noticeably.
             val file = withContext(Dispatchers.IO) { getFileFromUri(imageUri) }
                 ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_image_prepare))
 
-            // Fajl je posle kompresije uvek JPEG (compressBitmapToFile), bez obzira na originalni
-            // format ulazne slike - ne treba više nagađanje MIME tipa iz content resolver-a.
+            // After compression the file is always JPEG (compressBitmapToFile), whatever the
+            // original format was, so there is no need to guess the MIME type.
             val requestFile = file.asRequestBody("image/jpeg".toMediaType())
             val body = MultipartBody.Part.createFormData("image", file.name, requestFile)
 
@@ -69,28 +70,17 @@ class VisionRepositoryImpl @Inject constructor(
                     ?: throw IllegalStateException(dev.milinko.movielens.util.AppLocale.string(dev.milinko.movielens.R.string.error_empty_response))
             }
 
-            // Bugfix (2. septembar 2026, korisnički izveštaj - "pukla mi je greška za Gemini
-            // preopterećenost") - RANIJE se ovde ručno parsirao JSON iz error body-ja i taj SIROVI
-            // tekst backend-a (npr. "Gemini SDK error: 503 UNAVAILABLE. {\"error\":...}") se
-            // direktno prikazivao korisniku - mimoilazeći centralnu `friendlyMessage()` funkciju
-            // (Faza A, `util/FriendlyError.kt`) koja postoji TAČNO za ovaj slučaj, ali je ovaj
-            // repository nikad nije koristio (napravljen je pre nje, sa sopstvenom ad-hoc logikom).
-            // Sad se baca `HttpException` kao svuda drugde u app-u - hvata se ispod.
+            // Thrown as HttpException like everywhere else and mapped below; the backend's raw
+            // error body is never shown to the user.
             throw HttpException(response)
         } catch (e: CancellationException) {
             throw e
         } catch (e: HttpException) {
-            // Backend (Routing.kt /chat/vision) sad eksplicitno vraća 503 kad Gemini SDK javi
-            // preopterećenost/rate limit (videti GeminiService.isGeminiOverloadSignal) - to je
-            // dovoljno česta i specifična situacija (testirano uživo) da zaslužuje sopstvenu,
-            // actionable poruku umesto generičkog "server ima problema" iz friendlyMessage().
-            //
-            // Dorada (2. septembar 2026, korisnički zahtev - "poruka me para oči, deluje kao da
-            // sam nešto pokvario, hoću da bude blaže prikazana") - 503 sad baca posebno obeležen
-            // `TransientServiceException` umesto `IllegalStateException` - SearchViewModel ga
-            // hvata odvojeno i signalizira UI-ju (SearchScreen) da prikaže smireniji karton
-            // umesto crvene "Greške" (videti TransientServiceException.kt zašto ova razlika
-            // uopšte postoji). Sve ostale HTTP greške (nisu Gemini-specifične) ostaju kao pre.
+            // The backend returns 503 when Gemini reports overload or a rate limit (see
+            // GeminiService.isGeminiOverloadSignal). That is common enough to deserve its own
+            // TransientServiceException, which SearchViewModel shows as a calm "try again shortly"
+            // card instead of a red error (see TransientServiceException.kt). Other HTTP errors
+            // go through friendlyMessage().
             if (e.code() == 503) {
                 throw dev.milinko.movielens.util.TransientServiceException(
                     "Prepoznavanje slike je trenutno preopterećeno (previše zahteva odjednom). Pokušaj ponovo za par trenutaka."
@@ -103,12 +93,9 @@ class VisionRepositoryImpl @Inject constructor(
     }
 
     private fun Throwable.toUserFacingMessage(): String {
-        // Dorada (2. septembar 2026, korisnički zahtev - "nijedna sirova poruka ne sme da
-        // postoji nigde") - `else` grana je RANIJE propuštala `message` bilo kog neočekivanog
-        // tipa izuzetka (npr. JSON parsiranje, biblioteke koje ne kontrolišemo) direktno
-        // korisniku. `IllegalStateException` ostaje bezbedan (app ga sam baca sa već napisanim
-        // srpskim tekstom, videti VisionRepository.detect() iznad) - sve ostalo sad pada na
-        // generičnu poruku umesto da rizikuje sirov tehnički tekst.
+        // Only messages the app wrote itself (IllegalStateException) are shown as they are; any
+        // other exception type falls back to a generic message so raw technical text never
+        // reaches the user.
         return when (this) {
             is SocketTimeoutException -> "Vreme je isteklo dok je slika slana. Proveri internet i pokušaj ponovo."
             is UnknownHostException -> "Ne mogu da pronađem server. Proveri internet i adresu backend-a."
@@ -119,13 +106,9 @@ class VisionRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Priprema fajl za upload - downsample (max ~1600px duža strana), EXIF rotaciona korekcija,
-     * pa JPEG kompresija sa opadajućim kvalitetom dok ne stane pod MAX_UPLOAD_BYTES.
-     *
-     * RANIJE (bug): ova funkcija je samo kopirala sirove bajtove sa content:// URI-ja, bez ikakve
-     * obrade - moderna kamera slika lako ume da bude 8-15MB, što je backend odbijao sa "slika
-     * prevelika" (8MB limit, videti Routing.kt /chat/vision). Otuda greške koje su se ranije
-     * javljale pri skeniranju.
+     * Prepares the file for upload: downsample (at most ~1600px on the longer side), EXIF rotation
+     * fix, then JPEG compression with decreasing quality until it fits under MAX_UPLOAD_BYTES.
+     * Uploading the raw camera bytes (often 8-15MB) would exceed the backend's 8MB limit.
      */
     private fun getFileFromUri(uriString: String): File? {
         return try {
@@ -141,17 +124,14 @@ class VisionRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Dva prolaza kroz BitmapFactory: prvi samo čita dimenzije (inJustDecodeBounds, jeftino - ne
-     * učitava piksele), da se izračuna inSampleSize za downsample; drugi stvarno dekodira sliku
-     * već smanjenu, umesto da se puna rezolucija učita u memoriju pa tek onda skalira (to bi na
-     * starijim/slabijim telefonima moglo da izazove OutOfMemoryError za velike kamera slike).
+     * Two BitmapFactory passes: the first reads only the dimensions (inJustDecodeBounds, cheap) to
+     * compute inSampleSize; the second decodes an already reduced image. Decoding at full
+     * resolution and scaling afterwards could cause OutOfMemoryError on weaker phones.
      */
     private fun decodeSampledAndRotatedBitmap(uri: Uri, maxDimensionPx: Int): Bitmap? {
-        // VAŽNO: BitmapFactory.decodeStream UVEK vraća null kad je inJustDecodeBounds=true (to je
-        // normalno - samo puni outWidth/outHeight, ne alocira piksele). Zato se null rezultat tog
-        // poziva ne sme koristiti kao signal da je otvaranje stream-a palo - to je bio bug (`?:
-        // return null` je hvatao baš taj očekivani null i prekidao celu funkciju na svaki poziv).
-        // Sad se posebno proverava samo da li openInputStream() vrati null (stream nedostupan).
+        // decodeStream always returns null when inJustDecodeBounds = true (it only fills
+        // outWidth/outHeight), so that null must not be treated as a failure. Only a null from
+        // openInputStream() means the stream is unavailable.
         val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         val boundsStream = context.contentResolver.openInputStream(uri) ?: return null
         boundsStream.use { input -> BitmapFactory.decodeStream(input, null, boundsOptions) }
@@ -170,8 +150,8 @@ class VisionRepositoryImpl @Inject constructor(
         val rawBitmap = decodeStream.use { input -> BitmapFactory.decodeStream(input, null, decodeOptions) }
             ?: return null
 
-        // Kamera slike često čuvaju orientation kao EXIF tag umesto da stvarno rotiraju piksele -
-        // bez ovoga bi mnoge slike stigle na Gemini "na bok" ili naopako.
+        // Camera images often store the orientation as an EXIF tag instead of rotating the pixels;
+        // without this many images would reach Gemini sideways or upside down.
         val rotationDegrees = getExifRotationDegrees(uri)
         if (rotationDegrees == 0) return rawBitmap
 
@@ -197,9 +177,9 @@ class VisionRepositoryImpl @Inject constructor(
     }
 
     /**
-     * JPEG kompresija sa opadajućim kvalitetom (90 -> 20, korak 10) dok fajl ne stane pod
-     * maxBytes. U najgorem slučaju (kvalitet već pao na 20 a slika i dalje prevelika - retko posle
-     * downsample-a na 1600px) šalje se poslednja (najmanja) verzija, ne blokira upload.
+     * JPEG compression with decreasing quality (90 -> 20, step 10) until the file fits under
+     * maxBytes. If it still does not fit at quality 20 (rare after downsampling to 1600px), the
+     * smallest version is sent anyway rather than blocking the upload.
      */
     private fun compressBitmapToFile(bitmap: Bitmap, file: File, maxBytes: Int) {
         var quality = 90

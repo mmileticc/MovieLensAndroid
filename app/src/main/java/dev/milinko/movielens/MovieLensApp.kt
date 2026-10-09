@@ -7,6 +7,7 @@ import dev.milinko.movielens.data.push.PushTokenManager
 import dev.milinko.movielens.util.AppLocale
 import javax.inject.Inject
 
+/** Application class: Hilt entry point; initializes the app language and syncs the push token. */
 @HiltAndroidApp
 class MovieLensApp : Application() {
 
@@ -15,10 +16,10 @@ class MovieLensApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // Jezik aplikacije (srpski/engleski) - mora biti spreman pre prvog ViewModel-a/mrežnog poziva.
+        // App language (Serbian/English) - must be ready before the first ViewModel or network call.
         AppLocale.init(this)
         PushNotifier.createChannels(this)
-        // Već prijavljen korisnik (npr. posle ažuriranja aplikacije) - token se potvrdi na backendu.
+        // An already signed-in user (e.g. after an app update) - confirm the token on the backend.
         pushTokenManager.syncAsync()
     }
 }

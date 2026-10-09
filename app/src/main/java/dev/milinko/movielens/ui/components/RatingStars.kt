@@ -24,19 +24,13 @@ import dev.milinko.movielens.R
 import kotlin.math.roundToInt
 
 /**
- * Red od 10 zvezdica (1-10 skala, ista kao backend) - tap na zvezdicu N postavlja ocenu N.
- * Zajednička komponenta (MovieDetailScreen + Library/Istorija tab) - videti MOVIELENS_ROADMAP.md,
- * ranije je postojala samo kao privatna komponenta na MovieDetailScreen.
- *
- * Faza 6 redizajna: boja popunjene zvezdice je sad `MaterialTheme.colorScheme.secondary` umesto
- * hardkodovanog Color(0xFFF5C518) literala - u novoj temi je secondary = MlAccentGold (ista
- * vrednost), ali sad ide preko teme radi doslednosti/održivosti. contentDescription prebačen u
- * strings.xml (rating_stars_content_description) po novoj konvenciji lokalizacije.
+ * A row of 10 stars (1-10 scale, same as the backend); tapping star N sets rating N. Used on Movie
+ * Detail and in the Library history tab. Filled stars use `colorScheme.secondary` (gold).
  */
 @Composable
 fun RatingStars(rating: Int, onRate: (Int) -> Unit, modifier: Modifier = Modifier) {
-    // Za čitač ekrana ceo red je jedan klizač ("Ocena, 7 od 10", menja se prevlačenjem gore/dole)
-    // umesto 10 malih dugmadi - 10 dodirnih ciljeva od 48dp ne bi stalo u širinu ekrana.
+    // For screen readers the whole row is one slider ("Rating, 7 of 10", adjusted by swiping up/down)
+    // instead of 10 small buttons - ten 48dp touch targets would not fit the screen width.
     val label = stringResource(R.string.rating_stars_label)
     val state = if (rating in 1..10) stringResource(R.string.rating_stars_state, rating) else stringResource(R.string.rating_stars_not_rated)
     Row(
@@ -52,8 +46,8 @@ fun RatingStars(rating: Int, onRate: (Int) -> Unit, modifier: Modifier = Modifie
         }
     ) {
         for (i in 1..10) {
-            // Ikonica je namerno manja od dodirnog cilja (Box 32dp) - 10 zvezdica u redu bi inače
-            // bilo skoro nemoguće precizno pogoditi (svaka bi imala samo ~22dp bez razmaka).
+            // The icon is smaller than the touch target (32dp Box) on purpose; otherwise 10 stars in
+            // a row would be almost impossible to hit precisely (~22dp each without spacing).
             Box(
                 modifier = Modifier
                     .size(32.dp)

@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-// ...existing imports...
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Notifications
@@ -42,7 +41,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-// ...existing code...
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLocale
@@ -62,8 +60,12 @@ import dev.milinko.movielens.data.remote.user.FriendActivity
 import dev.milinko.movielens.ui.components.SectionHeader
 import dev.milinko.movielens.ui.notifications.NotificationsViewModel
 import kotlinx.coroutines.launch
-// ...existing code...
 
+/**
+ * Home: the bell for notifications, then rows "Suggested for you", "In cinemas now", "Continue
+ * watching" (watchlist) and "Friends are watching", followed by the infinitely scrolling popular
+ * movies.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -81,23 +83,16 @@ fun HomeScreen(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Ako popularni filmovi nisu uspeli da se učitaju na paljenje app-a (npr. hladan start
-    // backend-a) ovo je jedina prilika da se ponovo pokuša - HomeViewModel inače živi celu sesiju
-    // pa mu se init{} poziva samo jednom.
+    // If popular movies failed to load at app start (e.g. the backend was cold), this is the only
+    // chance to retry: HomeViewModel lives for the whole session, so its init{} runs only once.
     LaunchedEffect(Unit) {
         viewModel.ensureTrendingLoaded()
     }
 
     Scaffold(
         floatingActionButton = {
-            // Dorada (17. avgust 2026, korisnička žalba "nema potrebe za lupicom") - FAB za
-            // pretragu uklonjen, pretraga je već dostupna preko donje navigacije (Search tab) pa
-            // je FAB bio suvišan drugi ulaz za istu akciju. Zamenjen dugmetom "nazad na vrh" koje
-            // se pojavljuje tek kad korisnik dovoljno odskroluje nadole (isti obrazac kao većina
-            // aplikacija sa dugim skrolom) - nema razloga da zauzima prostor dok je vrh liste već
-            // vidljiv. `SmallFloatingActionButton` sa `surfaceVariant` bojom (ne crveni `primary`
-            // glow rezervisan za glavne CTA akcije, videti MOVIELENS_DESIGN_PLAN.md 1.3) jer je ovo
-            // sporedna, ne primarna akcija.
+            // "Back to top" button, shown only after scrolling down far enough. A small
+            // surfaceVariant FAB, because it is a secondary action (red is reserved for main actions).
             val showScrollToTop by remember {
                 derivedStateOf { listState.firstVisibleItemIndex > 2 }
             }
@@ -134,9 +129,8 @@ fun HomeScreen(
             )
         }
     ) { paddingValues ->
-        // Beskonačan skrol: kad je poslednja vidljiva stavka blizu kraja liste, tražimo sledeću
-        // TMDB stranicu. derivedStateOf da se ovo ne preračunava na svaki recompose, samo kad se
-        // stvarno promeni indeks poslednje vidljive stavke.
+        // Infinite scroll: when the last visible item is near the end, request the next TMDB page.
+        // derivedStateOf so this is recomputed only when the last visible index really changes.
         val shouldLoadMore by remember {
             derivedStateOf {
                 val layoutInfo = listState.layoutInfo
@@ -151,9 +145,7 @@ fun HomeScreen(
             }
         }
 
-        // Swipe-down da ponovo učita sve trake odjednom (trending, personalizovano, u bioskopima
-        // sada, watchlist) - standardna Material3 gesta, ne zahteva poseban dugme na Home-u
-        // (za razliku od Movie Night ekrana koji zadržava i eksplicitno dugme).
+        // Swipe down to refresh (see HomeViewModel.refreshAll).
         PullToRefreshBox(
             isRefreshing = uiState.isRefreshing,
             onRefresh = { viewModel.refreshAll() },
@@ -172,18 +164,10 @@ fun HomeScreen(
                 HomeHeader(onNotificationsClick = onNavigateToNotifications)
             }
 
-            // Search / scan lives on the Search screen. Home keeps a quick FAB for search.
-
-            // Dizajn dorada (17. avgust 2026, korisnička žalba "izgleda nabacano") - trake su
-            // ranije bile samo tekstualni naslov + red kartica direktno na pozadini, bez ikakve
-            // vizuelne granice između sekcija. Svaka traka je sad u ElevatedCard-u - ISTI obrazac
-            // koji već koriste Profile (SettingsSection, FriendCard) i Library ekrani ("elevacija
-            // preko svetline površine, ne senki", videti MOVIELENS_DESIGN_PLAN.md 1.2/1.3) - Home
-            // je bio jedini ekran koji taj obrazac nije koristio. "Popularno" ostaje van kartice
-            // (plain lista, kao Library watchlist/history) jer je to glavni, dugačak, beskonačno-
-            // skrolujući sadržaj, ne kratka traka za pregled - razdvojen je debljom linijom
-            // (HorizontalDivider) umesto kartice da se ne pravi jedna ogromna kartica koja raste
-            // unedogled.
+            // Each row is in an ElevatedCard, like the Profile and Library screens. "Popular" stays
+            // outside a card (a plain list like the Library lists) because it is the long, infinitely
+            // scrolling main content - it is separated by a HorizontalDivider instead of one card
+            // that grows forever.
             if (uiState.personalizedMovies.isNotEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(20.dp))
@@ -289,8 +273,8 @@ fun HomeScreen(
             }
 
             if (uiState.isTrendingLoading && uiState.trendingMovies.isEmpty()) {
-                // Prvi ikad ulazak / hladan start - spinner umesto belog/praznog ekrana dok
-                // se prva strana ne učita.
+                // First load / cold start - a spinner instead of an empty screen until the first
+                // page arrives.
                 item {
                     Box(
                         modifier = Modifier
@@ -333,12 +317,7 @@ fun HomeScreen(
         }
         }
     }
-
-    // Home only shows trending items and keeps FAB to quick-open Search screen.
 }
-
-
-// ...existing code...
 
 @Composable
 private fun HomeHeader(
@@ -346,14 +325,15 @@ private fun HomeHeader(
     notificationsViewModel: NotificationsViewModel = hiltViewModel()
 ) {
     val notifications by notificationsViewModel.uiState.collectAsStateWithLifecycle()
-    // Ponovo pri svakom povratku na Home (npr. posle ekrana Obaveštenja) - brojač je uvek tačan.
+    // Reloaded on every return to Home (e.g. after the Notifications screen), so the count is
+    // always right.
     LaunchedEffect(Unit) { notificationsViewModel.load() }
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(modifier = Modifier.weight(1f)) { HomeTitle() }
-        // Gost nema obaveštenja - zvonce se ne prikazuje.
+        // Guests have no notifications - no bell.
         if (!notifications.requiresSignIn) {
             IconButton(onClick = onNotificationsClick) {
                 BadgedBox(
@@ -375,13 +355,8 @@ private fun HomeHeader(
 
 @Composable
 private fun HomeTitle() {
-    // Faza 4 redizajna: wordmark je ranije bio 28sp Bold - dominirao je ekran (videti
-    // MOVIELENS_DESIGN_PLAN.md 2.2: "manji i tanji ... pomera fokus na sadržaj"). Sad koristi
-    // `titleLarge` (20sp SemiBold) iz teme, akcentna boja se zadržava radi prepoznatljivosti brenda.
     Column {
-        // Rebrending (25. avgust 2026) - dvobojni "movie‑nee" wordmark umesto jednobojnog app_name
-        // teksta (isti akcentni token kao pre, samo sad "movie" deo ostaje u tekst boji a "nee" nosi
-        // akcent - videti MovieneeWordmark.kt).
+        // Two-color "movie-nee" wordmark (see MovieneeWordmark.kt) in the theme's titleLarge.
         MovieneeWordmark(style = MaterialTheme.typography.titleLarge)
         Text(
             text = stringResource(R.string.home_header_subtitle),
@@ -391,13 +366,8 @@ private fun HomeTitle() {
     }
 }
 
-/**
- * Faza 4 redizajna: PosterCard/MovieCard privatni composable-i su uklonjeni - zamenjeni deljenim
- * `MoviePosterCard`/`MovieListRow` (Faza 2, videti MOVIELENS_DESIGN_PLAN.md 1.4). Ovi tanki
- * wrapper-i samo mapiraju svaki model na gole parametre komponente (nema jedinstven "movie" model
- * u appu). Takođe uklonjen mrtav privatni `ErrorCard` - nije se nigde pozivao, postoji već
- * zajednička verzija u `ui/components/StateCards.kt`.
- */
+// Thin wrappers that map each model to the plain parameters of the shared MoviePosterCard /
+// MovieListRow (the app has no single movie model).
 @Composable
 private fun PersonalizedMovieCard(
     movie: dev.milinko.movielens.data.remote.movie.MovieSearchResult,

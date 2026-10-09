@@ -77,7 +77,7 @@ class SearchViewModelTest {
         coEvery { movieRepository.searchMovies("fast") } returns Result.success(listOf(movie(2, "Fresh")))
 
         viewModel.setSearchQuery("slow")
-        advanceTimeBy(1_000) // debounce prošao, spor zahtev je u letu
+        advanceTimeBy(1_000) // debounce passed, the slow request is in flight
         viewModel.setSearchQuery("fast")
         advanceUntilIdle()
 

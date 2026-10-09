@@ -36,7 +36,7 @@ data class TmdbMatch(
     @SerialName("posterPath") val posterPath: String? = null,
     @SerialName("popularity") val popularity: Double? = null,
     @SerialName("voteAverage") val voteAverage: Double? = null,
-    // KLJUČNI DEO: Lista lokalnih bioskopa u kojima film igra
+    // Cinemas currently showing this movie.
     @SerialName("cinemaShowtimes") val cinemaShowtimes: List<ScrapedMovie> = emptyList()
 )
 
@@ -56,6 +56,7 @@ data class ErrorResponse(
     val error: String
 )
 
+/** Full TMDB image URL for a poster/backdrop path, or null if there is no path. */
 fun tmdbPosterUrl(path: String?, size: String = "w500"): String? =
     path?.let { "https://image.tmdb.org/t/p/$size$it" }
 

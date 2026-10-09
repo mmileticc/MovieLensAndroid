@@ -67,7 +67,7 @@ import java.util.Locale
 
 private const val BIOGRAPHY_COLLAPSED_MAX_LINES = 5
 
-/** Sortiranje filmografije glumca. */
+/** Filmography sort order. */
 private enum class FilmographySort(@StringRes val labelRes: Int) {
     POPULARITY(R.string.actor_sort_popularity),
     NEWEST(R.string.actor_sort_newest),
@@ -75,8 +75,8 @@ private enum class FilmographySort(@StringRes val labelRes: Int) {
     RATING(R.string.actor_sort_rating)
 }
 
-// TMDB šalje datume kao "yyyy-MM-dd". SimpleDateFormat (ne java.time) jer je minSdk 24, a
-// java.time bez desugaring-a traži API 26.
+// TMDB sends dates as "yyyy-MM-dd". SimpleDateFormat (not java.time) because minSdk is 24 and
+// java.time without desugaring needs API 26.
 private fun parseTmdbDate(value: String): Date? = try {
     SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }.parse(value)
 } catch (e: ParseException) {
@@ -84,8 +84,8 @@ private fun parseTmdbDate(value: String): Date? = try {
 }
 
 /**
- * "1974-11-11" -> "11. novembra 1974." / "November 11, 1974" po jeziku aplikacije (ako parsiranje
- * ne uspe, vraća originalni tekst).
+ * "1974-11-11" -> "11. novembra 1974." / "November 11, 1974" depending on the app language (returns
+ * the original text if parsing fails).
  */
 private fun formatTmdbDate(value: String): String {
     val date = parseTmdbDate(value) ?: return value
@@ -97,7 +97,7 @@ private fun formatTmdbDate(value: String): String {
     return format.format(date)
 }
 
-/** Pun broj godina između rođenja i [toDate] (ili danas). */
+/** Full years between the birthday and [toDate] (or today). */
 private fun ageInYears(birthday: String, toDate: String?): Int? {
     val birth = parseTmdbDate(birthday) ?: return null
     val end = toDate?.let { parseTmdbDate(it) ?: return null } ?: Date()
@@ -109,30 +109,13 @@ private fun ageInYears(birthday: String, toDate: String?): Int? {
 }
 
 /**
- * E2.3 (2. septembar 2026, dorada vizuelnog uokvirenja posle prvog testiranja - "malo lepse
- * uokviriti prikazati") - stranica glumca, otvara se klikom na glumca u "Glumci" traci na Movie
- * Detail ekranu. Foto glumca je sad pun "hero" preko celog ekrana (isti obrazac kao Movie Detail
- * poster hero - gradijent "scrim" preko donje polovine + ime/odeljenje ispisani preko slike),
- * umesto ranije male kvadratne slike pored teksta - deluje kao prava naslovna stranica, ne kao
- * red podataka. Kratke činjenice (rođen/preminuo/mesto rođenja) su sad u zasebnoj `ElevatedCard`
- * ispod hero-a (isti "info kartica" obrazac kao `CinemaShowtimeCard`/`FriendsWatchedBadge` na
- * Movie Detail ekranu) umesto golog teksta - jasnije uokvireno, lakše se skenira pogledom.
+ * Person page (actor or crew member), opened from the cast row on Movie Detail: a full-screen photo
+ * hero (tap to open it full screen), a card with short facts (born/died/birthplace), the biography
+ * and a sortable filmography.
  *
- * Dorada (2. septembar 2026, korisnički bug report - "biografija se na tamnoj temi ne vidi jer su
- * crna slova na tamnu pozadinu") - ekran je RANIJE bio ručno sklopljen preko golog `Box`/`Column`
- * (bez `Scaffold`), za razliku od svih ostalih ekrana u app-u (`MovieDetailScreen`/
- * `FriendProfileScreen`/itd. svi koriste `Scaffold`). `Scaffold` iznutra umotava sadržaj u
- * `Surface` koja postavlja `LocalContentColor` na ispravnu, temi-svesnu boju (`onBackground` u
- * tamnoj temi, ne crna) - bez nje, svaki `Text` BEZ eksplicitno navedene `color` (biografija,
- * naslov trake, vrednosti u `ActorFactRow`) pada na globalni Compose default `Color.Black`, koji
- * je nevidljiv na tamnoj pozadini (u svetloj temi je isti bag bio nevidljiv jer se crna na belom
- * vidi normalno). Fix: ceo ekran sad koristi `Scaffold(topBar = {...})`, isti obrazac kao
- * `MovieDetailScreen`.
- *
- * Dorada (2. septembar 2026, korisnički zahtev - "hocu da slika glumca moze da se otvori kao i
- * poster slika") - fotografija u hero-u je sad klikabilna i otvara `FullScreenImageDialog`
- * (deljena komponenta izdvojena iz `MovieDetailScreen`-ovog ranije privatnog
- * `FullScreenPosterDialog`-a - identičan pinch-to-zoom/pan mehanizam kao pregled postera filma).
+ * Uses `Scaffold` like the other screens: its Surface sets `LocalContentColor` to the theme's
+ * content color, otherwise Text without an explicit color falls back to black and is invisible in
+ * the dark theme.
  */
 @Composable
 fun ActorDetailScreen(
@@ -243,9 +226,8 @@ private fun ActorDetailContent(
                     )
                 } else {
                     var bioExpanded by remember(person.id) { mutableStateOf(false) }
-                    // UX dorada (oktobar 2026): "Prikaži više" se pojavljuje kad se tekst STVARNO
-                    // skrati (hasVisualOverflow), a ne po broju karaktera - na uskim ekranima je
-                    // i biografija kraća od praga bila odsečena bez načina da se otvori.
+                    // "Show more" appears when the text is really truncated (hasVisualOverflow), not
+                    // by character count - on narrow screens even a short biography could be cut off.
                     var bioOverflows by remember(person.id) { mutableStateOf(false) }
                     Text(
                         text = person.biography,
@@ -284,13 +266,12 @@ private fun ActorDetailContent(
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 } else {
-                    // UX dorada (oktobar 2026): sortiranje filmografije. Podrazumevano ostaje
-                    // popularnost (redosled koji backend već vraća - "najpoznatije uloge prve").
+                    // Default is popularity (the order the backend returns: best-known roles first).
                     var sort by remember(person.id) { mutableStateOf(FilmographySort.POPULARITY) }
                     val sortedCredits = remember(person.movieCredits, sort) {
                         when (sort) {
                             FilmographySort.POPULARITY -> person.movieCredits
-                            // Filmovi bez datuma (najavljeni bez termina) idu na kraj u oba smera.
+                            // Movies without a date (announced, not scheduled) go last in both directions.
                             FilmographySort.NEWEST -> person.movieCredits.sortedWith(
                                 compareBy<PersonMovieCredit> { it.releaseDate.isNullOrBlank() }.thenByDescending { it.releaseDate }
                             )
@@ -322,7 +303,7 @@ private fun ActorDetailContent(
                             MoviePosterCard(
                                 title = credit.title,
                                 posterPath = credit.posterPath,
-                                // "2019 · Joker" - godina pomaže da se snađe u dugoj karijeri.
+                                // "2019 · Joker" - the year helps orientation in a long career.
                                 caption = listOfNotNull(
                                     credit.releaseDate?.take(4)?.takeIf { it.isNotBlank() },
                                     credit.character?.takeIf { it.isNotBlank() }
@@ -342,11 +323,10 @@ private fun ActorDetailContent(
 }
 
 /**
- * Pun "hero" preko celog ekrana - isti obrazac kao poster/naslov na Movie Detail ekranu (Faza 5
- * redizajna): fotografija fillMaxSize, "scrim" gradijent koji od pola visine naniže prelazi u
- * pozadinsku boju radi čitljivosti teksta, ime/odeljenje ispisani preko donjeg dela slike. Bez
- * fotografije (TMDB je nema za svakog glumca/člana ekipe) prikazuje se siluetna ikonica umesto
- * praznog kvadrata - jasno komunicira "nema slike" umesto da deluje kao da nešto nije učitano.
+ * Full-screen hero, same pattern as Movie Detail: the photo fills the area, a scrim gradient from
+ * half height down fades into the background for readable text, and the name/department are drawn
+ * over the bottom. Without a photo (TMDB does not have one for everyone) a silhouette icon is shown
+ * instead of an empty box, so it does not look like something failed to load.
  */
 @Composable
 private fun ActorHero(person: PersonDetail) {
@@ -381,8 +361,8 @@ private fun ActorHero(person: PersonDetail) {
                 )
             }
         }
-        // Frakcioni color stop-ovi (ne raw piksel startY) - isti obrazac kao Movie Detail hero,
-        // nezavisno od gustine ekrana "scrim" uvek počinje od pola visine hero-a naniže.
+        // Fractional color stops (not a pixel startY), so regardless of screen density the scrim
+        // always starts at half the hero height.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -422,10 +402,8 @@ private fun ActorHero(person: PersonDetail) {
 }
 
 /**
- * Kratke činjenice (rođen/preminuo/mesto rođenja) u zasebnoj kartici ispod hero-a - isti
- * "info kartica" obrazac kao `CinemaShowtimeCard`/`FriendsWatchedBadge` na Movie Detail ekranu,
- * umesto ranijeg golog teksta. Ceo blok se ne prikazuje ako TMDB nema nijedan od ova tri podatka
- * (česta pojava za manje poznate glumce) - nema smisla prikazati praznu karticu.
+ * Short facts (born/died/birthplace) in a card under the hero. Not shown at all when TMDB has none
+ * of the three (common for lesser-known people) - an empty card makes no sense.
  */
 @Composable
 private fun ActorQuickFacts(person: PersonDetail) {
@@ -445,7 +423,8 @@ private fun ActorQuickFacts(person: PersonDetail) {
         ) {
             if (!person.birthday.isNullOrBlank()) {
                 val born = formatTmdbDate(person.birthday)
-                // Uzrast se prikazuje samo za žive (za preminule ide uz datum smrti ispod).
+                // Age is shown only for living people (for the deceased it goes with the date of
+                // death below).
                 val age = if (person.deathday.isNullOrBlank()) ageInYears(person.birthday, null) else null
                 ActorFactRow(
                     label = stringResource(R.string.actor_detail_born),

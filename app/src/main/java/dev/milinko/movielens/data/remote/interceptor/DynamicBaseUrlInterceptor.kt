@@ -7,6 +7,10 @@ import okhttp3.Response
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Rewrites the scheme, host and port of every request to the currently selected backend URL
+ * (see UrlStorage), so the backend can be switched at runtime without rebuilding Retrofit.
+ */
 @Singleton
 class DynamicBaseUrlInterceptor @Inject constructor(
     private val urlStorage: UrlStorage

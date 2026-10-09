@@ -20,14 +20,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 /**
- * Deljeni "potrebna je prijava" prikaz (17. avgust 2026, korisnička žalba) - koriste ga Library i
- * Profile ekrani kad korisnik nije prijavljen. Zamenjuje dva ranija, lošija ponašanja: (a) Profile
- * je prikazivao poluprazan/"pokvaren" oblik forme za izmenu profila (bez username-a, bez avatara,
- * ništa se ne može ni sačuvati bez tokena) kao da je normalan, samo prazan profil; (b) Library je
- * samo ispisivao golu rečenicu bez ikakve akcije. Namerno NE navigira automatski na Sign In čim se
- * tab otvori - korisnik i dalje slobodno pregleda Home/Search preko donje navigacije, ovaj prikaz
- * mu samo jasno kaže šta mu fali na OVOM tabu i nudi dugme da to reši kad poželi (isti obrazac kao
- * standardni "prijavi se da vidiš X" prikaz u većini aplikacija).
+ * Shared "sign-in required" state for tabs that need an account (Library, Profile...). It does not
+ * navigate to Sign In by itself - the user can keep browsing Home/Search - it just explains what is
+ * missing on this tab and offers a button to sign in.
  */
 @Composable
 fun SignInRequiredState(

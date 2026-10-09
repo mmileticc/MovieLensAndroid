@@ -102,12 +102,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Dorada (2. septembar 2026, korisnički zahtev - "stoji samo ime, na odbij nema potvrde, fali
- * mogućnost da se vidi javni profil pre odluke") - dodat avatar pošiljaoca (backend već vraća
- * `avatar_url` u `PendingRequestDto`, samo nije bio prikazan), ceo red je klikabilan i vodi na
- * `FriendProfileScreen` (koji za PENDING_RECEIVED status već prikazuje ograničen javni preview -
- * videti E1.5), i "Odbij" sad samo javlja roditelju da otvori potvrdu (videti
- * `requestPendingRejection` na vrhu `ProfileScreen`) umesto da odmah odbije.
+ * An incoming friend request: the sender's avatar and name; the whole card opens their profile
+ * (a limited public preview) so they can be checked before deciding. "Reject" only asks the parent
+ * to show a confirmation (see `requestPendingRejection` in FriendsScreen).
  */
 @Composable
 internal fun PendingRequestCard(
@@ -163,9 +160,8 @@ internal fun PendingRequestCard(
 }
 
 /**
- * Korisnički zahtev (2. septembar 2026) - kartica za poslate (odlazne) zahteve, isti vizuelni
- * obrazac kao PendingRequestCard iznad (avatar + klikabilna kartica ka javnom profilu), samo
- * jedno dugme ("Otkaži zahtev") umesto prihvati/odbij ikonica.
+ * A sent (outgoing) request: same layout as PendingRequestCard (avatar + card opening the public
+ * profile), with a single "Cancel request" button.
  */
 @Composable
 internal fun SentRequestCard(

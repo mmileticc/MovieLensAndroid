@@ -23,7 +23,7 @@ private data class MovieNightRawState(
     val friendUsername: String? = null,
     val sharedGenres: List<Genre> = emptyList(),
     val matchScore: Float? = null,
-    // Lokalni filter po jednom od zajedničkih žanrova (null = svi).
+    // Local filter by one of the shared genres (null = all).
     val selectedGenreId: Int? = null,
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
@@ -32,14 +32,15 @@ private data class MovieNightRawState(
     val error: String? = null
 )
 
+/** State of the Movie Night screen: the filtered suggestions plus the shared header data. */
 data class MovieNightUiState(
     val suggestions: List<MovieSuggestion> = emptyList(),
     val totalLoaded: Int = 0,
     val friendUsername: String? = null,
     val sharedGenres: List<Genre> = emptyList(),
     val matchScore: Float? = null,
-    // "Ti / Prijatelj" afinitet za glavni zajednički žanr - isti za sve predloge, pa se prikazuje
-    // jednom u zaglavlju (ranije ponovljen kao identične trake u svakom redu).
+    // "You / Friend" affinity for the main shared genre - the same for every suggestion, so it is
+    // shown once in the header.
     val yourMatch: Float? = null,
     val theirMatch: Float? = null,
     val selectedGenreId: Int? = null,
@@ -50,12 +51,10 @@ data class MovieNightUiState(
 )
 
 /**
- * Predlozi za zajedničko gledanje sa prijateljem.
- *
- * UX dorada (oktobar 2026): strane se DODAJU na listu (beskonačan skrol) umesto da "Osveži"
- * zameni sve - ranije se predlog koji se korisniku dopao gubio bez povratka, a posle poslednje
- * strane lista se tiho vraćala na početak. Pull-to-refresh počinje ispočetka sa svežim podacima.
- * Prva strana se prikazuje odmah iz keša (prefetch sa profila prijatelja), pa se tiho osveži.
+ * Movie Night suggestions for the user and a friend. Pages are APPENDED (infinite scroll), so a
+ * suggestion the user liked is never lost; pull-to-refresh starts over with fresh data. The first
+ * page is shown immediately from the cache (prefetched on the friend's profile) and then silently
+ * refreshed.
  */
 @HiltViewModel
 class MovieNightViewModel @Inject constructor(
@@ -78,7 +77,10 @@ class MovieNightViewModel @Inject constructor(
         loadSuggestions()
     }
 
-    /** Prvo učitavanje (i "Pokušaj ponovo"): keš za trenutni prikaz, pa tiho sveža prva strana. */
+    /**
+     * First load (and "Try again"): the cache for an instant display, then a silent fresh first
+     * page.
+     */
     fun loadSuggestions() {
         val userId = sessionManager.getUserId() ?: return
         viewModelScope.launch {
@@ -87,14 +89,14 @@ class MovieNightViewModel @Inject constructor(
                 .onSuccess { result -> applyFirstPage(result) }
                 .onFailure { e -> showError(e) }
 
-            // Keš (memorija/Room) može biti star - npr. od pre nego što je backend počeo da šalje
-            // ime prijatelja i zajedničke žanrove. Tiho osvežavanje, bez spinnera.
+            // The cache (memory/Room) may be stale, e.g. from before the backend started sending
+            // the friend's name and shared genres. Silent refresh, no spinner.
             userRepository.getMovieNightSuggestions(userId, friendId, page = 1, forceRefresh = true)
                 .onSuccess { result -> if (currentPage == 1) applyFirstPage(result) }
         }
     }
 
-    /** Pull-to-refresh - ispočetka, sa svežim podacima sa servera. */
+    /** Pull-to-refresh - starts over with fresh data from the server. */
     fun refresh() {
         val userId = sessionManager.getUserId() ?: return
         viewModelScope.launch {
@@ -106,7 +108,7 @@ class MovieNightViewModel @Inject constructor(
         }
     }
 
-    /** Beskonačan skrol - sledeća TMDB strana se dodaje na kraj (dedupe po tmdbId). */
+    /** Infinite scroll - the next TMDB page is appended (deduplicated by tmdbId). */
     fun loadMore() {
         val userId = sessionManager.getUserId() ?: return
         val state = raw.value
@@ -128,13 +130,14 @@ class MovieNightViewModel @Inject constructor(
                     }
                 }
                 .onFailure {
-                    // Tiho - korisnik i dalje ima sve već učitane predloge; sledeći skrol pokušava ponovo.
+                    // Silent - the user still has all loaded suggestions; the next scroll tries
+                    // again.
                     raw.update { it.copy(isLoadingMore = false) }
                 }
         }
     }
 
-    /** Ponovni izbor istog žanra isključuje filter. */
+    /** Selecting the same genre again turns the filter off. */
     fun onGenreSelected(genreId: Int) = raw.update {
         it.copy(selectedGenreId = if (it.selectedGenreId == genreId) null else genreId)
     }
@@ -158,7 +161,7 @@ class MovieNightViewModel @Inject constructor(
         raw.update {
             it.copy(
                 isLoading = false,
-                // Greška preko cele stranice samo kad nema šta da se prikaže.
+                // Full-page error only when there is nothing to show.
                 error = if (it.suggestions.isEmpty()) {
                     dev.milinko.movielens.util.friendlyMessage(e, dev.milinko.movielens.R.string.error_suggestions_unavailable)
                 } else null

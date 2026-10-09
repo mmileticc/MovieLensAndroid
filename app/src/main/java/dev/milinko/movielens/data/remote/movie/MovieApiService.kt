@@ -9,6 +9,7 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 
+/** Movie, person, cinema programme and comment endpoints of the backend (`/api/movies`, `/api/people`). */
 interface MovieApiService {
     // Search
     @GET("api/movies/search")
@@ -16,8 +17,8 @@ interface MovieApiService {
         @Query("query") query: String
     ): Response<MovieSearchResponse>
 
-    // Detail. lat/lon: opciono, samo ako korisnik ima uključenu lokacijsku dozvolu - backend onda
-    // sortira "Bioskopski termini" po udaljenosti.
+    // Detail. lat/lon are optional: sent only with location permission, so the backend can sort
+    // cinemas by distance.
     @GET("api/movies/{tmdbId}")
     suspend fun getMovieDetail(
         @Path("tmdbId") tmdbId: Int,
@@ -25,7 +26,7 @@ interface MovieApiService {
         @Query("lon") lon: Double? = null
     ): Response<MovieDetail>
 
-    // Trending/Featured
+    // Trending / featured (featured is personalized when the request carries a token)
     @GET("api/movies/trending")
     suspend fun getTrendingMovies(
         @Query("page") page: Int = 1
@@ -37,42 +38,36 @@ interface MovieApiService {
         @Query("page") page: Int = 1
     ): Response<TrendingResponse>
 
-    // "Prijatelji su gledali" bedž - JWT zaštićena ruta (za razliku od ostalih ruta u ovom
-    // interfejsu koje su javne), userId se čita iz JWT-a na backendu.
+    // "Friends watched" badge - requires sign-in; the backend takes the user from the JWT.
     @GET("api/movies/{tmdbId}/friends-watched")
     suspend fun getFriendsWhoWatched(
         @Path("tmdbId") tmdbId: Int
     ): Response<FriendsWatchedResponse>
 
-    // Svi TMDB žanrovi (id -> naziv) - za filter po žanru na "Vidi sve" ekranima.
+    // All TMDB genres (id -> name), for the genre filters on the "See all" screens.
     @GET("api/movies/genres")
     suspend fun getGenres(): Response<GenreListResponse>
 
-    // Ceo skrapovani repertoar (Home traka uzima prvih 20, "U bioskopima" ekran sve).
+    // The whole scraped programme (Home shows the first 20, the "In cinemas" screen all of it).
     @GET("api/movies/now-in-cinemas")
     suspend fun getNowInCinemas(): Response<NowInCinemasResponse>
 
-    // Faza D (17. avgust 2026, predlog mentora Marka) - semantička pretraga, namerno svedena na
-    // filmove trenutno na repertoaru (videti CinemaSemanticIndex na backendu). Ista odgovor forma
-    // kao gornja now-in-cinemas ruta.
-    //
-    // Faza D dorada - opcioni `engine` parametar ("gemini" ili "local") bira koji embedding se
-    // koristi na backendu, radi poređenja kvaliteta pretrage. Podrazumevano "gemini" na klijentu.
+    // Semantic ("mood") search over the movies currently in cinemas; same response shape as
+    // getNowInCinemas. `engine` ("gemini" or "local") selects the backend's embedding model.
     @GET("api/movies/now-in-cinemas/semantic-search")
     suspend fun semanticSearchNowInCinemas(
         @Query("q") query: String,
         @Query("engine") engine: String = "gemini"
     ): Response<NowInCinemasResponse>
 
-    // E2.3 (2. septembar 2026) - stranica glumca. Javna ruta, isti obrazac kao getMovieDetail.
+    // Person page (actor/crew). Public.
     @GET("api/people/{id}")
     suspend fun getPersonDetail(
         @Path("id") personId: Int
     ): Response<PersonDetail>
 
-    // E2.2 dorada (3. septembar 2026) - javni komentari na film. Sve 4 rute JWT-zaštićene (isto
-    // kao getFriendsWhoWatched iznad) - backend treba identitet pozivaoca da bi znao koji
-    // komentari su "od prijatelja"/već lajkovani/sopstveni, čak i za obično čitanje.
+    // Movie comments. Reading is public (with a token the own/friend/liked markers are filled in);
+    // posting, deleting and liking require sign-in.
     @GET("api/movies/{tmdbId}/comments")
     suspend fun getComments(
         @Path("tmdbId") tmdbId: Int,

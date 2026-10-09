@@ -42,17 +42,20 @@ import dev.milinko.movielens.ui.components.MovieneeWordmark
 import dev.milinko.movielens.ui.components.SettingsDialog
 import dev.milinko.movielens.util.DevSettings
 
-// ⚠️  Replace this with your actual Web Client ID from Firebase Console →
-//     Project Settings → Your apps → Web client (auto created by Google Service) → Client ID
+// Web client ID from the Firebase console (Project settings -> Your apps -> Web client), needed to
+// request a Google ID token for Firebase.
 private const val WEB_CLIENT_ID = "688395138951-64q747lml48uq3idgstjgj5tpa0rkgr2.apps.googleusercontent.com"
 
+/**
+ * Google sign-in screen with a poster collage background. [onDismiss] closes it without signing in
+ * (the X button and system back); NavGraph decides whether to pop or go to Home.
+ */
 @Composable
 fun SignInScreen(
     onSignedIn: () -> Unit,
-    // Zatvara ekran bez prijave - ranije jedini izlaz je bio sistemsko dugme "nazad", što je posle
-    // odjave (back stack potpuno očišćen u NavGraph.kt) gasilo celu aplikaciju umesto da vrati na
-    // Home. Sad se i sistemsko "nazad" (BackHandler ispod) i vidljivo X dugme oslanjaju na isti
-    // callback - NavGraph.kt odlučuje da li ima šta da se pop-uje ili treba direktno na Home.
+    // Closes the screen without signing in. Both system "back" (BackHandler below) and the visible X
+    // use it; NavGraph.kt decides whether there is something to pop or to go to Home (after sign-out
+    // the back stack is empty and "back" would otherwise close the app).
     onDismiss: () -> Unit = {},
     viewModel: AuthViewModel = hiltViewModel()
 ) {
@@ -67,9 +70,7 @@ fun SignInScreen(
         }
     }
 
-    // UI dorada (17. avgust 2026) - vidi napomenu u AuthViewModel.kt: poster kolaž pozadina,
-    // učitava se samo ovde (ne u init{}) da se izbegne nepotreban poziv kad se AuthViewModel
-    // reuse-uje u ProfileScreen top baru za isSignedIn proveru.
+    // Decorative poster background, loaded only here (see AuthViewModel).
     LaunchedEffect(Unit) {
         viewModel.loadBackgroundPostersIfNeeded()
     }
@@ -102,7 +103,7 @@ fun SignInScreen(
                 }
             } catch (e: ApiException) {
                 Log.e("SignIn", "Google sign-in failed: ${e.statusCode}", e)
-                // 12501 = korisnik je sam zatvorio Google prozor - to nije greška, ne prikazujemo ništa.
+                // 12501 = the user closed the Google window themselves - not an error, nothing is shown.
                 if (e.statusCode != GoogleSignInStatusCodes.SIGN_IN_CANCELLED) {
                     viewModel.reportGoogleSignInFailure(context.getString(R.string.sign_in_google_failed))
                 }
@@ -110,26 +111,9 @@ fun SignInScreen(
         }
     }
 
-    // Faza 4 redizajna: gradijent je ranije bio inline ljubičasto-crn (#070710/#0F0F1A/#0B0B12),
-    // van teme i van naše palete. Sad ide iz centralizovanih tokena (background -> surfaceElevated1)
-    // - i dalje suptilan vertikalni gradijent (koncept se zadržava, videti MOVIELENS_DESIGN_PLAN.md
-    // 2.1), samo bez tuđe boje.
-    //
-    // UI dorada (17. avgust 2026, korisnička žalba "sign in deluje prazno") - zatvoreno "otvoreno
-    // pitanje" iz plana 6: dodat poster kolaž ispod gradijenta. Grid se puni pravim trenutno
-    // popularnim filmovima (`AuthViewModel.backgroundPosters`, ista javna /trending ruta kao Home) -
-    // ako poziv ne uspe (offline/hladan start backenda) lista ostaje prazna i ekran izgleda
-    // IDENTIČNO kao pre ove dorade (čist gradijent), bez ikakvog error stanja - ovo je čisto
-    // dekorativno.
-    //
-    // Ispravka (17. avgust 2026, korisnik prijavio "ne vidim promenu") - prva verzija je imala
-    // grešku u računu providnosti: gornji/donji kraj vertikalnog gradijenta su bili POTPUNO
-    // neprovidni (`colorScheme.background` bez alpha), a čak i sredina je bila providna samo 12%
-    // (`surface.copy(alpha=0.88f)`) - preko kolaža koji je i sam bio na svega 18% providnosti. Neto
-    // efekat: kolaž praktično nevidljiv. Zamenjeno radijalnim vinjet-om (providno na ivicama, gde i
-    // onako nema teksta osim blede terms poruke, neprovidno u centru gde sede logo/naslov/dugme) i
-    // podignuta providnost postera na 40% - sad stvarno vidljivo, a centar ekrana (gde je čitljivost
-    // najbitnija) ostaje čist.
+    // Background: a subtle vertical gradient from theme tokens, with a collage of currently popular
+    // posters (`AuthViewModel.backgroundPosters`) underneath. If the posters cannot be loaded the
+    // screen is just the gradient - purely decorative, no error state.
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -145,9 +129,9 @@ fun SignInScreen(
             )
         }
 
-        // Radijalni vinjet: neproviran u centru (gde sede logo/naslov/dugme - čitljivost prioritet),
-        // providan na ivicama (gde se kolaž treba VIDETI). Kad kolaža nema, ovo je i dalje solidno
-        // oslonjeno na opaque `.background(colorScheme.background)` ispod (spoljašnji Box).
+        // Radial vignette: opaque in the center (logo/title/button - readability first), transparent
+        // at the edges where the collage should show. Without a collage the opaque background of the
+        // outer Box is underneath.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -161,9 +145,7 @@ fun SignInScreen(
                 )
         )
 
-        // Vidljivo dugme za zatvaranje - ne oslanjamo se samo na sistemsko "nazad" jer korisnici
-        // ne moraju znati da će ono raditi ovde (posle odjave back stack je bio prazan i pre ove
-        // izmene bi "nazad" ugasio celu aplikaciju).
+        // A visible close button - users do not necessarily know that system "back" works here.
         IconButton(
             onClick = onDismiss,
             modifier = Modifier
@@ -178,17 +160,9 @@ fun SignInScreen(
             )
         }
 
-        // Dorada (17. avgust 2026, korisnička žalba "ne mogu ništa da uradim kad sam izlogovan jer
-        // se backend ruta vidi samo kad si ulogovan") - urediva backend ruta je ranije bila SAMO na
-        // Profile → Podešavanja tabu, koji je sad zaključan iza prijave (dorada #2). Sign In je
-        // jedini ekran koji izlogovan korisnik uvek vidi, pa dugme ide ovde, simetrično sa X gore
-        // levo. Reciklira isti UrlStorage preko AuthViewModel-a - ista podešavanja kao Profile.
-        //
-        // Dorada (1. septembar 2026, priprema APK-a za spoljne testere) - dugme je sad vidljivo
-        // samo kad je DevSettings.SHOW_BACKEND_URL_SETTINGS = true (videti obrazloženje tamo zašto
-        // NIJE vezano za BuildConfig.DEBUG). Testeri i dalje dobijaju `debug`-potpisan APK (radi bez
-        // keystore-a), ali sa ovim flag-om na `false` ne vide/ne mogu da menjaju backend rutu -
-        // ostaju na difoltnoj (Render) ruti iz UrlStorage.kt.
+        // Backend URL button (debug builds only, DevSettings.SHOW_BACKEND_URL_SETTINGS): Sign In is
+        // the only screen always visible when signed out, so the URL can be changed here too. Uses
+        // the same UrlStorage as the Profile settings, via AuthViewModel.
         var showBackendDialog by remember { mutableStateOf(false) }
         if (DevSettings.SHOW_BACKEND_URL_SETTINGS) {
             IconButton(
@@ -229,10 +203,7 @@ fun SignInScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Logo (rebrending 25. avgust 2026) - stvaran Movienee znak (crvena filmska traka/dva
-            // profila) umesto generičke Icons.Default.Movie ikonice, videti
-            // drawable-nodpi/ic_movienee_mark.png. Krug pozadina/ivica nedirnuti (isti tretman kao
-            // pre).
+            // Logo: the Movienee mark (drawable-nodpi/ic_movienee_mark.png) in a circle.
             Box(
                 modifier = Modifier
                     .size(96.dp)
@@ -253,8 +224,8 @@ fun SignInScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 MovieneeWordmark(style = MaterialTheme.typography.displayMedium)
-                // Sitno objašnjenje odakle ime dolazi (movie + matinee), isto kao mala napomena
-                // ispod wordmark-a u originalnom logu - odvojeno od funkcionalnog taglina ispod.
+                // Small note explaining the name (movie + matinee), as under the wordmark in the
+                // original logo - separate from the tagline below.
                 MovieneeNameOrigin()
                 Text(
                     text = stringResource(R.string.sign_in_tagline),
@@ -317,8 +288,8 @@ fun SignInScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
                 } else {
-                    // Google "G" logo - Google-ova sopstvena brend boja (#4285F4), namerno NE ide
-                    // iz naše teme (obavezan deo Google Sign-In vizuelnog identiteta).
+                    // Google "G" logo in Google's own brand color (#4285F4), deliberately not from our
+                    // theme (a required part of the Google Sign-In branding).
                     Text(
                         text = "G",
                         color = Color(0xFF4285F4),
@@ -345,10 +316,9 @@ fun SignInScreen(
 }
 
 /**
- * Statična mreža poster kartica (3 kolone) koja popunjava ceo ekran, ciklično ponavljajući
- * dostupne postere ako ih ima manje od broja ćelija - namerno NE lazy/skrolujuća (ovo je
- * dekoracija u pozadini, ne interaktivna lista), veličina liste je uvek mala (jedna TMDB stranica,
- * ~20 filmova) pa je obična ugnježdena Column/Row kompozicija sasvim dovoljna.
+ * Static grid of poster cards (3 columns) filling the whole screen, repeating the posters if there
+ * are fewer than cells. Not lazy on purpose: it is background decoration, and the list is always
+ * small (one TMDB page, ~20 movies).
  */
 @Composable
 private fun PosterCollageBackground(

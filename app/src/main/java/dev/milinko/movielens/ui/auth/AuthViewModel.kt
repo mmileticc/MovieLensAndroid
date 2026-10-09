@@ -19,6 +19,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * Sign-in flow: Google -> Firebase -> backend session exchange, sign-out, the decorative poster
+ * background and (in debug builds) the backend URL choice on the Sign In screen.
+ */
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepo: AuthRepository,
@@ -32,21 +36,18 @@ class AuthViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val uiState: StateFlow<AuthUiState> = _uiState
 
-    // UI dorada (17. avgust 2026, korisnička žalba "sign in deluje prazno") - poster kolaž
-    // pozadina na Sign In ekranu. Namerno POTPUNO odvojeno od uiState/prijave - ovo je čisto
-    // dekorativno, javna /trending ruta (ne treba token, ista ruta koju Home koristi za "Popularno").
-    // Ako poziv padne (offline, hladan start backenda) lista ostaje prazna i ekran se prikazuje
-    // identično kao pre ove dorade (plain gradijent) - nema error banner-a, nema retry dugmeta, ne
-    // sme da utiče na sam tok prijave.
+    // Poster collage for the Sign In background: purely decorative and independent of the sign-in
+    // state (public /trending route, no token). If the call fails the list stays empty and the screen
+    // shows a plain gradient - no error banner, no retry, and the sign-in flow is never affected.
     //
-    // NAMERNO nije u init{} - AuthViewModel se ponovo koristi i u ProfileScreen.kt (top bar
-    // isSignedIn provera preko hiltViewModel()), pa bi init{} tamo pokretao nepotreban mrežni
-    // poziv za podatak koji se nigde na Profile ekranu ne koristi. loadBackgroundPostersIfNeeded()
-    // poziva samo SignInScreen (LaunchedEffect), a isLoadingPosters flag sprečava duple pozive.
+    // Not loaded in init{}: AuthViewModel is also used on ProfileScreen (isSignedIn check), where the
+    // posters are not needed. Only SignInScreen calls loadBackgroundPostersIfNeeded(), and
+    // isLoadingPosters prevents duplicate calls.
     private val _backgroundPosters = MutableStateFlow<List<String>>(emptyList())
     val backgroundPosters: StateFlow<List<String>> = _backgroundPosters
     private var didLoadBackgroundPosters = false
 
+    /** Loads the background posters once (see the note above). */
     fun loadBackgroundPostersIfNeeded() {
         if (didLoadBackgroundPosters) return
         didLoadBackgroundPosters = true
@@ -91,23 +92,23 @@ class AuthViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // Faza A bugfix (16. avgust 2026) - exchangeFirebaseToken NIJE umotan u
-                // Response<T>, pa Retrofit ovde direktno baca IOException (nema konekcije/timeout)
-                // ili HttpException (5xx sa backenda) - bez friendlyMessage() korisnik bi na Sign
-                // In ekranu video sirov tehnički tekst poput "timeout" umesto razumljive poruke.
+                // exchangeFirebaseToken is not wrapped in Response<T>, so Retrofit throws IOException
+                // (no connection/timeout) or HttpException (5xx) directly; friendlyMessage() turns
+                // them into a readable message instead of raw technical text.
                 _uiState.value = AuthUiState.Error(friendlyMessage(e, dev.milinko.movielens.R.string.error_sign_in_failed))
             }
         }
     }
 
     /**
-     * Google deo prijave nije uspeo (pre nego što dođemo do backend-a) - ranije se to samo
-     * logovalo, pa bi se Google prozor zatvorio i ništa vidljivo se ne bi desilo.
+     * The Google part of sign-in failed (before the backend is reached); shown as an error so the
+     * Google window does not just close with nothing visible happening.
      */
     fun reportGoogleSignInFailure(message: String) {
         _uiState.value = AuthUiState.Error(message)
     }
 
+    /** Signs out of Firebase and the backend session and unregisters this device's push token. */
     fun signOut() {
         val userId = sessionManager.getUserId()
         val appToken = sessionManager.getAppToken()
@@ -117,16 +118,13 @@ class AuthViewModel @Inject constructor(
         _uiState.value = AuthUiState.Idle
     }
 
+    /** True if both the Firebase user and the backend session exist. */
     fun isAlreadySignedIn(): Boolean =
         authRepo.isSignedIn() && sessionManager.isSessionValid()
 
-    // Dorada (17. avgust 2026, korisnička žalba "ne mogu ništa da uradim kad sam izlogovan jer se
-    // backend ruta vidi samo kad si ulogovan") - urediva backend ruta je ranije postojala SAMO na
-    // Profile → Podešavanja tabu, koji je (dorada #2, task #160) sad zaključan iza prijave. Bez
-    // ovoga, korisnik na pogrešnom backend URL-u (npr. promenjen IP na lokalnoj mreži) nije imao
-    // NIKAKAV način da ga promeni - Sign In je jedini ekran uvek dostupan izlogovanom korisniku.
-    // Reciklira isti UrlStorage/SettingsDialog koji Profile već koristi (videti ProfileViewModel) -
-    // ista podešavanja, samo drugi ulaz, nema duplog izvora istine.
+    // Backend URL for the developer dialog on the Sign In screen - the only screen always available
+    // when signed out, so a wrong URL (e.g. a changed local IP) can be fixed without signing in. Uses
+    // the same UrlStorage as the Profile settings.
     private val _baseUrl = MutableStateFlow(urlStorage.getBaseUrl())
     val baseUrl: StateFlow<String> = _baseUrl.asStateFlow()
 
@@ -154,6 +152,7 @@ class AuthViewModel @Inject constructor(
     }
 }
 
+/** State of the sign-in flow. */
 sealed interface AuthUiState {
     object Idle : AuthUiState
     object Loading : AuthUiState

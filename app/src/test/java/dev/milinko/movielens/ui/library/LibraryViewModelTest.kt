@@ -125,7 +125,7 @@ class LibraryViewModelTest {
 
         viewModel.requestRemove(watchlist[0])
         viewModel.commitAllPendingRemovals()
-        viewModel.commitRemove(1) // drugi poziv (npr. snackbar istekao) ne sme da pošalje dupli zahtev
+        viewModel.commitRemove(1) // a second call (e.g. the snackbar expired) must not send a duplicate request
         advanceUntilIdle()
 
         coVerify(exactly = 1) { userRepository.removeFromWatchlist("u1", 1) }

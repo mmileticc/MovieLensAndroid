@@ -21,43 +21,44 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** State of the movie detail screen, including the signed-in user's own data for the movie. */
 data class MovieDetailUiState(
     val movieDetail: MovieDetail? = null,
     val isLoading: Boolean = false,
     val isInWatchlist: Boolean = false,
     val isWatched: Boolean = false,
-    // 0.0 = odgledano bez ocene (isti dogovor kao na backendu - videti UserActionsRouting.kt)
+    // 0.0 = watched without a rating (same convention as the backend, see UserActionsRouting.kt)
     val userRating: Double = 0.0,
-    // Prijatelji koji su odgledali ovaj film (i njihova ocena, ako postoji). Tiho prazno ako
-    // korisnik nije ulogovan ili poziv padne - nije kritična funkcionalnost, ne blokira ekran.
+    // Friends who watched this movie (with their rating, if any). Silently empty when signed out or
+    // when the call fails - not critical, it never blocks the screen.
     val friendsWatched: List<FriendWatched> = emptyList(),
-    // E2.2 dorada (3. septembar 2026) - javni komentari, ZAMENJUJU stari userReview koncept
-    // (jedan privatan tekst uz ocenu). Potpuno odvojeno od ocene/watched statusa ispod.
-    // `comments` su SVI do sada mrežno učitani komentari; `commentsVisibleCount` je koliko se od
-    // njih trenutno prikazuje - "Prikaži više" prvo samo otkriva već učitane (bez mreže), tek kad
-    // ih ponestane a `commentsHasMoreOnServer` je true ide se po sledeću stranicu. "Prikaži manje"
-    // samo vraća vidljivi broj na COMMENTS_PAGE_SIZE, bez brisanja već učitanih iz memorije.
+    // Public comments, independent of the rating and watched status. `comments` are ALL comments
+    // loaded so far; `commentsVisibleCount` is how many of them are shown. "Show more" first reveals
+    // already loaded ones (no network) and fetches the next page only when they run out and
+    // `commentsHasMoreOnServer` is true. "Show less" only resets the visible count to
+    // COMMENTS_PAGE_SIZE without dropping the loaded comments.
     val comments: List<MovieComment> = emptyList(),
     val commentsVisibleCount: Int = 0,
-    // Tekst komentara koji server nije prihvatio - ekran ga vraća u polje i javlja poruku
-    // (optimistična objava, videti postComment).
+    // Text of a comment the server rejected - the screen puts it back into the field and shows a
+    // message (optimistic posting, see postComment).
     val failedCommentText: String? = null,
     val commentsHasMoreOnServer: Boolean = false,
     val isLoadingComments: Boolean = false,
     val isLoadingMoreComments: Boolean = false,
-    // Gost vidi komentare, ali umesto polja za unos dobija poziv na prijavu.
+    // Guests see the comments, but get a sign-in prompt instead of the input field.
     val isSignedIn: Boolean = false,
-    // "Pošalji prijatelju" - lista prijatelja se učitava tek kad se dijalog otvori.
+    // "Send to a friend" - the friend list is loaded only when the dialog opens.
     val shareFriends: List<FriendInfo> = emptyList(),
     val isLoadingShareFriends: Boolean = false,
     val isSendingShare: Boolean = false,
-    // Bugfix (E1.2, 2. septembar 2026) - RANIJE watchlistError/historyError polja koja su se
-    // prikazivala kao Toast ("Update history failed: 404" iz test feedback-a). Uklonjena namerno -
-    // watchlist/watched/ocena greške se sad samo tiho loguju (Log.w), nikad ne prekidaju korisnika,
-    // videti historyJob/watchlistJob napomenu ispod.
     val error: String? = null
 )
 
+/**
+ * Movie detail: loads the movie (cinemas sorted by distance when location is available), the user's
+ * watchlist/watched/rating state (cache first, then network), friends who watched it and comments,
+ * and handles the user's actions on the movie.
+ */
 @HiltViewModel
 class MovieDetailViewModel @Inject constructor(
     private val movieRepository: MovieRepository,
@@ -69,35 +70,28 @@ class MovieDetailViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(MovieDetailUiState())
     val uiState: StateFlow<MovieDetailUiState> = _uiState.asStateFlow()
 
-    // Bugfix (E1.2, 2. septembar 2026, feedback testera - "greske 500/400 pri brzim uzastopnim
-    // klikovima na watchlist/odgledano") - toggleWatched/rateMovie sve mutiraju ISTI
-    // backend red (user_actions/history), pa dele jedan Job. toggleWatchlist je odvojen resurs
-    // (watchlist tabela) - sopstveni Job. Svaka nova akcija OTKAŽE prethodnu ako je još u letu
-    // (umesto da oba zahteva odu na mrežu istovremeno i sudare se) - Retrofit suspend pozivi
-    // prate coroutine cancellation, pa se i stvaran HTTP poziv prekine, ne samo lokalno stanje.
-    // Rezultat: brzo uzastopno kuckanje zvezdica/dugmeta šalje SAMO poslednji zahtev, bez trke.
+    // toggleWatched/rateMovie modify the SAME backend row (history), so they share one Job;
+    // toggleWatchlist is a separate resource with its own Job. Each new action CANCELS the previous
+    // one if it is still in flight (Retrofit suspend calls honor cancellation, so the HTTP call is
+    // aborted too). Rapid repeated taps on the stars/buttons therefore send only the last request,
+    // with no race between them.
     private var historyJob: Job? = null
     private var watchlistJob: Job? = null
 
+    /** Loads everything for the movie; cached user data is shown first, then refreshed. */
     fun loadMovieDetail(tmdbId: Int) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
 
-            // Poslednja poznata lokacija - samo ako korisnik već ima uključenu dozvolu (ne
-            // tražimo je ovde, to radi UI preko sistemskog dijaloga). Ako je nema, showtimes
-            // dolaze nesortirani po udaljenosti, ne prazni - to je samo "ukras", ne blokira ništa.
+            // Last known location, only if permission is already granted (the UI asks for it).
+            // Without it cinemas are simply not sorted by distance.
             val location = locationHelper.getLastKnownLocation()
             val userId = sessionManager.getUserId()
             _uiState.value = _uiState.value.copy(isSignedIn = userId != null)
 
-            // Faza C (16. avgust 2026, korisnički zahtev "da deluje momentalno pa se pozadinski
-            // sa backom to uradi") - watchlist/istorija se već keširaju u Room-u (isti keš koji
-            // Library ekran koristi), ovaj ekran ga ranije nije čitao - svaki put je čekao mrežni
-            // round-trip da bi prikazao sopstvenu ocenu/komentar/watchlist status, uvek počinjao od
-            // "nema ocene" pa "skočio" na pravu vrednost kad mreža odgovori. Sad se prvo čita
-            // Room keš (instant, radi i offline), mrežni pozivi ispod i dalje idu u pozadini radi
-            // osvežavanja/potvrde - `onSuccess` blokovi ispod će po potrebi prepisati ovu vrednost
-            // svežijom.
+            // Show the user's watchlist/history state from the Room cache first (instant, works
+            // offline); the network calls below refresh it and the onSuccess blocks overwrite it
+            // with fresher values.
             if (userId != null) {
                 val cachedHistoryItem = userRepository.observeHistory(userId).first().firstOrNull { it.tmdbId == tmdbId }
                 if (cachedHistoryItem != null) {
@@ -112,8 +106,8 @@ class MovieDetailViewModel @Inject constructor(
                 }
             }
 
-            // Detalji filma, watchlist status i istorija (odgledano/ocena) su nezavisni pozivi -
-            // paralelno umesto sekvencijalno da ne čekamo tri round-trip-a zaredom.
+            // Details, watchlist and history are independent calls, so they run in parallel instead
+            // of three round trips in a row.
             val detailDeferred = async { movieRepository.getMovieDetail(tmdbId, location?.latitude, location?.longitude) }
             val watchlistDeferred = userId?.let { async { userRepository.getWatchlist(it) } }
             val historyDeferred = userId?.let { async { userRepository.getHistory(it) } }
@@ -133,10 +127,9 @@ class MovieDetailViewModel @Inject constructor(
                     )
                 }
 
-            // Ako je korisnik ulogovan, proveri da li je film već u watchlisti/istoriji. Nema
-            // posebnog "da li je ovaj film..." endpoint-a, pa gledamo pune liste - jeftino je
-            // (po jedan poziv po otvaranju detalja) i tačno odražava stanje umesto da uvek kreće
-            // od "nije u watchlisti"/"nije odgledano".
+            // There is no "is this movie on my list" endpoint, so the full lists are checked - one
+            // call each per opening of the screen, and the state is accurate instead of always
+            // starting from "not on the watchlist / not watched".
             watchlistDeferred?.await()?.onSuccess { items ->
                 _uiState.value = _uiState.value.copy(
                     isInWatchlist = items.any { it.tmdbId == tmdbId }
@@ -157,9 +150,9 @@ class MovieDetailViewModel @Inject constructor(
     }
 
     /**
-     * Uključuje/isključuje "odgledano". Drugi klik (kad je već odgledano) je "undo" - za slučaj
-     * lapsus klika - i briše i ocenu ako je bila postavljena (ista tabela/red na backendu). true
-     * ako je zahtev pokrenut, false ako korisnik nije ulogovan.
+     * Toggles "watched". A second tap (already watched) is an undo for an accidental tap and also
+     * removes the rating (same row on the backend). Returns true if the request was started, false
+     * if the user is not signed in.
      */
     fun toggleWatched(tmdbId: Int): Boolean {
         val userId = sessionManager.getUserId() ?: return false
@@ -178,10 +171,9 @@ class MovieDetailViewModel @Inject constructor(
             } else {
                 userRepository.addToHistory(userId, tmdbId).map { }
             }
-            // Bugfix (E1.2) - ne prikazujemo grešku korisniku za ovaj tok (videti napomenu na
-            // historyJob) - najčešći uzrok je otkazan/sudaren zahtev od brzog uzastopnog klika,
-            // ne stvaran problem. Tiho se loguje i lokalno stanje se vrati na poslednje poznato
-            // dobro - sledeći uspešan poziv (ili sledeće otvaranje ekrana) ionako sve resinhronizuje.
+            // Not shown to the user (see historyJob): the usual cause is a cancelled request from
+            // rapid taps, not a real problem. It is logged and the local state reverts to the last
+            // known good value; the next successful call or screen opening resyncs everything.
             result.onFailure { e ->
                 Log.w("MovieDetailViewModel", "toggleWatched nije uspeo (tiho, ne prikazuje se korisniku): ${e.message}")
                 _uiState.value = _uiState.value.copy(
@@ -194,10 +186,8 @@ class MovieDetailViewModel @Inject constructor(
     }
 
     /**
-     * Postavlja/menja ocenu (1-10) - automatski označava film kao odgledan ako već nije. Kratak
-     * tekstualni "komentar uz ocenu" je uklonjen (E2.2 dorada, 3. septembar 2026) - zamenjen
-     * potpuno odvojenim javnim komentarima ispod, videti loadComments/postComment. true ako je
-     * zahtev pokrenut, false ako korisnik nije ulogovan.
+     * Sets or changes the rating (1-10) and marks the movie as watched if it is not already. Returns
+     * true if the request was started, false if the user is not signed in.
      */
     fun rateMovie(tmdbId: Int, rating: Int): Boolean {
         val userId = sessionManager.getUserId() ?: return false
@@ -216,8 +206,7 @@ class MovieDetailViewModel @Inject constructor(
             } else {
                 userRepository.addToHistory(userId, tmdbId, rating = rating.toDouble())
             }
-            // Bugfix (E1.2) - videti napomenu na historyJob/toggleWatched: tiho se loguje umesto da
-            // korisnik vidi "Update history failed: CODE" (tačan bag sa test feedback-a).
+            // Logged quietly instead of shown to the user (see historyJob/toggleWatched).
             result.onFailure { e ->
                 Log.w("MovieDetailViewModel", "rateMovie nije uspeo (tiho, ne prikazuje se korisniku): ${e.message}")
                 _uiState.value = _uiState.value.copy(
@@ -230,9 +219,9 @@ class MovieDetailViewModel @Inject constructor(
     }
 
     /**
-     * true ako korisnik nije ulogovan (poziv nije ni pokušan) - ekran treba da traži prijavu.
-     * Ažurira UI odmah (optimistički), pre nego što mrežni poziv uopšte završi - dugme reaguje
-     * trenutno na klik umesto da čeka round-trip. Ako poziv ne uspe, stanje se vraća nazad.
+     * Adds/removes the movie on the watchlist. The UI updates immediately (optimistically) and
+     * reverts if the call fails. Returns true if the user is NOT signed in (nothing was attempted) -
+     * the screen should then ask for sign-in.
      */
     fun toggleWatchlist(tmdbId: Int): Boolean {
         val userId = sessionManager.getUserId() ?: return false
@@ -247,7 +236,7 @@ class MovieDetailViewModel @Inject constructor(
             } else {
                 userRepository.addToWatchlist(userId, tmdbId).map { }
             }
-            // Bugfix (E1.2) - videti napomenu na historyJob/toggleWatched, isti princip za watchlist.
+            // Logged quietly, same as toggleWatched (see historyJob).
             result.onFailure { e ->
                 Log.w("MovieDetailViewModel", "toggleWatchlist nije uspeo (tiho, ne prikazuje se korisniku): ${e.message}")
                 _uiState.value = _uiState.value.copy(isInWatchlist = wasInWatchlist)
@@ -256,9 +245,7 @@ class MovieDetailViewModel @Inject constructor(
         return true
     }
 
-    // E2.2 dorada (3. septembar 2026) - javni komentari na film. Videti obrazloženje na
-    // MovieDetailUiState.comments/commentsVisibleCount iznad za "otkrij već učitano pre nego što
-    // se ide po sledeću mrežnu stranicu" logiku.
+    // --- Public comments (see MovieDetailUiState.comments for the paging/reveal logic) ---
 
     private fun loadComments(tmdbId: Int) {
         viewModelScope.launch {
@@ -273,8 +260,8 @@ class MovieDetailViewModel @Inject constructor(
                     )
                 }
                 .onFailure { e ->
-                    // Tiho, isti princip kao friendsWatched - komentari nisu kritični, ne
-                    // blokiraju ostatak ekrana koji se već učitao.
+                    // Quietly, like friendsWatched - comments are not critical and must not block
+                    // the rest of the screen.
                     Log.w("MovieDetailViewModel", "loadComments nije uspeo (tiho): ${e.message}")
                     _uiState.value = _uiState.value.copy(isLoadingComments = false)
                 }
@@ -282,8 +269,8 @@ class MovieDetailViewModel @Inject constructor(
     }
 
     /**
-     * "Prikaži više" - prvo samo otkriva već mrežno učitane komentare (bez poziva), tek kad
-     * ponestane a server ima još ide se po sledeću stranicu.
+     * "Show more": first reveals already loaded comments (no call); only when they run out and the
+     * server has more is the next page fetched.
      */
     fun showMoreComments(tmdbId: Int) {
         val state = _uiState.value
@@ -314,25 +301,24 @@ class MovieDetailViewModel @Inject constructor(
         }
     }
 
-    /** "Prikaži manje" - vraća vidljivi broj na prvu stranicu, bez brisanja iz memorije/mreže. */
+    /** "Show less": resets the visible count to the first page without dropping loaded comments. */
     fun showLessComments() {
         val state = _uiState.value
         _uiState.value = state.copy(commentsVisibleCount = COMMENTS_PAGE_SIZE.coerceAtMost(state.comments.size))
     }
 
     /**
-     * Objavljuje novi komentar - novi komentar se odmah dodaje na vrh vidljive liste (optimistički,
-     * pre nego što mreža potvrdi) da se ekran oseti trenutno responzivan. true ako je zahtev
-     * pokrenut, false ako korisnik nije ulogovan ili je tekst prazan.
+     * Posts a new comment. It appears at the top of the list immediately (optimistically, before the
+     * network confirms). Returns true if the request was started, false if the user is not signed in
+     * or the text is empty.
      */
     fun postComment(tmdbId: Int, body: String): Boolean {
         val userId = sessionManager.getUserId() ?: return false
         val trimmed = body.trim()
         if (trimmed.isEmpty()) return false
 
-        // UX dorada (oktobar 2026): komentar se prikazuje ODMAH (privremeni, negativan id dok server
-        // ne dodeli pravi). Ranije se pojavljivao tek posle mreže, a pri grešci je tiho nestajao
-        // zajedno sa tekstom.
+        // Shown IMMEDIATELY with a temporary negative id until the server assigns the real one. On
+        // failure it is removed and its text goes back into the field (failedCommentText).
         val tempId = nextTempCommentId--
         val optimistic = MovieComment(
             id = tempId,
@@ -372,17 +358,17 @@ class MovieDetailViewModel @Inject constructor(
         return true
     }
 
-    /** Ekran je vratio neuspeli tekst u polje i prikazao poruku. */
+    /** The screen has put the failed text back into the field and shown the message. */
     fun consumeFailedComment() {
         _uiState.value = _uiState.value.copy(failedCommentText = null)
     }
 
-    // Privremeni (lokalni) id-jevi optimističnih komentara - negativni da se ne sudare sa pravim.
+    // Temporary (local) ids of optimistic comments - negative so they never clash with real ones.
     private var nextTempCommentId = -1
 
-    /** Briše sopstveni komentar (optimistički, uz rollback ako mreža odbije). */
+    /** Deletes one's own comment (optimistically, rolled back if the network refuses). */
     fun deleteComment(commentId: Int) {
-        // Komentar još nije stigao do servera (privremeni id) - nema šta da se briše tamo.
+        // Not on the server yet (temporary id) - nothing to delete there.
         if (commentId < 0) return
         val state = _uiState.value
         val index = state.comments.indexOfFirst { it.id == commentId }
@@ -406,15 +392,14 @@ class MovieDetailViewModel @Inject constructor(
     }
 
     /**
-     * Lajk/skidanje lajka (toggle) - optimistički menja srce/brojač odmah, uz rollback ako mreža
-     * odbije (npr. pokušaj lajkovanja sopstvenog komentara - backend to odbija, videti
-     * CommentsRepository.toggleLike). Ne deli Job sa ostalima - lajkovi na različitim komentarima
-     * su nezavisni resursi, za razliku od historyJob/watchlistJob slučaja.
+     * Likes/unlikes a comment: the heart and counter change immediately and are rolled back if the
+     * network refuses (e.g. liking one's own comment, see CommentsRepository.toggleLike). It does not
+     * share a Job with the others - likes on different comments are independent. Returns false if
+     * the user is not signed in (nothing attempted) - the screen should ask for sign-in.
      */
-    /** false ako korisnik nije prijavljen (lajk nije ni pokušan) - ekran treba da traži prijavu. */
     fun toggleCommentLike(commentId: Int): Boolean {
         if (sessionManager.getUserId() == null) return false
-        if (commentId < 0) return true // privremeni komentar, još nije na serveru
+        if (commentId < 0) return true // temporary comment, not on the server yet
         val state = _uiState.value
         val comment = state.comments.firstOrNull { it.id == commentId } ?: return true
         val optimisticLiked = !comment.likedByMe
@@ -446,7 +431,7 @@ class MovieDetailViewModel @Inject constructor(
         return true
     }
 
-    /** Prijatelji za dijalog "Pošalji prijatelju": prvo iz keša (odmah), pa osveženo sa mreže. */
+    /** Friends for the "Send to a friend" dialog: from the cache first (instant), then from the network. */
     fun loadShareFriends() {
         val userId = sessionManager.getUserId() ?: return
         viewModelScope.launch {
@@ -460,6 +445,7 @@ class MovieDetailViewModel @Inject constructor(
         }
     }
 
+    /** Sends the movie to a friend (push notification); [onResult] reports success. */
     fun shareWithFriend(tmdbId: Int, friendId: String, note: String?, onResult: (Boolean) -> Unit) {
         val userId = sessionManager.getUserId() ?: return onResult(false)
         viewModelScope.launch {
@@ -471,7 +457,7 @@ class MovieDetailViewModel @Inject constructor(
     }
 
     companion object {
-        // Komentari se učitavaju i otkrivaju po 3; isti prag koristi i "Prikaži manje" na ekranu.
+        // Comments are loaded and revealed 3 at a time; "Show less" on the screen uses the same value.
         internal const val COMMENTS_PAGE_SIZE = 3
     }
 }

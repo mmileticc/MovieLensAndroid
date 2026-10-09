@@ -7,6 +7,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
+/** Provides Firebase singletons. */
 @Module
 @InstallIn(SingletonComponent::class)
 object FirebaseModule {

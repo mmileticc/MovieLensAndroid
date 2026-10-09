@@ -14,8 +14,8 @@ import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 
 /**
- * Zamenjuje Dispatchers.Main test dispečerom (viewModelScope ga koristi) i lokalizovane stringove
- * (AppLocale traži Android Context) predvidljivim tekstom "res:<id>".
+ * Replaces Dispatchers.Main with a test dispatcher (used by viewModelScope) and localized strings
+ * (AppLocale needs an Android Context) with predictable "res:<id>" text.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainDispatcherRule(

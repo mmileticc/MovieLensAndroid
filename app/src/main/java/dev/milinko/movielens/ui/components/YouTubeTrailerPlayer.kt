@@ -57,15 +57,15 @@ import dev.milinko.movielens.R
 import dev.milinko.movielens.data.remote.movie.MovieVideo
 
 /**
- * Trejler(i) filma pušteni u aplikaciji (YouTube IFrame plejer u WebView-u, biblioteka
- * android-youtube-player). Ako ima više videa, red čipova iznad plejera bira koji se prikazuje.
+ * The movie's trailer(s) played in the app (YouTube IFrame player in a WebView, via the
+ * android-youtube-player library). With several videos, a row of chips above the player picks one.
  *
- * - Video se samo "cue"-uje (ne pušta sam) - ne troši podatke dok korisnik ne pritisne play.
- * - Fullscreen: biblioteka nam preda gotov fullscreen View, mi ga dodamo preko celog ekrana u ISTI
- *   prozor (videti FullscreenPlayerOverlay) i prebacimo aktivnost u landscape (MainActivity ima
- *   configChanges za orientation, pa se aktivnost ne kreira ponovo i plejer preživljava rotaciju).
- * - Neki studiji zabranjuju embed (ili plejer iz drugog razloga ne može da pusti video) - tada se
- *   umesto plejera prikazuje "Otvori na YouTube-u".
+ * - The video is only cued (does not autoplay), so no data is used until the user presses play.
+ * - Fullscreen: the library hands over a ready fullscreen View, which is added over the whole screen
+ *   in the SAME window (see FullscreenPlayerOverlay) and the activity switches to landscape
+ *   (MainActivity handles orientation configChanges, so the activity and the player survive rotation).
+ * - Some studios forbid embedding (or the player cannot play the video for another reason); then
+ *   "Open on YouTube" is shown instead of the player.
  */
 @Composable
 fun YouTubeTrailerPlayer(
@@ -76,7 +76,7 @@ fun YouTubeTrailerPlayer(
 
     var selectedIndex by remember(videos) { mutableIntStateOf(0) }
     val selected = videos[selectedIndex.coerceIn(videos.indices)]
-    // Greška se pamti po video ključu - drugi trejler istog filma možda može da se pusti.
+    // Failures are remembered per video key - another trailer of the same movie may still play.
     var failedKeys by remember(videos) { mutableStateOf(emptySet<String>()) }
     val context = LocalContext.current
 
@@ -140,10 +140,10 @@ private fun EmbeddedYouTubePlayer(videoKey: String, onError: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Obični MutableState držači (ne `by` delegati) - pišu ih listener-i View-a iz anonimnih klasa.
+    // Plain MutableState holders (not `by` delegates): the View's listeners write them from anonymous classes.
     val playerState = remember { mutableStateOf<YouTubePlayer?>(null) }
     val fullscreenState = remember { mutableStateOf<Pair<View, () -> Unit>?>(null) }
-    // Listener-i su registrovani jednom (pri kreiranju View-a), a moraju da vide aktuelni ključ/callback.
+    // Listeners are registered once (when the View is created) but must see the current key/callback.
     val currentKey by rememberUpdatedState(videoKey)
     val currentOnError by rememberUpdatedState(onError)
 
@@ -176,7 +176,7 @@ private fun EmbeddedYouTubePlayer(videoKey: String, onError: () -> Unit) {
         }
     }
 
-    // Promena izabranog trejlera posle prvog učitavanja (prvi ključ cue-uje onReady).
+    // Switching the selected trailer after the first load (the first key is cued in onReady).
     LaunchedEffect(videoKey) {
         playerState.value?.cueVideo(videoKey, 0f)
     }
@@ -191,12 +191,10 @@ private fun EmbeddedYouTubePlayer(videoKey: String, onError: () -> Unit) {
 
     AndroidView(factory = { playerView }, modifier = Modifier.fillMaxSize())
 
-    // Dok traje fullscreen, "zakačimo" ovu stavku LazyColumn-a (Movie Detail ekran). Bez ovoga je
-    // ekran posle rotacije u landscape (visina ~400dp) prenizak, trejler ispadne iz vidljivog dela
-    // liste, LazyColumn ga izbaci iz kompozicije -> onDispose oslobodi plejer i fullscreen se
-    // ugasi (potvrđeno logom: onDispose ~100ms posle onConfigurationChanged u landscape).
-    // Mora biti PRE FullscreenPlayerOverlay-a ispod - efekti se izvršavaju redom, pa je stavka
-    // zakačena pre nego što overlay zatraži promenu orijentacije.
+    // While in fullscreen, pin this LazyColumn item (Movie Detail). Otherwise, after rotating to
+    // landscape (height ~400dp) the trailer scrolls out of view, LazyColumn disposes it, onDispose
+    // releases the player and fullscreen ends. Must come BEFORE FullscreenPlayerOverlay below:
+    // effects run in order, so the item is pinned before the overlay requests the orientation change.
     val pinnableContainer = LocalPinnableContainer.current
     val isFullscreen = fullscreenState.value != null
     DisposableEffect(isFullscreen, pinnableContainer) {
@@ -210,18 +208,18 @@ private fun EmbeddedYouTubePlayer(videoKey: String, onError: () -> Unit) {
 }
 
 /**
- * Fullscreen trejler: View koji je dala biblioteka dodajemo direktno u decor view ISTOG prozora
- * aktivnosti, preko svega, u landscape-u i bez sistemskih traka.
+ * Fullscreen trailer: the View provided by the library is added directly to the decor view of the
+ * SAME activity window, above everything, in landscape and without system bars.
  *
- * NAMERNO ne Dialog (prva verzija): Dialog je zaseban prozor, a video površina WebView-a je vezana
- * za prozor u kom je nastala - premeštanje u drugi prozor ju je uništavalo i plejer se gasio čim se
- * uđe u fullscreen. Isti pristup (isti prozor) koristi i zvanični primer biblioteke.
+ * Deliberately not a Dialog: a Dialog is a separate window, and the WebView's video surface is tied
+ * to the window it was created in - moving it destroyed the surface and playback stopped on entering
+ * fullscreen. The library's official sample uses the same approach.
  */
 @Composable
 private fun FullscreenPlayerOverlay(fullscreenView: View, onExit: () -> Unit) {
     val activity = LocalContext.current.findActivity() ?: return
 
-    // Sistemsko "nazad" izlazi iz fullscreen-a umesto da napusti ekran filma.
+    // System "back" leaves fullscreen instead of leaving the movie screen.
     BackHandler(onBack = onExit)
 
     DisposableEffect(fullscreenView, activity) {
@@ -247,6 +245,7 @@ private fun FullscreenPlayerOverlay(fullscreenView: View, onExit: () -> Unit) {
     }
 }
 
+/** Opens the video in the YouTube app (or the browser). */
 fun Context.openYouTube(videoKey: String) {
     startActivity(Intent(Intent.ACTION_VIEW, "https://www.youtube.com/watch?v=$videoKey".toUri()))
 }

@@ -53,11 +53,9 @@ import dev.milinko.movielens.ui.components.MovieListRow
 import dev.milinko.movielens.ui.components.RemoteAvatarImage
 
 /**
- * Faza 7 redizajna (MOVIELENS_DESIGN_PLAN.md 2.8). Header (avatar/username/broj filmova) unifikovan
- * sa sopstvenim Profile ekranom - isti obrubljeni krug avatara (accentPrimary border, 80dp). CTA
- * dugme "Predlozi za zajedničko gledanje" premešteno iz skrolujućeg sadržaja u fiksni
- * `Scaffold.bottomBar` (uvek vidljivo, ne zahteva skrol do dna liste odgledanih filmova) i sad je
- * `AppButton` umesto sirovog `Button`. Odgledana lista koristi deljeni `MovieListRow`.
+ * Another user's profile: avatar, name, status line and either the watched movies (accepted friend)
+ * or a limited preview with shared genres (not a friend yet). The friendship action (add / cancel /
+ * accept / reject) or the "Movie Night" button sits in a fixed bottom bar, always visible.
  */
 @Composable
 fun FriendProfileScreen(
@@ -67,10 +65,9 @@ fun FriendProfileScreen(
     onNavigateToMovieNight: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    // Bugfix (2. septembar 2026) - potvrda pre odbijanja, isti obrazac/stringovi kao
-    // ProfileScreen (PendingRequestCard) - dosledna UX na oba mesta gde se zahtev može odbiti.
+    // Confirmation before rejecting, same dialog and strings as PendingRequestCard on Profile.
     var showRejectConfirm by remember { mutableStateOf(false) }
-    // Otkazivanje poslatog zahteva - ista potvrda kao na Profile ekranu.
+    // Cancelling a sent request - same confirmation as on the Profile screen.
     var showCancelConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -99,17 +96,13 @@ fun FriendProfileScreen(
             }
         },
         bottomBar = {
-            // Bugfix (E1.5, 2. septembar 2026) - RANIJE se do ovog ekrana moglo stići SAMO za već
-            // prihvaćene prijatelje, pa je "Movie Night" CTA bilo jedino moguće dugme ovde. Sad se
-            // ekran otvara i za NEprihvaćene (ograničen preview) - dugme zavisi od
-            // `profile.friendshipStatus`, isti stringovi/varijante kao FriendSearchSection na
-            // Profile ekranu (dosledan jezik kroz app).
+            // The screen opens for non-friends too (limited preview), so the button depends on
+            // `profile.friendshipStatus`, with the same strings/variants as FriendSearchSection.
             val profile = uiState.profile
             if (profile != null && !uiState.isSelf) {
                 Box(modifier = Modifier.padding(16.dp)) {
-                    // Bugfix (2. septembar 2026) - `friendshipStatus` je nullable jer ga Gson može
-                    // vratiti kao null iz starog keš zapisa (videti komentar u UserModels.kt) - String
-                    // `when` bez ovog fallback-a ruši aplikaciju (poziva hashCode() na null).
+                    // friendshipStatus can be null from an old cache entry (see UserModels.kt); a
+                    // String `when` without this fallback would crash (hashCode() on null).
                     when (profile.friendshipStatus ?: "NONE") {
                         "ACCEPTED" -> AppButton(
                             text = stringResource(R.string.friend_profile_movie_night_cta),
@@ -127,14 +120,8 @@ fun FriendProfileScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Bugfix (2. septembar 2026, korisnički zahtev - "dugme 'Odgovori
-                            // ispod' pokazuje nadole ali ispod nema ničega, uzelo je vremena dok
-                            // se to pojavi, a pre toga je pisalo 'otkaži zahtev' sto uopste nije
-                            // dobro ponasanje") - RANIJE je ovde stajalo samo onemogućeno dugme
-                            // koje je upućivalo na prihvatanje/odbijanje "ispod" (taj UI je
-                            // postojao SAMO na Profile ekranu, ne i ovde) - sad ekran sam ume da
-                            // prihvati/odbije. Odbijanje traži potvrdu (isti dijalog/stringovi
-                            // kao PendingRequestCard na Profile ekranu).
+                            // An incoming request can be accepted or rejected right here; rejecting
+                            // asks for confirmation (same dialog/strings as PendingRequestCard).
                             AppButton(
                                 text = stringResource(R.string.profile_reject_content_description),
                                 onClick = { showRejectConfirm = true },
@@ -183,8 +170,8 @@ fun FriendProfileScreen(
                 }
                 uiState.profile != null -> {
                     val profile = uiState.profile!!
-                    // E1.5 dorada (2. septembar 2026) - "zaključan" prikaz (bez liste odgledanih
-                    // filmova) za svakoga ko NIJE prihvaćen prijatelj, videti FriendsRouting.kt.
+                    // "Locked" view (no watched list) for anyone who is not an accepted friend
+                    // (see FriendsRouting.kt on the backend).
                     val isLocked = !uiState.isSelf && profile.friendshipStatus != "ACCEPTED"
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         item {
@@ -220,9 +207,8 @@ fun FriendProfileScreen(
                                 }
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(profile.username, style = MaterialTheme.typography.titleLarge)
-                                // E1.5 dorada - dok nije prihvaćen prijatelj, umesto broja odgledanih
-                                // filmova (koji se namerno ne otkriva, videti isLocked) prikazuje se
-                                // email, ako backend ima da ga vrati.
+                                // Locked: the number of watched movies is not revealed; the email is
+                                // shown only if the backend returns it (it does not for non-friends).
                                 if (isLocked) {
                                     if (!profile.email.isNullOrBlank()) {
                                         Text(
@@ -238,8 +224,8 @@ fun FriendProfileScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                // Faza 7 dorada - prijateljev "mini status", isti izvor podataka
-                                // kao sopstveni profil (UserProfile.bio / UserDao.updateProfile).
+                                // The friend's status line, same data as one's own profile
+                                // (UserProfile.bio).
                                 if (!profile.bio.isNullOrBlank()) {
                                     Text(
                                         text = profile.bio,
@@ -251,9 +237,9 @@ fun FriendProfileScreen(
                                             .padding(top = 8.dp, start = 24.dp, end = 24.dp)
                                     )
                                 }
-                                // E1.5 dorada - presek žanrovskih interesovanja umesto liste filmova
-                                // dok prijateljstvo nije prihvaćeno (isti compareTasteProfiles kao
-                                // Profile → Prijatelji lista, videti FriendsRouting.kt na backendu).
+                                // Shared genre interests instead of the movie list until the friendship
+                                // is accepted (same compareTasteProfiles as the Friends list, see
+                                // FriendsRouting.kt on the backend).
                                 if (isLocked && !profile.commonGenres.isNullOrEmpty()) {
                                     Spacer(modifier = Modifier.height(12.dp))
                                     Text(
@@ -299,7 +285,7 @@ fun FriendProfileScreen(
                             }
                         }
 
-                        // Prostor na dnu da poslednji red ne bude sakriven ispod fiksnog CTA dugmeta.
+                    // Space at the bottom so the last row is not hidden under the fixed button.
                         if (!uiState.isSelf) {
                             item { Spacer(modifier = Modifier.height(72.dp)) }
                         }
@@ -331,8 +317,7 @@ fun FriendProfileScreen(
         )
     }
 
-    // Bugfix (2. septembar 2026) - potvrda pre odbijanja, isti stringovi kao PendingRequestCard
-    // na Profile ekranu (dosledna UX na oba mesta gde se zahtev može odbiti).
+    // Confirmation before rejecting (same strings as PendingRequestCard on Profile).
     if (showRejectConfirm) {
         val username = uiState.profile?.username?.takeIf { it.isNotBlank() } ?: stringResource(R.string.profile_default_username)
         AlertDialog(
@@ -362,8 +347,7 @@ private fun WatchedMovieRow(movie: FriendProfileMovie, onClick: () -> Unit) {
         title = movie.title,
         posterPath = movie.posterPath,
         ratingText = movie.rating?.let { "$it/10" },
-        // E2.2 dorada (3. septembar 2026) - stari privatan review prikaz uklonjen (zamenjen javnim
-        // komentarima na Movie Detail ekranu) - "bez ocene" napomena ostaje kad je relevantna.
+        // "No rating" note when the friend watched the movie without rating it.
         description = if (movie.rating == null) stringResource(R.string.friend_profile_no_rating) else null,
         onClick = onClick,
         modifier = Modifier.padding(horizontal = 16.dp)

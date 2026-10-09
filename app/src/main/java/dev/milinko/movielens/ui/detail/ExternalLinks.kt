@@ -89,8 +89,8 @@ import dev.milinko.movielens.ui.components.SectionHeader
 import dev.milinko.movielens.ui.components.YouTubeTrailerPlayer
 
 /**
- * "Istraži više" linkovi: IMDb dugme (ako TMDB zna IMDb ID filma), inače TMDB dugme; uz to uvek i
- * manji "Više na TMDB-u" link. Otvaraju se u browser-u / IMDb aplikaciji, isto kao booking link.
+ * "Explore more" links: an IMDb button (if TMDB knows the movie's IMDb id), otherwise a TMDB button,
+ * plus a smaller "More on TMDB" link. They open in the browser / IMDb app, like the booking link.
  */
 @Composable
 internal fun ExternalLinksRow(tmdbId: Int, imdbId: String?) {
@@ -129,6 +129,7 @@ internal fun ExternalLinksRow(tmdbId: Int, imdbId: String?) {
     }
 }
 
+/** A clickable chip with a colored source badge (IMDb/TMDB). */
 @Composable
 internal fun ExternalLinkChip(label: String, badgeColor: Color, textColor: Color, onClick: () -> Unit) {
     Row(
@@ -151,9 +152,9 @@ internal fun ExternalLinkChip(label: String, badgeColor: Color, textColor: Color
 }
 
 /**
- * Mali bedž za dopunsku ocenu (IMDb/Rotten Tomatoes) sa OMDb-a, prikazan pored TMDB ocene na
- * Movie Detail ekranu (3. septembar 2026). Namerno prost tekstualni bedž umesto pravih logoa
- * (nema licenciranih ikonica u projektu) - boja pozadine dovoljno jasno signalizira izvor.
+ * Small badge for an extra rating (IMDb / Rotten Tomatoes from OMDb) next to the TMDB rating. Plain
+ * text instead of logos (there are no licensed icons in the project); the background color signals
+ * the source.
  */
 @Composable
 internal fun ExternalRatingBadge(label: String, value: String, badgeColor: Color, textColor: Color) {

@@ -112,6 +112,11 @@ import java.io.File
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
+/**
+ * Search: text search over the whole TMDB catalog, image search (Gemini vision, signed-in users
+ * only) and the "In cinemas" mode with semantic search over the current programme. The input bar is
+ * docked at the bottom, reachable with a thumb.
+ */
 @Composable
 fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel(),
@@ -167,9 +172,7 @@ fun SearchScreen(
             cameraImageUri = uri
             cameraLauncher.launch(uri)
         } catch (e: Exception) {
-            // Bugfix (16. avgust 2026) - ranije se sirova poruka izuzetka (e.message) ubacivala
-            // direktno u Toast (npr. FileProvider/IO greške), sad fiksna razumljiva poruka bez
-            // tehničkog teksta - detalj ostaje samo u Logcat-u za debug.
+            // A fixed, readable message instead of the raw exception text; details stay in Logcat.
             Log.e("SearchScreen", "Error opening camera", e)
             Toast.makeText(context, context.getString(R.string.search_camera_error), Toast.LENGTH_LONG).show()
         }
@@ -186,9 +189,8 @@ fun SearchScreen(
             if (granted) {
                 openCamera()
             } else {
-                // Ranije se odbijena dozvola tiho ignorisala - posle "ne pitaj ponovo" dugme je
-                // izgledalo pokvareno. Kad sistem više neće pitati (rationale = false posle
-                // odbijanja), nudimo podešavanja; inače kratko objašnjenje + alternativa (galerija).
+                // When the system will no longer ask (rationale = false after a denial), offer the
+                // app settings; otherwise a short explanation plus the alternative (gallery).
                 val permanentlyDenied = activity != null &&
                     !ActivityCompat.shouldShowRequestPermissionRationale(activity, android.Manifest.permission.CAMERA)
                 if (permanentlyDenied) {
@@ -200,7 +202,7 @@ fun SearchScreen(
         }
     )
 
-    // "Pokušaj ponovo" na kartici greške - ponavlja ono što je korisnik poslednje pokrenuo.
+    // "Try again" on the error card - repeats whatever the user ran last.
     val retryLastSearch: () -> Unit = {
         if (uiState.selectedImageUri != null) {
             requireScanAuthOrProceed { viewModel.detectImage() }
@@ -270,14 +272,11 @@ fun SearchScreen(
 
     Scaffold(
         bottomBar = {
-            // Faza 6 redizajna (videti MOVIELENS_DESIGN_PLAN.md 2.3): polje za pretragu ide na
-            // dno, ne na vrh - dohvatljivije palcem, prati tastaturu naviše kad je fokusirano.
-            // imePadding() ide na CEO donji klaster (pregled slike + input bar + app-wide nav) jer
-            // Scaffold ima samo jedan bottomBar slot - ceo klaster se diže zajedno iznad tastature,
-            // ne samo input bar (manja, prihvatljiva razlika od "samo input bar" iz dokumenta).
+            // The search field is at the bottom (easier to reach with a thumb). imePadding() is on
+            // the WHOLE bottom cluster (image preview + input bar + app navigation), because
+            // Scaffold has a single bottomBar slot, so the cluster rises above the keyboard
+            // together.
             Column(modifier = Modifier.imePadding()) {
-                // Faza B bugfix - `?.let` umesto `if (!= null) { ...!! }`, isti efekat bez
-                // non-null assertion-a.
                 uiState.selectedImageUri?.let { imageUri ->
                     SelectedImagePreviewRow(
                         imageUri = imageUri,
@@ -288,8 +287,8 @@ fun SearchScreen(
                 SearchInputBar(
                     query = uiState.searchQuery,
                     onQueryChange = { viewModel.setSearchQuery(it) },
-                    // Faza D - spinner u polju treba da se pojavi i tokom semantičke pretrage, ne
-                    // samo tokom obične (odvojena polja u SearchUiState, videti SearchViewModel).
+                    // The spinner in the field also shows during the semantic search (separate
+                    // flags in SearchUiState, see SearchViewModel).
                     isSearching = if (uiState.isCinemaMode) uiState.isSearchingCinemas else uiState.isSearching,
                     hasSelectedImage = uiState.selectedImageUri != null,
                     isAnalyzingImage = uiState.isAnalyzingImage,
@@ -307,8 +306,8 @@ fun SearchScreen(
                                 showCinemaModeImageDialog = true
                                 false
                             }
-                            // Prijava PRE biranja slike - ranije se saznavalo tek na slanju, posle
-                            // biranja/slikanja (4+ dodira uzalud).
+                            // Sign-in is required BEFORE picking an image, not discovered only when
+                            // sending.
                             !authViewModel.isAlreadySignedIn() -> {
                                 showScanSignInDialog = true
                                 false
@@ -345,14 +344,11 @@ fun SearchScreen(
             }
         }
     ) { paddingValues ->
-        // Dorada (25. avgust 2026, korisnički zahtev "moze da se predje sa pretrage svih filmova na
-        // samo bioskopske na svajp") - HorizontalPager ispod (isti obrazac kao Library/Profile
-        // tabovi) nosi 2 stranice, svajp menja stranicu KAO I klik na SearchModeToggle - obe akcije
-        // moraju da drže i pager i pravi ViewModel state (uiState.isCinemaMode) u sinhronizaciji, jer
-        // mod nije čisto vizuelan (menja debounce ponašanje, gasi pretragu slikom, itd. - videti
-        // SearchViewModel). Dvosmerna sinhronizacija ispod je bezbedna od petlje: setCinemaMode ima
-        // rani return kad je vrednost već ista, a animateScrollToPage je no-op kad je pager već na
-        // ciljnoj stranici.
+        // Two pager pages (text search / in cinemas). The pager and the real ViewModel state
+        // (uiState.isCinemaMode) are kept in sync in both directions, because the mode is not just
+        // visual (it changes the debounce, disables image search...). No loop: setCinemaMode
+        // returns early when the value is unchanged and animateScrollToPage is a no-op on the
+        // target page.
         val pagerState = rememberPagerState(pageCount = { 2 })
         val pagerScope = rememberCoroutineScope()
 
@@ -389,9 +385,8 @@ fun SearchScreen(
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-                // Faza D (17. avgust 2026, predlog mentora Marka) - toggle između obične tekstualne
-                // pretrage (ceo TMDB katalog) i semantičke pretrage svedene na filmove trenutno na
-                // repertoaru bioskopa (videti MOVIELENS_DESIGN_PLAN.md Faza D za obrazloženje obima).
+                // Switches between the text search (whole TMDB catalog) and the semantic search
+                // limited to the movies currently in cinemas.
                 SearchModeToggle(
                     isCinemaMode = uiState.isCinemaMode,
                     onModeChange = { target ->
@@ -399,17 +394,11 @@ fun SearchScreen(
                         pagerScope.launch { pagerState.animateScrollToPage(if (target) 1 else 0) }
                     }
                 )
-                // Faza D dorada (korisnički zahtev "da bih pogledao razliku u radu", pa naknadno "da
-                // ne bude isto veliko kao ova gore podela") - prekidač za embedding provajder,
-                // vidljiv SAMO u "U bioskopima" modu (nema smisla van semantičke pretrage). Namerno
-                // sitniji/sekundaran u odnosu na SearchModeToggle iznad - videti EmbeddingEngineToggle.
-                //
-                // Dorada (1. septembar 2026, priprema za testere) - dodat i
-                // DevSettings.SHOW_LOCAL_EMBEDDING_ENGINE_OPTION uslov. Render (difoltni backend za
-                // testere) namerno drži lokalni MiniLM indeks isključenim (ENABLE_LOCAL_EMBEDDING),
-                // pa bi "Lokalno" opcija uvek vraćala praznu listu - nema smisla da je testeri uopšte
-                // vide. uiState.useLocalEmbedding je već `false` po defaultu (SearchViewModel), pa
-                // sakrivanje ovog prekidača samo znači da pretraga uvek ide preko Gemini-ja.
+                // Embedding provider switch, only in the "In cinemas" mode and only when
+                // DevSettings.SHOW_LOCAL_EMBEDDING_ENGINE_OPTION is on (Render keeps the local
+                // MiniLM index disabled, so "Local" would always return nothing there). Hidden
+                // means the search always uses Gemini (uiState.useLocalEmbedding defaults to
+                // false).
                 if (uiState.isCinemaMode && DevSettings.SHOW_LOCAL_EMBEDDING_ENGINE_OPTION) {
                     Spacer(modifier = Modifier.height(8.dp))
                     EmbeddingEngineToggle(
@@ -417,9 +406,9 @@ fun SearchScreen(
                         onChange = { viewModel.setUseLocalEmbedding(it) }
                     )
                 }
-                // E2.1/E2.4 dorada (2. septembar 2026) - stalno vidljivo objašnjenje kako "U
-                // bioskopima" mod radi (dva sloja pretrage - videti SearchViewModel), ne samo u
-                // praznom stanju pre prve pretrage (koje nestaje čim korisnik počne da kuca).
+                // An always visible explanation of how the "In cinemas" mode works (two search
+                // layers, see SearchViewModel), not only in the empty state before the first
+                // search.
                 if (uiState.isCinemaMode) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -431,11 +420,9 @@ fun SearchScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (uiState.error != null) {
-                    // Dorada (2. septembar 2026, korisnički zahtev - "poruka o preopterećenju me
-                    // para oči, deluje kao greška koju sam ja skrivio") - "meke" greške (Gemini
-                    // trenutno zauzet i slično - videti TransientServiceException.kt) dobijaju
-                    // smireniji karton (bez crvene boje/reči "Greška", info ikonica umesto
-                    // upozorenja) - jasno vizuelno drugačije od pravih grešaka ispod.
+                    // "Soft" errors (e.g. Gemini temporarily busy, see
+                    // TransientServiceException.kt) get a calmer card (no red, no "Error", an info
+                    // icon) - clearly different from real errors below.
                     if (uiState.isSoftError) {
                         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                             Row(
@@ -468,7 +455,6 @@ fun SearchScreen(
                             }
                         }
                     } else {
-                        // Faza B bugfix - `?:` umesto `!!` (isti razlog kao MovieDetailScreen).
                         ErrorCard(
                             message = uiState.error ?: stringResource(R.string.error_generic_title),
                             onRetry = retryLastSearch
@@ -480,9 +466,8 @@ fun SearchScreen(
 
             HorizontalPager(
                 state = pagerState,
-                // UX dorada (oktobar 2026): mod se menja SAMO preko SearchModeToggle-a. Svajp je
-                // ranije menjao mod usput (npr. pri skrolovanju rezultata), brišući rezultate i
-                // izabranu sliku bez upozorenja.
+                // The mode changes ONLY via SearchModeToggle; swiping used to switch it by accident
+                // (e.g. while scrolling results), clearing the results and the picked image.
                 userScrollEnabled = false,
                 modifier = Modifier
                     .weight(1f)

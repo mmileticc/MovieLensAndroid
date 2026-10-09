@@ -10,11 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 
-/**
- * Naslov sekcije (npr. "Predloženo za tebe", "U bioskopima sada") sa opcionom akcijom ("Vidi sve")
- * na desnoj strani. Faza 6 redizajna, videti MOVIELENS_DESIGN_PLAN.md 1.4. Tekst se prosleđuje sa
- * poziva - ne sadrži sopstveni hardkodovan string.
- */
+/** Section title (e.g. "Suggested for you") with an optional action on the right ("See all"). */
 @Composable
 fun SectionHeader(
     title: String,

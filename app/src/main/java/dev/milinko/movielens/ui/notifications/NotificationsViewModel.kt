@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** State of the notification history (and the unread count for the Home bell). */
 data class NotificationsUiState(
     val items: List<NotificationItem> = emptyList(),
     val unreadCount: Int = 0,
@@ -23,8 +24,9 @@ data class NotificationsUiState(
 )
 
 /**
- * Istorija obaveštenja (sve što je stiglo i kao push: podeljeni filmovi, zahtevi, lajkovi, filmovi
- * sa liste u bioskopu). Koristi je i zvonce na Home-u (samo [NotificationsUiState.unreadCount]).
+ * Notification history (everything that also arrived as a push: shared movies, friend requests,
+ * likes, watchlist movies in cinemas). The bell on Home uses it too (only
+ * [NotificationsUiState.unreadCount]).
  */
 @HiltViewModel
 class NotificationsViewModel @Inject constructor(
@@ -35,7 +37,7 @@ class NotificationsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(NotificationsUiState())
     val uiState: StateFlow<NotificationsUiState> = _uiState.asStateFlow()
 
-    /** @param markRead true na ekranu Obaveštenja: posle prikaza se sve označava kao pročitano. */
+    /** @param markRead true on the Notifications screen: after loading, everything is marked as read. */
     fun load(markRead: Boolean = false) {
         val userId = sessionManager.getUserId()
         if (userId == null) {
@@ -51,7 +53,8 @@ class NotificationsViewModel @Inject constructor(
                         unreadCount = items.count { !it.isRead },
                         isLoading = false
                     )
-                    // Stavke na ekranu ostaju istaknute kao nove dok je korisnik tu; samo brojač se nuluje.
+                    // Items on the screen stay highlighted as new while the user is there; only the
+                    // counter is reset.
                     if (markRead && items.any { !it.isRead }) {
                         userRepository.markNotificationsRead(userId).onSuccess {
                             _uiState.value = _uiState.value.copy(unreadCount = 0)

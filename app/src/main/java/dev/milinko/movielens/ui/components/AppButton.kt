@@ -14,16 +14,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 
-/**
- * Varijante dugmeta iz MOVIELENS_DESIGN_PLAN.md 1.4 - Primary (puna crvena, glavna akcija),
- * Secondary (obrisano dugme sa outline, sporedna akcija). Faza 6 redizajna.
- *
- * `leadingIcon` dodat u Fazi 5 (Movie Detail) - Watchlist/Odgledano dugmad menjaju i ikonicu i
- * tekst zavisno od stanja (npr. FavoriteBorder->Favorite), pa je opcioni slot neophodan da bi
- * AppButton uopšte mogao da ih zameni umesto ad-hoc Button/OutlinedButton poziva.
- */
+/** Button variants: Primary (filled red, main action) and Secondary (outlined, secondary action). */
 enum class AppButtonVariant { Primary, Secondary }
 
+/**
+ * The app's standard button. The optional `leadingIcon` lets stateful buttons (e.g. Watchlist /
+ * Watched) change both the icon and the text.
+ */
 @Composable
 fun AppButton(
     text: String,

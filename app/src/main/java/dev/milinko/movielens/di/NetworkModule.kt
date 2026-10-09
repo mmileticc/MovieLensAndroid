@@ -21,6 +21,10 @@ import retrofit2.converter.scalars.ScalarsConverterFactory
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
+/**
+ * Provides OkHttp, Retrofit and the API interfaces: the main client (auth header, token refresh,
+ * dynamic base URL, Accept-Language) and a separate bare client used only to refresh the JWT.
+ */
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
@@ -32,17 +36,16 @@ object NetworkModule {
         authInterceptor: AuthInterceptor,
         tokenAuthenticator: TokenAuthenticator
     ): OkHttpClient {
-        // BODY loguje ceo request/response (uključujući vision/image pozive) na svaki poziv -
-        // primetan overhead (Logcat I/O + serijalizacija) čak i na debug buildu. Ostaje BODY samo
-        // u debugu radi lakšeg razvoja, u release-u se logging potpuno gasi.
+        // BODY logs whole requests and responses (including image uploads), which is noticeable
+        // overhead, so it is used only in debug builds; release builds do not log at all.
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
         }
         return OkHttpClient.Builder()
             .addInterceptor(dynamicBaseUrlInterceptor)
             .addInterceptor(authInterceptor)
-            // Jezik aplikacije - backend po njemu vraća poruke grešaka i tekstove (npr. razlog
-            // Movie Night predloga) na srpskom ili engleskom (videti Localization.kt na backendu).
+            // The app language; the backend uses it to return error messages and texts (e.g. the
+            // Movie Night reasons) in Serbian or English (see Localization.kt on the backend).
             .addInterceptor { chain ->
                 chain.proceed(
                     chain.request().newBuilder()
@@ -51,9 +54,8 @@ object NetworkModule {
                 )
             }
             .addInterceptor(loggingInterceptor)
-            // Backend JWT traje 24h - kad istekne, ovo automatski osveži token (preko Firebase-a) i
-            // ponovi zahtev umesto da zaštićeni pozivi tiho puknu 401 dok se korisnik ručno ne
-            // odjavi/prijavi. Videti TokenAuthenticator.kt.
+            // The backend JWT lasts 24h; when it expires this refreshes it via Firebase and retries
+            // the request instead of failing with 401 (see TokenAuthenticator.kt).
             .authenticator(tokenAuthenticator)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
@@ -67,16 +69,16 @@ object NetworkModule {
         return Retrofit.Builder()
             .baseUrl(urlStorage.getBaseUrl())
             .client(okHttpClient)
-            .addConverterFactory(ScalarsConverterFactory.create()) // Za običan tekst
+            .addConverterFactory(ScalarsConverterFactory.create()) // For plain-text responses
             .addConverterFactory(GsonConverterFactory.create())
             .build()
     }
 
-    // --- Odvojen, "goli" klijent SAMO za TokenAuthenticator (osvežavanje JWT-a) ---
-    // Mora biti bez AuthInterceptor-a (nepotreban - exchangeFirebaseToken ne treba naš JWT) i bez
-    // TokenAuthenticator-a (kritično - inače bi 401 na refresh pozivu izazvao beskonačnu petlju
-    // koja opet zove sebe). Ako bismo ovde ubrizgali glavni OkHttpClient/Retrofit, dobili bismo
-    // Dagger ciklus (OkHttpClient -> TokenAuthenticator -> AuthApi -> Retrofit -> OkHttpClient).
+    // --- Separate bare client used ONLY by TokenAuthenticator (JWT refresh) ---
+    // It must not have AuthInterceptor (the exchange does not need our JWT) or TokenAuthenticator
+    // (a 401 on the refresh call would loop forever). Injecting the main OkHttpClient/Retrofit here
+    // would also create a Dagger cycle (OkHttpClient -> TokenAuthenticator -> AuthApi -> Retrofit
+    // -> OkHttpClient).
 
     @Provides
     @Singleton

@@ -5,17 +5,12 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 
 /**
- * Dekodiranje `data:image/...;base64,...` URI-ja (Uredi profil avatar, videti
- * `util/AvatarImage.kt` za kompresiju pri slanju) u `Bitmap` za prikaz.
- *
- * NAPOMENA: Coil 2.x nema ugrađenu podršku za `data:` scheme, a pisanje custom `Fetcher`-a bi
- * zahtevalo Coil-ove interne klase (`ImageSource`) čiji tačan konstruktor u ovoj verziji nije bilo
- * moguće pouzdano potvrditi bez pokretanja kompajlera protiv stvarne biblioteke - rizik od greške
- * koja bi pukla ceo build. Umesto toga, `ui/components/RemoteAvatarImage.kt` koristi ovu funkciju
- * da dekodira data URI-je direktno u Bitmap, mimoilazeći Coil samo za taj slučaj (obični https://
- * avatari i dalje idu kroz AsyncImage/Coil kao i pre).
+ * Decodes a `data:image/...;base64,...` URI into a Bitmap. Coil 2 cannot load `data:` URIs, so
+ * RemoteAvatarImage uses this for avatars that are still data URIs (e.g. a freshly picked picture
+ * shown before the upload finishes); regular URLs go through Coil.
  */
 object DataUriImage {
+    /** The decoded bitmap, or null if the URI is not valid base64 image data. */
     fun decode(dataUri: String): Bitmap? {
         return try {
             val base64 = dataUri.substringAfter(',', missingDelimiterValue = "")

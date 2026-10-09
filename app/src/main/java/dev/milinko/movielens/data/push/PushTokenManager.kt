@@ -14,8 +14,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Povezuje FCM token ovog uređaja sa prijavljenim nalogom na backendu. Sve ide u pozadini i tiho:
- * bez registrovanog tokena aplikacija radi normalno, samo ne stižu push obaveštenja.
+ * Links this device's FCM token to the signed-in account on the backend. Everything runs silently
+ * in the background: without a registered token the app works normally, only pushes do not arrive.
  */
 @Singleton
 class PushTokenManager @Inject constructor(
@@ -24,7 +24,7 @@ class PushTokenManager @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** Posle prijave, pri pokretanju aplikacije i kad FCM izda novi token. */
+    /** Registers the token: after sign-in, on app start and when FCM issues a new token. */
     fun syncAsync(knownToken: String? = null) {
         val userId = sessionManager.getUserId() ?: return
         scope.launch {
@@ -36,8 +36,9 @@ class PushTokenManager @Inject constructor(
     }
 
     /**
-     * Pri odjavi. Sesija se briše odmah (korisnik ne čeka mrežu), pa se ovde prosleđuju userId i
-     * token odjavljenog naloga - AuthInterceptor ih posle brisanja sesije više ne bi imao.
+     * Unregisters the token on sign-out. The session is cleared immediately (the user does not wait
+     * for the network), so the signed-out account's userId and token are passed explicitly -
+     * AuthInterceptor no longer has them.
      */
     fun unregisterAsync(userId: String, appToken: String) {
         scope.launch {

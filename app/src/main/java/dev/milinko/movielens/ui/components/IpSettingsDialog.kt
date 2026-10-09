@@ -27,6 +27,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+/**
+ * Developer dialog (debug builds only) for choosing the backend URL and managing the saved URLs
+ * (see UrlStorage).
+ */
 @Composable
 fun SettingsDialog(
     currentUrl: String,

@@ -66,12 +66,10 @@ import dev.milinko.movielens.ui.components.SignInRequiredState
 import kotlinx.coroutines.launch
 
 /**
- * Faza 7 redizajna (MOVIELENS_DESIGN_PLAN.md 2.5). Tab indikator nasleđuje `colorScheme.primary`
- * od Faze 1 (Theme.kt) - nema custom indicator koda.
- *
- * UX dorada (oktobar 2026): zajednička traka filtera (naziv + žanrovi) iznad oba taba, sortiranje
- * po tabu (i "moja ocena N+" na Odgledano), "Poništi" snackbar za uklanjanje sa liste, potvrda za
- * izmenu ocene, i prikaz greške učitavanja sa "Pokušaj ponovo".
+ * Library: the "To watch" (watchlist) and "Watched" tabs. A shared filter bar (title + genres)
+ * above
+ * both tabs, sorting per tab (plus "my rating N+" on Watched), an "Undo" snackbar for removals,
+ * quick rating edits and a load error with "Try again".
  */
 @Composable
 fun LibraryScreen(
@@ -92,7 +90,8 @@ fun LibraryScreen(
         viewModel.loadLibrary()
     }
 
-    // Uklanjanje koje korisnik nije poništio izvršava se i kad napusti ekran pre isteka snackbar-a.
+    // A removal the user did not undo is also carried out when leaving the screen before the
+    // snackbar expires.
     DisposableEffect(Unit) {
         onDispose { viewModel.commitAllPendingRemovals() }
     }
@@ -101,7 +100,8 @@ fun LibraryScreen(
         viewModel.events.collect { event ->
             when (event) {
                 is LibraryEvent.WatchlistItemRemoved -> coroutineScope.launch {
-                    // Novi "Poništi" zatvara prethodni (koji se tada izvršava) umesto da čeka u redu.
+                    // A new "Undo" closes the previous one (which is then carried out) instead of
+                    // queueing.
                     snackbarHostState.currentSnackbarData?.dismiss()
                     val result = snackbarHostState.showSnackbar(
                         message = context.getString(R.string.library_removed_snackbar, event.title),
@@ -138,7 +138,8 @@ fun LibraryScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            // Custom Row umesto M3 TopAppBar - statusBarsPadding jer MainActivity zove enableEdgeToEdge().
+            // Custom Row instead of an M3 TopAppBar; statusBarsPadding because MainActivity calls
+            // enableEdgeToEdge().
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -193,7 +194,7 @@ fun LibraryScreen(
     }
 }
 
-/** Tabovi + filteri + liste (prikazuje se samo prijavljenom korisniku). */
+/** Tabs + filters + lists (shown only to a signed-in user). */
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.LibraryContent(
     uiState: LibraryUiState,
@@ -228,7 +229,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.LibraryContent(
                 )
             }
 
-            // Filteri tek kad lista ima šta da filtrira - na praznoj Biblioteci samo smetaju.
+            // Filters only when there is something to filter - on an empty Library they just get in
+            // the way.
             if (uiState.watchlistTotal + uiState.historyTotal > 0) {
                 BrowseFilterBar(
                     query = uiState.query,
@@ -308,7 +310,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.LibraryContent(
             }
 }
 
-/** Kad filteri ne pogađaju ništa (a lista sama nije prazna). */
+/** When the filters match nothing (while the list itself is not empty). */
 private fun androidx.compose.foundation.lazy.LazyListScope.emptyFilterResult(isEmpty: Boolean) {
     if (!isEmpty) return
     item {
@@ -321,8 +323,10 @@ private fun androidx.compose.foundation.lazy.LazyListScope.emptyFilterResult(isE
 }
 
 /**
- * Stanja jednog taba: spinner pri prvom učitavanju, prazna lista (sa "Pronađi filmove"), ili sadržaj.
- * Prazno stanje se ne prikazuje kad je lista prazna zbog greške - tada je iznad već ErrorCard.
+ * States of one tab: a spinner on the first load, an empty list (with "Find movies") or the
+ * content.
+ * The empty state is not shown when the list is empty because of an error - the ErrorCard is
+ * already shown above.
  */
 @Composable
 private fun LibraryTabContent(
@@ -392,7 +396,7 @@ private fun HistoryFilterRow(
         selected = sort,
         onSelect = onSortChange,
         leading = {
-            // "Moja ocena 7+ / 8+ / 9+" - brz filter za "nešto što sam stvarno voleo".
+            // "My rating 7+ / 8+ / 9+" - a quick filter for "things I really liked".
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(listOf(7, 8, 9)) { threshold ->
                     FilterChip(
@@ -406,7 +410,7 @@ private fun HistoryFilterRow(
     )
 }
 
-/** Red sa opcionim levim sadržajem i dugmetom za sortiranje (meni) desno. */
+/** A row with optional content on the left and a sort button (menu) on the right. */
 @Composable
 private fun <T> SortMenuRow(
     options: List<Pair<T, String>>,
@@ -449,7 +453,7 @@ private fun <T> SortMenuRow(
     }
 }
 
-/** "2024 · Komedija, Drama" - delovi koji nedostaju se preskaču. */
+/** "2024 · Comedy, Drama" - missing parts are skipped. */
 private fun metaLine(year: Int?, genres: List<dev.milinko.movielens.data.remote.movie.Genre>?): String? =
     listOfNotNull(
         year?.toString(),
@@ -485,8 +489,9 @@ private fun WatchlistItemRow(
 }
 
 /**
- * Olovka otvara/zatvara red od 10 zvezdica za brzu izmenu ocene, bez odlaska na Movie Detail -
- * sam `RatingStars` red se širi ISPOD reda (stateful UI ostaje u ekranu, ne u deljenoj komponenti).
+ * The pencil opens/closes a row of 10 stars for a quick rating edit without going to Movie Detail;
+ * the `RatingStars` row expands BELOW the item (the stateful UI stays in the screen, not in the
+ * shared component).
  */
 @Composable
 private fun HistoryItemRow(
@@ -518,8 +523,8 @@ private fun HistoryItemRow(
                             tint = if (isEditingRating) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    // Uklanjanje iz odgledanih (briše i ocenu) - sa "Poništi" snackbar-om, kao na
-                    // listi za gledanje. Ranije je bilo moguće samo sa detalja filma.
+                    // Remove from watched (also removes the rating), with an "Undo" snackbar like
+                    // the watchlist.
                     IconButton(onClick = onRemoveClick) {
                         Icon(
                             Icons.Default.Delete,

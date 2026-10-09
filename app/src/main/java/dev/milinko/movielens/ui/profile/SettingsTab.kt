@@ -101,7 +101,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Sadržaj "Podešavanja" stranice pagera - sopstveni LazyColumn (svaka stranica se skroluje nezavisno). */
+/** Content of the "Settings" page - its own LazyColumn (each page scrolls independently). */
 @Composable
 internal fun SettingsTabContent(
     uiState: ProfileUiState,
@@ -111,13 +111,8 @@ internal fun SettingsTabContent(
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
-            // Faza 7 dorada #4 (korisnička žalba: podaci profila su bili ispisani dvaput - jednom
-            // u read-only header-u, pa odmah ispod opet u "Uredi profil" formi sa istim poljima) -
-            // spojeno u JEDAN prikaz koji olovka-ikonica prebacuje između read-only i edit stanja
-            // (isti obrazac kao u većini appova), umesto stalno vidljive duplirane forme. Zamenjuje
-            // raniji par ProfileHeader/SessionIdentityHeader + EditProfileSection na ovom tabu -
-            // Prijatelji tab i dalje koristi plain ProfileHeader/SessionIdentityHeader (bez edit
-            // afinosti, videti FriendsTabContent).
+            // One header that the pencil icon switches between read-only and edit mode, instead of
+            // showing the profile data twice (header + an always visible edit form).
             EditableProfileHeader(
                 uiState = uiState,
                 sessionUser = sessionUser,
@@ -131,11 +126,6 @@ internal fun SettingsTabContent(
             }
         }
         item {
-            // Faza 2 bugfix (16. avgust 2026) - ranije ovaj ceo odeljak (uklj. "Verzija" i "Backend
-            // URL" kartice, ne samo "Tamna tema") NIKAD nije bio vidljiv, jer je bio uslovljen sa
-            // uiState.userSettings != null, a taj backend poziv nikad nije uspevao (backend nema
-            // /settings rutu). "Tamna tema" je sad čisto lokalno podešavanje pa uslov više nije
-            // potreban - odeljak se uvek prikazuje.
             SettingsSection(viewModel, onSignOut)
         }
         item {
@@ -145,10 +135,9 @@ internal fun SettingsTabContent(
 }
 
 /**
- * Izbor jezika aplikacije (oktobar 2026): Sistem (prati jezik telefona) / Srpski / English.
- * Promena se čuva u AppLocale i odmah primenjuje ponovnim kreiranjem aktivnosti. Nazivi jezika
- * su namerno uvek na svom jeziku ("Srpski", "English") - da ih korisnik prepozna i kad trenutni
- * jezik aplikacije ne razume.
+ * App language: System (follows the phone) / Srpski / English. Stored in AppLocale and applied
+ * immediately by recreating the activity. Language names are always in their own language
+ * ("Srpski", "English") so they are recognizable whatever the current app language is.
  */
 @Composable
 internal fun LanguageSetting() {
@@ -185,6 +174,10 @@ internal fun LanguageSetting() {
     }
 }
 
+/**
+ * Settings cards: language, dark theme, notifications, the backend URL (debug builds) and the app
+ * version.
+ */
 @Composable
 internal fun SettingsSection(
     viewModel: ProfileViewModel,
@@ -201,12 +194,7 @@ internal fun SettingsSection(
             modifier = Modifier.padding(bottom = 12.dp)
         )
 
-        // Faza "settings cleanup" (16. avgust 2026, korisnička žalba) - "Obaveštenja" i "Modus
-        // štednje podataka" su bili prikazani ali potpuno neožičeni (onCheckedChange = TODO,
-        // switch se vizuelno pomeri ali ništa se ne dešava) - uklonjeni dok stvarno ne zažive.
-        // "Tamna tema" je sad STVARNO funkcionalna (Faza 2) - čita/piše lokalno preko
-        // ThemePreferences (viewModel.isDarkMode), ne preko backend /settings rute koja nikad
-        // nije postojala.
+    // The dark theme is a local setting (ThemePreferences via viewModel.isDarkMode).
         val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -246,15 +234,13 @@ internal fun SettingsSection(
             }
         }
 
-        // Dorada (1. septembar 2026, priprema APK-a za spoljne testere) - ceo "Backend URL" editor
-        // (kartica + dijalog) je sad vidljiv samo kad je DevSettings.SHOW_BACKEND_URL_SETTINGS =
-        // true (videti obrazloženje tamo zašto NIJE vezano za BuildConfig.DEBUG). Testeri dobijaju
-        // `debug`-potpisan APK (radi bez keystore-a) sa ovim flag-om na `false` - ne vide/ne mogu
-        // da menjaju backend rutu, ostaju na difoltnoj (Render) iz UrlStorage.
+    // Backend URL editor (card + dialog), debug builds only
+    // (DevSettings.SHOW_BACKEND_URL_SETTINGS); other builds stay on the default (Render) URL from
+    // UrlStorage.
         if (DevSettings.SHOW_BACKEND_URL_SETTINGS) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Mini backend URL editor for testing
+        // Backend URL editor dialog state.
             val showBackendDialog = remember { mutableStateOf(false) }
             val baseUrl by viewModel.baseUrl.collectAsStateWithLifecycle()
 

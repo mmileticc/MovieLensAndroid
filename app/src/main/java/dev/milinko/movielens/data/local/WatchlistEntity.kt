@@ -3,9 +3,9 @@ package dev.milinko.movielens.data.local
 import androidx.room.Entity
 
 /**
- * Lokalni (Room) keš watchlist-e - offline-first: UI čita odavde (Flow, instant), mreža samo
- * osvežava ovu tabelu u pozadini (videti UserRepositoryImpl). Composite PK (userId, tmdbId) da bi
- * više naloga na istom uređaju imalo odvojene liste (npr. posle sign-out/sign-in kao drugi nalog).
+ * Cached watchlist entry. Offline-first: the UI reads from here (Flow, instant) and the network only
+ * refreshes the table in the background (see UserRepositoryImpl). The composite key (userId, tmdbId)
+ * keeps the lists of different accounts on one device apart.
  */
 @Entity(tableName = "watchlist_items", primaryKeys = ["userId", "tmdbId"])
 data class WatchlistEntity(
@@ -15,8 +15,8 @@ data class WatchlistEntity(
     val posterPath: String?,
     val addedAt: Long,
     val priority: Int = 0,
-    // Filteri Biblioteke (UX dorada oktobar 2026). Žanrovi kao JSON (Gson) - mala lista, ne
-    // vredi posebna tabela/TypeConverter samo za prikaz i filtriranje.
+    // For the Library filters. Genres as JSON (Gson): a small list that does not justify a
+    // separate table or TypeConverter.
     val genresJson: String? = null,
     val releaseYear: Int? = null,
     val voteAverage: Double? = null

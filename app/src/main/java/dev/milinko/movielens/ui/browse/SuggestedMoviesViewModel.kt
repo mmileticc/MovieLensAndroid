@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** Sirovo stanje (sve učitane strane + filteri) - UI dobija već filtriranu listu, videti uiState. */
+/** Raw state (all loaded pages + filters); the UI gets the already filtered list, see uiState. */
 private data class SuggestedState(
     val movies: List<MovieSearchResult> = emptyList(),
     val genreNames: Map<Int, String> = emptyMap(),
@@ -32,9 +32,10 @@ private data class SuggestedState(
     val error: String? = null
 )
 
+/** State of the Suggested screen: the filtered list, paging flags and the active filters. */
 data class SuggestedMoviesUiState(
     val movies: List<BrowseMovie> = emptyList(),
-    // Samo žanrovi koji postoje među učitanim filmovima (nema smisla nuditi prazan filter).
+    // Only genres present among the loaded movies (an empty filter makes no sense).
     val availableGenres: List<Genre> = emptyList(),
     val query: String = "",
     val selectedGenreIds: Set<Int> = emptySet(),
@@ -47,9 +48,9 @@ data class SuggestedMoviesUiState(
 )
 
 /**
- * "Predloženo za tebe" - Vidi sve. Ista lista kao Home traka (/featured, personalizovano po
- * žanrovima za ulogovanog korisnika), ali sa beskonačnim skrolom i lokalnim filterima (naziv,
- * žanr) nad svim učitanim stranama. Obrazac stranica + dedupe po tmdbId kao HomeViewModel.loadMoreTrending.
+ * "Suggested for you" - See all. The same list as the Home row (/featured, personalized by genre for
+ * a signed-in user), with infinite scrolling and local filters (title, genre) over all loaded pages.
+ * Pages are deduplicated by tmdbId like HomeViewModel.loadMoreTrending.
  */
 @HiltViewModel
 class SuggestedMoviesViewModel @Inject constructor(
@@ -61,8 +62,9 @@ class SuggestedMoviesViewModel @Inject constructor(
     private val state = MutableStateFlow(SuggestedState())
     private var currentPage = 1
 
-    // Kad filter ostavi premalo rezultata, sami učitamo još par strana (da filter po žanru ne
-    // izgleda prazno samo zato što prva strana nema taj žanr). Resetuje se pri svakoj promeni filtera.
+    // When a filter leaves too few results, a few more pages are loaded automatically (so a genre
+    // filter does not look empty just because the first page lacks that genre). Reset on every
+    // filter change.
     private var autoLoadsRemaining = MAX_AUTO_LOADS
 
     private companion object {
@@ -117,13 +119,16 @@ class SuggestedMoviesViewModel @Inject constructor(
         }
     }
 
+    /** Pull-to-refresh: reloads from the first page. */
     fun refresh() {
         autoLoadsRemaining = MAX_AUTO_LOADS
         loadFirstPage(isRefresh = true)
     }
 
+    /** Reloads after an error. */
     fun retry() = loadFirstPage(isRefresh = false)
 
+    /** Loads the next page (infinite scroll). */
     fun loadMore() {
         val s = state.value
         if (s.isLoading || s.isLoadingMore || s.isRefreshing || !s.canLoadMore) return
@@ -150,6 +155,7 @@ class SuggestedMoviesViewModel @Inject constructor(
         }
     }
 
+    // Filter events - applied locally to all loaded pages.
     fun onQueryChange(query: String) {
         autoLoadsRemaining = MAX_AUTO_LOADS
         state.update { it.copy(query = query) }

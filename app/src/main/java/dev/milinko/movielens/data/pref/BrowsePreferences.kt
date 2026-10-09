@@ -9,12 +9,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Prikaz filmova na "Vidi sve" ekranima (Predloženo za tebe / U bioskopima). */
+/** How movies are shown on the "See all" screens (Suggested for you / In cinemas). */
 enum class BrowseViewMode { GRID, LIST }
 
 /**
- * Pamti izabran prikaz (mreža/lista) na "Vidi sve" ekranima - jedan izbor zajednički za oba
- * ekrana, čisto lokalno podešavanje uređaja (isti obrazac kao ThemePreferences).
+ * Remembers the grid/list choice on the "See all" screens: one choice shared by both screens,
+ * stored locally on the device (same pattern as ThemePreferences).
  */
 @Singleton
 class BrowsePreferences @Inject constructor(
@@ -32,6 +32,7 @@ class BrowsePreferences @Inject constructor(
     )
     val viewMode: StateFlow<BrowseViewMode> = _viewMode.asStateFlow()
 
+    /** Switches between grid and list. */
     fun toggleViewMode() {
         val next = if (_viewMode.value == BrowseViewMode.GRID) BrowseViewMode.LIST else BrowseViewMode.GRID
         prefs.edit { putString(KEY_VIEW_MODE, next.name) }

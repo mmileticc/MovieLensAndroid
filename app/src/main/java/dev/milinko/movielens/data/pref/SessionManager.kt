@@ -7,8 +7,8 @@ import javax.inject.Singleton
 import androidx.core.content.edit
 
 /**
- * Persists the backend session token and user info received after exchanging
- * a Firebase ID token with the Ktor backend (POST /api/auth/firebase).
+ * Backend session: the JWT (`appToken`) and user info received from `POST /api/auth/firebase`,
+ * stored in SharedPreferences. `getUserId() != null` means "signed in" throughout the app.
  */
 @Singleton
 class SessionManager @Inject constructor(
@@ -25,6 +25,7 @@ class SessionManager @Inject constructor(
         private const val KEY_FIREBASE_UID = "firebase_uid"
     }
 
+    /** Stores a new session after sign-in or after a token refresh. */
     fun saveSession(appToken: String, userId: String, firebaseUid: String, username: String?, email: String?, avatarUrl: String?) {
         prefs.edit {
             putString(KEY_APP_TOKEN, appToken)
@@ -37,12 +38,9 @@ class SessionManager @Inject constructor(
     }
 
     /**
-     * Osvežava SAMO keširano ime/avatar (npr. posle uspešnog čuvanja profila ili svežeg
-     * GET /profile odgovora) - bez diranja tokena/firebase uid-a. `saveSession()` se poziva samo
-     * pri loginu, pa je keš avatara/username-a inače zauvek "zamrznut" na trenutak logina - ako
-     * korisnik posle promeni avatar/ime, header koji čita SessionManager (kao trenutni fallback dok
-     * se puni profil sa mreže ne učita) i dalje prikazuje STARU sliku dok se ponovo ne uloguje.
-     * Ovo se poziva svaki put kad stigne svež podatak sa backenda da keš ne zaostaje.
+     * Updates only the cached username/avatar (after saving the profile or loading a fresh one),
+     * without touching the token. Otherwise the cached identity would stay frozen at sign-in time
+     * and headers would keep showing an old picture or name.
      */
     fun updateCachedIdentity(username: String?, avatarUrl: String?) {
         prefs.edit {
@@ -58,8 +56,10 @@ class SessionManager @Inject constructor(
     fun getEmail(): String? = prefs.getString(KEY_EMAIL, null)
     fun getAvatarUrl(): String? = prefs.getString(KEY_AVATAR_URL, null)
 
+    /** True if a backend token is stored (it may still be expired; TokenAuthenticator renews it). */
     fun isSessionValid(): Boolean = getAppToken() != null
 
+    /** Removes the whole session (sign-out). */
     fun clearSession() {
         prefs.edit { clear() }
     }

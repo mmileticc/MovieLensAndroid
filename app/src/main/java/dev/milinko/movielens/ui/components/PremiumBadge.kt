@@ -17,11 +17,8 @@ import androidx.compose.ui.unit.dp
 import dev.milinko.movielens.R
 
 /**
- * Mala zlatna značka koja obeležava premium funkcionalnost (npr. pretraga slikom u Search-u -
- * troši Gemini zahteve, videti korisnikov feedback u MOVIELENS_DESIGN_PLAN.md 2.3). Za sada čisto
- * vizuelno - nema logiku ograničenja korišćenja (korisnik: "za ovaj premium cemo prvo da uradimo
- * vizuelno a kasnije cemo da menjamo backend za usage"). Namerno malena (14dp) da se lepo uklapa
- * kao overlay bedž preko ikonice, ne kao samostalan element.
+ * Small gold badge marking a premium feature (e.g. image search, which uses Gemini requests).
+ * Visual only for now, with no usage limits. Small (14dp) on purpose, to sit as an overlay on an icon.
  */
 @Composable
 fun PremiumBadge(modifier: Modifier = Modifier) {

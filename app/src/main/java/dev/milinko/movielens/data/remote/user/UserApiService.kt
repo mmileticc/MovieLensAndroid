@@ -14,20 +14,15 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Body
 
-// Tela zahteva za POST/PUT rute ispod - namerno pravi tipovi umesto Map<String, Any>.
-// Kotlin-ov Map<K, out V> je kovarijantan u V; kad je V == Any, kompajlirani JVM potpis dobija
-// "? extends Object" wildcard u generic signature-u, a Retrofit-ova (lenjy, tek pri prvom pozivu
-// te metode) validacija to eksplicitno odbija sa "Parameter type must not include a type variable
-// or wildcard". Ovo se dešavalo baš na addToHistory/updateHistoryItem (Map<String, Any>) - i
-// Map<String, Int>/Map<String, String> na drugim rutama slučajno rade jer generic signature za te
-// value tipove ne dobija problematičan wildcard. Umesto da se oslanjamo na tu slučajnost, sve nove
-// body tipove pišemo kao prave data klase.
+// Request bodies are real data classes, never Map<String, Any>: Kotlin's Map<K, out V> with V = Any
+// compiles to a "? extends Object" wildcard in the JVM signature, which Retrofit rejects at the
+// first call ("Parameter type must not include a type variable or wildcard").
 data class AddToHistoryBody(val tmdbId: Int, val rating: Double? = null, val review: String? = null, val duration: Int? = null)
-// rating/review = null znače "ne diraj postojeću vrednost" (npr. izmena samo ocene bez dodira na
-// komentar, ili izmena samo komentara bez dodira na ocenu) - videti napomenu u backend
-// UserActionsRepository.markWatched.
+// rating/review = null mean "keep the existing value" (e.g. change only the rating). See the
+// backend's UserActionsRepository.markWatched.
 data class UpdateHistoryBody(val rating: Double? = null, val review: String? = null)
 
+/** The signed-in user's data and the social features (`/api/users/{userId}/...`); all require sign-in. */
 interface UserApiService {
     // Profile
     @GET("api/users/{userId}")
@@ -59,7 +54,7 @@ interface UserApiService {
         @Path("tmdbId") tmdbId: Int
     ): Response<Unit>
 
-    // History
+    // History (watched/rated)
     @GET("api/users/{userId}/history")
     suspend fun getHistory(
         @Path("userId") userId: String
@@ -78,15 +73,14 @@ interface UserApiService {
         @Body item: UpdateHistoryBody
     ): Response<HistoryItem>
 
-    // "Undo" za "označi kao odgledano" (lapsus klik) - briše i ocenu, ista tabela/red na backendu.
+    // Undo for "mark as watched" - also removes the rating (same row on the backend).
     @DELETE("api/users/{userId}/history/{tmdbId}")
     suspend fun removeFromHistory(
         @Path("userId") userId: String,
         @Path("tmdbId") tmdbId: Int
     ): Response<Unit>
 
-    // Pretraga korisnika (search-as-you-type za dodavanje prijatelja) - flat ruta, "ko sam ja" se
-    // čita iz JWT-a na backendu, ne šalje se kao path parametar.
+    // User search for adding friends (search as you type). The caller comes from the JWT.
     @GET("api/users/search")
     suspend fun searchUsers(
         @Query("q") query: String
@@ -103,8 +97,7 @@ interface UserApiService {
         @Path("userId") userId: String
     ): Response<PendingRequestsResponse>
 
-    // Korisnički zahtev (2. septembar 2026) - poslati (odlazni) zahtevi, da budu vidljivi
-    // izlistani kao i lista prijatelja, ne samo otkriveni ponovnom pretragom te osobe.
+    // Outgoing (sent) friend requests.
     @GET("api/users/{userId}/friends/pending/sent")
     suspend fun getSentFriendRequests(
         @Path("userId") userId: String
@@ -123,27 +116,26 @@ interface UserApiService {
         @Path("friendId") friendId: String
     ): Response<Unit>
 
-    // Profil prijatelja (ili sopstveni) - dozvoljeno samo za sebe ili ACCEPTED prijatelja,
-    // backend vraća 403 inače.
+    // A user's profile: full for oneself or an accepted friend, a limited preview otherwise.
     @GET("api/users/{userId}/friends/{friendId}/profile")
     suspend fun getFriendProfile(
         @Path("userId") userId: String,
         @Path("friendId") friendId: String
     ): Response<FriendProfileResponse>
 
-    // Taste profile (Faza 4) - prosečna ocena po žanru, samo za sebe.
+    // Taste profile (average rating per genre), own profile only.
     @GET("api/users/{userId}/taste-profile")
     suspend fun getTasteProfile(
         @Path("userId") userId: String
     ): Response<TasteProfileResponse>
 
-    // Friend Activity
+    // Friend activity feed
     @GET("api/users/{userId}/friends/activity")
     suspend fun getFriendActivity(
         @Path("userId") userId: String
     ): Response<FriendActivityResponse>
 
-    // MovieNight Suggestions. page: podržava "Osveži predloge" dugme (druga TMDB discover strana).
+    // Movie Night suggestions. `page` supports the "Refresh suggestions" button.
     @GET("api/users/{userId}/friends/{friendId}/movienight-suggestions")
     suspend fun getMovieNightSuggestions(
         @Path("userId") userId: String,
@@ -151,14 +143,14 @@ interface UserApiService {
         @Query("page") page: Int = 1
     ): Response<MovieNightResponse>
 
-    // Push obaveštenja - registracija uređaja za prijavljeni nalog.
+    // Push notifications: registers this device for the signed-in account.
     @PUT("api/users/{userId}/device-token")
     suspend fun registerDeviceToken(
         @Path("userId") userId: String,
         @Body body: DeviceTokenBody
     ): Response<Unit>
 
-    // Pri odjavi sesija je već obrisana, pa se token naloga prosleđuje eksplicitno.
+    // On sign-out the session is already cleared, so the account's token is passed explicitly.
     @DELETE("api/users/{userId}/device-token")
     suspend fun unregisterDeviceToken(
         @Path("userId") userId: String,
@@ -166,7 +158,7 @@ interface UserApiService {
         @Header("Authorization") authorization: String
     ): Response<Unit>
 
-    // Slanje filma prijatelju (stiže mu kao push obaveštenje).
+    // Sends a movie to a friend (delivered as a push notification).
     @POST("api/users/{userId}/share")
     suspend fun shareMovie(
         @Path("userId") userId: String,

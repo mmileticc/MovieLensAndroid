@@ -46,7 +46,7 @@ class MovieDetailViewModelTest {
         coEvery { userRepository.addToHistory("u1", 550, rating = 8.0) } returns Result.success(mockk(relaxed = true))
 
         assertTrue(viewModel.rateMovie(550, 8))
-        // Optimistično: pre nego što je mrežni poziv uopšte izvršen.
+        // Optimistic: before the network call has even run.
         assertEquals(8.0, viewModel.uiState.value.userRating, 0.0)
         assertTrue(viewModel.uiState.value.isWatched)
 

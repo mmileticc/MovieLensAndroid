@@ -70,10 +70,9 @@ import dev.milinko.movielens.ui.components.GenreChip
 import dev.milinko.movielens.ui.theme.MlPosterCornerRadius
 
 /**
- * Zajednički UI model za "Vidi sve" ekrane (Predloženo za tebe / U bioskopima). Isti princip kao
- * gole parametre u MoviePosterCard/MovieListRow - u appu ne postoji jedan zajednički "movie" model,
- * pa svaki ekran mapira svoj (MovieSearchResult / NowInCinemasMovie) u ovaj, a grid kartica i red
- * liste postoje samo jednom.
+ * Shared UI model for the "See all" screens (Suggested for you / In cinemas). The app has no single
+ * movie model, so each screen maps its own (MovieSearchResult / NowInCinemasMovie) into this one and
+ * the grid card and list row exist only once.
  */
 data class BrowseMovie(
     val tmdbId: Int,
@@ -84,11 +83,11 @@ data class BrowseMovie(
     val runtimeMinutes: Int?,
     val genreNames: List<String>,
     val overview: String?,
-    // Npr. "Cineplexx, Cine Grand +2" na ekranu U bioskopima; null na Predlozima.
+    // E.g. "Cineplexx, Cine Grand +2" on the In cinemas screen; null on Suggested.
     val subtitle: String?
 )
 
-/** "Cineplexx, Cine Grand +2" - prva dva bioskopa pa broj ostalih. */
+/** "Cineplexx, Cine Grand +2" - the first two cinemas, then the number of the rest. */
 fun cinemasSubtitle(cinemas: List<String>): String? = when {
     cinemas.isEmpty() -> null
     cinemas.size <= 2 -> cinemas.joinToString(", ")
@@ -100,8 +99,8 @@ private fun formatRating(rating: Double): String =
     String.format(LocalLocale.current.platformLocale, "%.1f", rating)
 
 /**
- * Gornja traka "Vidi sve" ekrana: nazad, naslov i prekidač mreža/lista (ikonica pokazuje prikaz
- * u koji će se preći). Isti ručni Row obrazac kao MovieNightScreen top bar.
+ * Top bar of the "See all" screens: back, title and the grid/list switch (the icon shows the view
+ * it switches to).
  */
 @Composable
 fun BrowseTopBar(
@@ -136,8 +135,8 @@ fun BrowseTopBar(
 }
 
 /**
- * Pretraga po nazivu + čipovi žanrova (više izbora). `extraFilters` je slot za filtere
- * specifične za ekran (npr. bioskop/lanac, Sada/Uskoro, sortiranje na ekranu U bioskopima).
+ * Title search + genre chips (multi-select). `extraFilters` is a slot for screen-specific filters
+ * (e.g. cinema/chain, Now/Upcoming and sorting on the In cinemas screen).
  */
 @Composable
 fun BrowseFilterBar(
@@ -191,8 +190,8 @@ fun BrowseFilterBar(
 }
 
 /**
- * Lista filmova u izabranom prikazu. `onLoadMore` (opciono) se poziva kad korisnik dođe blizu
- * kraja - isti derivedStateOf obrazac kao beskonačan skrol na HomeScreen-u.
+ * The movies in the selected view mode. The optional `onLoadMore` is called when the user gets near
+ * the end (same derivedStateOf pattern as the infinite scroll on HomeScreen).
  */
 @Composable
 fun BrowseMovieList(
@@ -270,7 +269,7 @@ private fun LoadingMoreFooter() {
     }
 }
 
-/** Krupna kartica za mrežu u 2 kolone: poster 2:3 preko cele širine kolone + osnovne informacije. */
+/** Large card for the 2-column grid: a 2:3 poster across the column width plus basic info. */
 @Composable
 fun BrowseGridCard(movie: BrowseMovie, onClick: () -> Unit) {
     Column(modifier = Modifier.clickable(onClick = onClick)) {
@@ -322,7 +321,10 @@ fun BrowseGridCard(movie: BrowseMovie, onClick: () -> Unit) {
     }
 }
 
-/** Red liste: poster levo, desno naslov, ocena/godina/trajanje, žanrovi, opis u 3 reda i bioskopi. */
+/**
+ * List row: poster on the left; title, rating/year/runtime, genres, a 3-line overview and cinemas
+ * on the right.
+ */
 @Composable
 fun BrowseListRow(movie: BrowseMovie, onClick: () -> Unit) {
     Row(
@@ -388,7 +390,7 @@ fun BrowseListRow(movie: BrowseMovie, onClick: () -> Unit) {
     }
 }
 
-/** "★ 8.4 · 2026 · 155 min" - delovi koji nedostaju se preskaču. */
+/** "★ 8.4 · 2026 · 155 min" - missing parts are skipped. */
 @Composable
 private fun RatingYearLine(movie: BrowseMovie, includeRuntime: Boolean) {
     val ratingText = if (movie.rating > 0) formatRating(movie.rating) else null
@@ -418,8 +420,8 @@ private fun RatingYearLine(movie: BrowseMovie, includeRuntime: Boolean) {
 }
 
 /**
- * Sadržaj ispod filtera: spinner pri prvom učitavanju, greška sa "Pokušaj ponovo", prazno stanje
- * (posebna poruka kad su filteri aktivni) ili lista - sve unutar pull-to-refresh-a.
+ * Content below the filters: a spinner on the first load, an error with "Try again", an empty state
+ * (with a separate message when filters are active) or the list - all inside pull-to-refresh.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

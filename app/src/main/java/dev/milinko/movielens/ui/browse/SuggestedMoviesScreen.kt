@@ -12,7 +12,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.milinko.movielens.R
 
-/** "Predloženo za tebe" - Vidi sve (otvara se sa Home trake). */
+/** "Suggested for you" - See all (opened from the Home row). */
 @Composable
 fun SuggestedMoviesScreen(
     onNavigateBack: () -> Unit,

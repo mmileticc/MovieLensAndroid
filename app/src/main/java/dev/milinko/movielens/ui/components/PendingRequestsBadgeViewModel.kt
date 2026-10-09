@@ -17,12 +17,12 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Broj dolaznih zahteva za prijateljstvo za bedž na tabu "Profil" u donjoj navigaciji (UX dorada,
- * oktobar 2026 - ranije se novi zahtev video tek kad korisnik sam otvori Profil i skroluje).
+ * Number of incoming friend requests for the badge on the Friends tab of the bottom navigation.
  *
- * Čita isti Room keš kao Profile ekran (`observeCachedPendingRequests`), pa se bedž ažurira čim
- * Profile ili ovaj ViewModel osveže keš sa mreže. Mrežno osvežavanje je ograničeno na jednom u
- * [REFRESH_INTERVAL_MS] za ceo proces - svaki ekran sa donjom navigacijom ima svoju instancu.
+ * Reads the same Room cache as the Profile/Friends screens (`observeCachedPendingRequests`), so the
+ * badge updates as soon as any of them refreshes the cache. Network refresh is limited to once per
+ * [REFRESH_INTERVAL_MS] for the whole process, since every screen with the bottom bar has its own
+ * instance.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -31,8 +31,8 @@ class PendingRequestsBadgeViewModel @Inject constructor(
     private val sessionManager: SessionManager
 ) : ViewModel() {
 
-    // Korisnik se može prijaviti/odjaviti dok je ekran (i ovaj ViewModel) živ - zato se ID ponovo
-    // čita u refresh(), a broj prati aktuelnog korisnika.
+    // The user can sign in/out while this ViewModel is alive, so the id is read again in refresh()
+    // and the count follows the current user.
     private val userId = MutableStateFlow(sessionManager.getUserId())
 
     val pendingCount: StateFlow<Int> = userId
@@ -41,7 +41,7 @@ class PendingRequestsBadgeViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
-    /** Poziva se svaki put kad se donja navigacija prikaže (ulazak na ekran). */
+    /** Called every time the bottom navigation is shown (entering a screen). */
     fun refresh() {
         val id = sessionManager.getUserId()
         userId.value = id
@@ -50,7 +50,8 @@ class PendingRequestsBadgeViewModel @Inject constructor(
         if (now - lastNetworkRefreshAt < REFRESH_INTERVAL_MS) return
         lastNetworkRefreshAt = now
         viewModelScope.launch {
-            // Upisuje svež spisak u isti keš - pendingCount se sam ažurira. Greška je nebitna za bedž.
+            // Writes the fresh list into the same cache, so pendingCount updates itself. Errors do
+            // not matter for the badge.
             userRepository.getPendingFriendRequests(id)
         }
     }

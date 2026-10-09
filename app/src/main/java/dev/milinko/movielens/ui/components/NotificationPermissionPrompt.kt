@@ -21,8 +21,8 @@ import dev.milinko.movielens.R
 import dev.milinko.movielens.data.push.NotificationPreferences
 
 /**
- * Android 13+: jednom, posle prijave, objasni čemu služe obaveštenja i tek onda zatraži sistemsku
- * dozvolu - sistemski dijalog bez objašnjenja korisnici često odbiju, a drugi put se ne prikazuje.
+ * Android 13+: once after sign-in, explains what notifications are for and only then requests the
+ * system permission. Users often deny a system dialog without context, and it is not shown again.
  */
 @Composable
 fun NotificationPermissionPrompt(

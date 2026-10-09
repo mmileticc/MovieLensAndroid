@@ -10,20 +10,18 @@ import androidx.exifinterface.media.ExifInterface
 import java.io.ByteArrayOutputStream
 
 /**
- * Kompresija profilne slike u kompaktan `data:image/jpeg;base64,...` URI koji se šalje direktno u
- * PUT /api/users/{userId}/profile telu i čuva u `users.avatar_url` (text kolona, bez potrebe za
- * posebnim file storage-om - van obima diplomskog da se uvodi npr. Firebase Storage/S3 samo za
- * ovo). Downsample+EXIF-rotaciona logika je namerno slična `VisionRepositoryImpl` (ista lekcija -
- * kamera slike znaju biti 8-15MB i pogrešno rotirane), ali je ovde samostalna kopija umesto deljene
- * funkcije - manja ciljna dimenzija (avatar je uvek mali krug, ne treba mu 1600px) i drugačiji
- * izlazni format (base64 string, ne fajl za multipart upload), pa bi deljenje samo zakomplikovalo
- * oba mesta bez stvarne uštede koda.
+ * Compresses a profile picture into a compact `data:image/jpeg;base64,...` URI sent in the profile
+ * update body; the backend stores the image in its avatars table and serves it by URL.
+ * The downsample + EXIF rotation logic is similar to VisionRepositoryImpl (camera images can be
+ * 8-15MB and wrongly rotated) but kept separate on purpose: the target size is much smaller (an
+ * avatar is always a small circle) and the output is different, so sharing the code would only
+ * complicate both places.
  */
 object AvatarImage {
     private const val MAX_DIMENSION_PX = 480
     private const val MAX_JPEG_BYTES = 150 * 1024
 
-    /** Vraća `null` ako slika ne može da se pročita/dekodira (npr. korisnik je otkazao izbor). */
+    /** Returns `null` if the image cannot be read or decoded (e.g. the user cancelled the picker). */
     fun compressToDataUri(context: Context, uri: Uri): String? {
         val bitmap = decodeSampledAndRotatedBitmap(context, uri, MAX_DIMENSION_PX) ?: return null
         val bytes = compressToJpegBytes(bitmap, MAX_JPEG_BYTES)

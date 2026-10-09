@@ -14,13 +14,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 
 /**
- * Rebrending (25. avgust 2026) - deljeni "movie‑nee" wordmark umesto običnog stringResource(app_name)
- * teksta jednobojno. Vizuelni identitet iz korisnikovog loga: "movie" u boji teksta (bela u tamnoj
- * temi), "nee" u brend crvenoj (isti [MaterialTheme.colorScheme.primary] token kao ostatak app-a -
- * nema potrebe za novom bojom), oba dela bold+italic (nemamo bundled kurzivni serif font iz loga,
- * pa se bold+italic sistemski font koristi kao najbliža aproksimacija bez rizika dodavanja novog
- * font asset-a). Koristi se na Home i Sign In ekranu (dva najistaknutija mesta za brend) umesto
- * ranijeg jednobojnog stringResource(R.string.app_name) teksta.
+ * The "movie-nee" wordmark: "movie" in the text color, "nee" in the brand red
+ * ([MaterialTheme.colorScheme.primary]), both bold italic (the closest match to the logo without
+ * bundling a font). Shown on Home and Sign In.
  */
 @Composable
 fun MovieneeWordmark(
@@ -41,12 +37,9 @@ fun MovieneeWordmark(
 }
 
 /**
- * Dorada (25. avgust 2026, korisnička primedba "nisi nigde dodao ovaj deo movie matine koji je
- * objašnjenje malo naziva") - sitan podnaslov ispod glavnog wordmark-a koji objašnjava odakle ime
- * dolazi (movie + matinee = movienee), isti obrazac dvobojnosti kao [MovieneeWordmark] ali sitnije
- * i priglušenije (onSurfaceVariant/accent umesto onBackground/accent) - u logu je ovo mala, tiha
- * napomena ispod velikog imena, ne novi naslov. NAMERNO na engleskom (isto kao original) - prevod
- * bi razbio igru reči koju objašnjava.
+ * Small subtitle under the wordmark explaining the name (movie + matinee = movienee), in the same
+ * two-color style as [MovieneeWordmark] but smaller and muted. Always in English on purpose - a
+ * translation would break the wordplay.
  */
 @Composable
 fun MovieneeNameOrigin(

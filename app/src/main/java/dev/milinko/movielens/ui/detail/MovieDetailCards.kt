@@ -89,12 +89,8 @@ import dev.milinko.movielens.ui.components.SectionHeader
 import dev.milinko.movielens.ui.components.YouTubeTrailerPlayer
 
 /**
- * Kartica bioskopa u "Bioskopski termini" sekciji. Faza 5 redizajna (MOVIELENS_DESIGN_PLAN.md
- * 2.4): dodata ikonica lokacije + jasnija hijerarhija (naziv bioskopa `titleMedium`, adresa/
- * udaljenost sitnije ispod). Napomena: doc pominje "vreme kao chip", ali `Showtime` model NEMA
- * eksplicitno polje za vreme termina (samo cinemaName/cinemaLocation/bookingUrl/distanceKm/
- * isUpcoming - videti MovieModels.kt) - umesto toga, "Uskoro" bedž (jedino dostupno statusno polje)
- * je taj koji sada koristi `GenreChip` stil umesto običnog teksta, u duhu iste ideje.
+ * Cinema card in the cinemas section: location icon, cinema name, address/distance below, an
+ * "Upcoming" badge and the booking link.
  */
 @Composable
 internal fun CinemaShowtimeCard(show: Showtime) {
@@ -150,8 +146,8 @@ internal fun CinemaShowtimeCard(show: Showtime) {
 }
 
 /**
- * "Prijatelji su gledali ovaj film" bedž - prost upit nad postojećim WATCHED podacima (bez
- * ikakvog match algoritma, to je Faza 4). Klik na ime prijatelja vodi na njegov profil.
+ * "Friends watched this movie" badge, a simple query over the friends' WATCHED data. Tapping a
+ * friend's name opens their profile.
  */
 @Composable
 internal fun FriendsWatchedBadge(friends: List<FriendWatched>, onFriendClick: (String) -> Unit) {
@@ -167,10 +163,8 @@ internal fun FriendsWatchedBadge(friends: List<FriendWatched>, onFriendClick: (S
             )
             Spacer(modifier = Modifier.height(6.dp))
             friends.forEach { friend ->
-                // E2.2 dorada (3. septembar 2026) - kratak tekstualni komentar prijatelja je
-                // ranije bio prikazan ovde (isto `review` polje kao HistoryItem) - to polje je
-                // ZAMENJENO javnim komentarima ispod (CommentsSection), pa je prikaz uklonjen -
-                // ostaje samo ime + ocena.
+                // Only the name and rating; friends' notes were replaced by public comments
+                // (CommentsSection).
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -204,10 +198,9 @@ internal fun FriendsWatchedBadge(friends: List<FriendWatched>, onFriendClick: (S
 }
 
 /**
- * Avatar kartica za horizontalnu traku glumaca (Faza 5 redizajna, videti MOVIELENS_DESIGN_PLAN.md
- * 2.4: "mala horizontalna traka sa okruglim avatarima + imenom ispod" - ranije je bio prost
- * vertikalan tekst red). `AsyncImage` mora imati `fillMaxSize()` PRE `clip()` (naučeno u Fazi 4 -
- * bez toga slika renderuje na malu podrazumevanu veličinu u gornjem levom uglu Box-a).
+ * Avatar card for the horizontal cast row: round photo with the name below. `AsyncImage` needs
+ * `fillMaxSize()` BEFORE `clip()`, otherwise the image renders at a small default size in the
+ * top-left corner of the Box.
  */
 @Composable
 internal fun CastAvatarCard(actor: CastMember, onClick: () -> Unit = {}) {

@@ -2,13 +2,13 @@ package dev.milinko.movielens.data.remote.movie
 
 import com.google.gson.annotations.SerializedName
 
-// Search Response
+/** Response of the movie search. */
 data class MovieSearchResponse(
     @SerializedName("results")
     val results: List<MovieSearchResult> = emptyList()
 )
 
-// Search Result - za listu
+/** A movie in a list (search, trending, suggestions). */
 data class MovieSearchResult(
     @SerializedName("id")
     val tmdbId: Int,
@@ -22,14 +22,14 @@ data class MovieSearchResult(
     val voteAverage: Double = 0.0,
     @SerializedName("overview")
     val overview: String? = null,
-    // Nova polja su NAMERNO nullable: Gson zaobilazi Kotlin podrazumevane vrednosti kad klasa nema
-    // konstruktor bez argumenata, pa bi polje koje stariji backend ne šalje bilo null uprkos
-    // non-null tipu. Čitati sa .orEmpty().
+    // New fields are nullable on purpose: Gson bypasses Kotlin default values when a class has no
+    // no-arg constructor, so a field an older backend does not send would be null despite a
+    // non-null type. Read with .orEmpty().
     @SerializedName("genre_ids")
     val genreIds: List<Int>? = null
 )
 
-// Movie Detail - za detaljan prikaz
+/** Full movie details for the detail screen. */
 data class MovieDetail(
     @SerializedName("id")
     val tmdbId: Int,
@@ -53,13 +53,13 @@ data class MovieDetail(
     val cast: List<CastMember> = emptyList(),
     @SerializedName("showtimes")
     val showtimes: List<Showtime> = emptyList(),
-    // Dopunske ocene sa OMDb-a (3. septembar 2026) - null ako backend nema podešen OMDb ključ ili
-    // OMDb nema podatke za dati film; ekran ih u tom slučaju prosto ne prikazuje.
+    // Extra ratings from OMDb; null when the backend has no OMDb key or OMDb has no data (then
+    // they are simply not shown).
     @SerializedName("imdb_rating")
     val imdbRating: Double? = null,
     @SerializedName("rotten_tomatoes")
     val rottenTomatoes: String? = null,
-    // "Istraži više" sekcija - nullable iz istog razloga kao MovieSearchResult.genreIds.
+    // "Explore more" section - nullable for the same reason as MovieSearchResult.genreIds.
     @SerializedName("imdb_id")
     val imdbId: String? = null,
     @SerializedName("videos")
@@ -68,7 +68,7 @@ data class MovieDetail(
     val backdrops: List<String>? = null
 )
 
-// YouTube trejler/teaser - `key` je YouTube video ID.
+/** A YouTube trailer or teaser; `key` is the YouTube video id. */
 data class MovieVideo(
     @SerializedName("key")
     val key: String,
@@ -101,9 +101,10 @@ data class CastMember(
     val profilePath: String? = null
 )
 
-// E2.3 (2. septembar 2026) - stranica glumca. `character` je ovde uloga koju je glumac igrao u
-// SVAKOM filmu iz njegove filmografije (obrnuto od CastMember.character iznad, koji opisuje
-// glumca IZ UGLA jednog filma) - otud posebna, zasebna data klasa umesto ponovne upotrebe CastMember.
+/**
+ * One movie of a person's filmography. `character` is the role in this movie (the opposite view
+ * of [CastMember], which describes an actor from one movie's point of view).
+ */
 data class PersonMovieCredit(
     @SerializedName("id")
     val tmdbId: Int,
@@ -140,9 +141,10 @@ data class PersonDetail(
     val movieCredits: List<PersonMovieCredit> = emptyList()
 )
 
-// Bioskopski termin - polja prate stvarni ScrapedMovie model na backendu (cinema_id/times/city iz
-// ranije verzije ovog modela nisu odgovarali stvarnim podacima i nikad nisu bili popunjeni - videti
-// MOVIELENS_ROADMAP.md, Faza 4.5). distanceKm je null ako korisnik nije dao lokacijsku dozvolu.
+/**
+ * A cinema showing the movie (from the backend's scraped programme). `distanceKm` is null without
+ * location permission.
+ */
 data class Showtime(
     @SerializedName("cinema_name")
     val cinemaName: String,
@@ -160,7 +162,7 @@ data class Showtime(
     val isUpcoming: Boolean = false
 )
 
-// Watchlist
+/** A movie on the user's watchlist. */
 data class WatchlistItem(
     @SerializedName("tmdb_id")
     val tmdbId: Int,
@@ -172,7 +174,7 @@ data class WatchlistItem(
     val addedAt: Long,
     @SerializedName("priority")
     val priority: Int = 0,
-    // Za filtere/sortiranje Biblioteke - nullable iz istog Gson razloga kao MovieSearchResult.genreIds.
+    // For the Library filters and sorting - nullable for the same Gson reason as MovieSearchResult.genreIds.
     @SerializedName("genres")
     val genres: List<Genre>? = null,
     @SerializedName("release_year")
@@ -186,7 +188,7 @@ data class WatchlistResponse(
     val items: List<WatchlistItem> = emptyList()
 )
 
-// History/Watched
+/** A watched (and possibly rated) movie. */
 data class HistoryItem(
     @SerializedName("tmdb_id")
     val tmdbId: Int,
@@ -196,7 +198,7 @@ data class HistoryItem(
     val posterPath: String? = null,
     @SerializedName("user_rating")
     val userRating: Double,
-    // Kratak tekstualni komentar uz ocenu (opcion) - videti backend HistoryItemDto.review.
+    // Optional note attached to the rating (see the backend's HistoryItemDto.review).
     @SerializedName("review")
     val review: String? = null,
     @SerializedName("watched_at")
@@ -216,14 +218,13 @@ data class HistoryResponse(
     val items: List<HistoryItem> = emptyList()
 )
 
-// Trending/Featured
+/** Response of trending / featured. */
 data class TrendingResponse(
     @SerializedName("results")
     val results: List<MovieSearchResult> = emptyList()
 )
 
-// "U bioskopima sada" traka na Home-u (Faza 4.5, polish pre redizajna) - iz postojećeg
-// skraping repertoara, grupisano po tmdbId sa listom bioskopa.
+/** A movie in the current cinema programme with the cinemas showing it. */
 data class NowInCinemasMovie(
     @SerializedName("id")
     val tmdbId: Int,
@@ -235,7 +236,7 @@ data class NowInCinemasMovie(
     val voteAverage: Double = 0.0,
     @SerializedName("cinemas")
     val cinemas: List<String> = emptyList(),
-    // Polja za "U bioskopima" ekran - nullable iz istog razloga kao MovieSearchResult.genreIds.
+    // Fields for the "In cinemas" screen - nullable for the same reason as MovieSearchResult.genreIds.
     @SerializedName("genres")
     val genres: List<Genre>? = null,
     @SerializedName("release_date")
@@ -253,9 +254,10 @@ data class NowInCinemasResponse(
     val results: List<NowInCinemasMovie> = emptyList()
 )
 
-// E2.2 dorada (3. septembar 2026) - javni komentari na film, ZAMENJUJE stari HistoryItem.review
-// koncept (jedan privatni komentar vezan za ocenu). Potpuno odvojena funkcionalnost - ne zavisi
-// od watched/rating statusa, više komentara po korisniku po filmu je dozvoljeno.
+/**
+ * A public comment on a movie. Independent of ratings and watched status; a user can leave
+ * several comments on the same movie.
+ */
 data class MovieComment(
     @SerializedName("id")
     val id: Int,
@@ -298,7 +300,7 @@ data class LikeCommentResponse(
     val likeCount: Int
 )
 
-// Generic API Response wrapper
+/** Generic API response wrapper. */
 data class ApiResponse<T>(
     @SerializedName("success")
     val success: Boolean,
