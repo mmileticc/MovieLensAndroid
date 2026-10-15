@@ -60,6 +60,12 @@
     <string name="movie_detail_sort_by_distance">Sort by distance</string>
     <string name="movie_detail_show_more_showtimes">Show %1$d more cinemas</string>
     <string name="movie_detail_hide_showtimes">Hide other cinemas</string>
+    <string name="showtimes_today">Today</string>
+    <string name="showtimes_tomorrow">Tomorrow</string>
+    <string name="showtimes_days_label">Screening day</string>
+    <string name="showtimes_none_on_day">No screenings on this day</string>
+    <string name="showtimes_hall_number">Hall %1$s</string>
+    <string name="showtimes_buy_content_description">Buy a ticket for the %1$s screening, %2$s</string>
     <string name="movie_detail_overview_header">Overview</string>
     <string name="movie_detail_cast_header">Cast</string>
     <string name="movie_detail_open_link">Open link</string>

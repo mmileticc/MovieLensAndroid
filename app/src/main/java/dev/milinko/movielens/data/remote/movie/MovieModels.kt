@@ -159,7 +159,26 @@ data class Showtime(
     @SerializedName("distance_km")
     val distanceKm: Double? = null,
     @SerializedName("is_upcoming")
-    val isUpcoming: Boolean = false
+    val isUpcoming: Boolean = false,
+    // Screenings of the next days at this cinema, earliest first. Nullable: Gson leaves it null
+    // when an older backend does not send it.
+    @SerializedName("times")
+    val times: List<ShowtimeSlot>? = null
+)
+
+/** One screening. `startsAt` is the local time in Belgrade, e.g. "2026-10-15T19:00". */
+data class ShowtimeSlot(
+    @SerializedName("starts_at")
+    val startsAt: String,
+    @SerializedName("hall")
+    val hall: String? = null,
+    @SerializedName("format")
+    val format: String? = null,
+    // Ticket page of exactly this screening.
+    @SerializedName("booking_url")
+    val bookingUrl: String? = null,
+    @SerializedName("price_rsd")
+    val priceRsd: Int? = null
 )
 
 /** A movie on the user's watchlist. */

@@ -74,6 +74,12 @@
     <string name="movie_detail_sort_by_distance">Sortiraj po udaljenosti</string>
     <string name="movie_detail_show_more_showtimes">Prikaži još %1$d bioskopa</string>
     <string name="movie_detail_hide_showtimes">Sakrij ostale bioskope</string>
+    <string name="showtimes_today">Danas</string>
+    <string name="showtimes_tomorrow">Sutra</string>
+    <string name="showtimes_days_label">Dan projekcije</string>
+    <string name="showtimes_none_on_day">Nema projekcija ovog dana</string>
+    <string name="showtimes_hall_number">Sala %1$s</string>
+    <string name="showtimes_buy_content_description">Kupi kartu za projekciju u %1$s, %2$s</string>
     <string name="movie_detail_overview_header">Opis</string>
     <string name="movie_detail_cast_header">Glumci</string>
     <string name="movie_detail_open_link">Otvori link</string>

@@ -90,6 +90,8 @@ import dev.milinko.movielens.ui.components.RatingStars
 import dev.milinko.movielens.ui.components.RemoteAvatarImage
 import dev.milinko.movielens.ui.components.SectionHeader
 import dev.milinko.movielens.ui.components.YouTubeTrailerPlayer
+import dev.milinko.movielens.util.cinemasForDay
+import dev.milinko.movielens.util.showtimeDays
 
 /** How many cinemas are always shown before "Show N more". */
 private const val ALWAYS_VISIBLE_SHOWTIMES = 3
@@ -518,7 +520,10 @@ fun MovieDetailScreen(
 
                 if (movie.showtimes.isNotEmpty()) {
                     item {
-                        val showtimes = movie.showtimes
+                        // Day chips over all cinemas; the chosen day resets when the days change.
+                        val days = remember(movie.showtimes) { showtimeDays(movie.showtimes) }
+                        var selectedDay by remember(days) { mutableStateOf(days.firstOrNull()) }
+                        val showtimes = remember(movie.showtimes, selectedDay) { cinemasForDay(movie.showtimes, selectedDay) }
                         // The first ALWAYS_VISIBLE_SHOWTIMES cinemas are always visible, the rest
                         // are behind "Show N more" (ExpandableMatchCard), so a long list stays readable.
                         val alwaysVisible = showtimes.take(ALWAYS_VISIBLE_SHOWTIMES)
@@ -534,9 +539,13 @@ fun MovieDetailScreen(
                                 } else null
                             )
                             Spacer(modifier = Modifier.height(8.dp))
+                            if (days.isNotEmpty()) {
+                                ShowtimeDayChips(days = days, selected = selectedDay, onSelect = { selectedDay = it })
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 alwaysVisible.forEach { show ->
-                                    CinemaShowtimeCard(show = show)
+                                    CinemaShowtimeCard(show = show, day = selectedDay)
                                 }
                             }
                             if (remaining.isNotEmpty()) {
@@ -558,7 +567,7 @@ fun MovieDetailScreen(
                                     expandedContent = {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             remaining.forEach { show ->
-                                                CinemaShowtimeCard(show = show)
+                                                CinemaShowtimeCard(show = show, day = selectedDay)
                                             }
                                         }
                                     }

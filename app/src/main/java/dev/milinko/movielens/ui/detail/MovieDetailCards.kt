@@ -11,6 +11,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -42,7 +44,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -64,6 +68,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,6 +82,7 @@ import dev.milinko.movielens.R
 import dev.milinko.movielens.data.remote.movie.CastMember
 import dev.milinko.movielens.data.remote.movie.MovieComment
 import dev.milinko.movielens.data.remote.movie.Showtime
+import dev.milinko.movielens.data.remote.movie.ShowtimeSlot
 import dev.milinko.movielens.data.remote.user.FriendWatched
 import dev.milinko.movielens.data.remote.vision.tmdbPosterUrl
 import dev.milinko.movielens.ui.components.AppButton
@@ -87,13 +94,42 @@ import dev.milinko.movielens.ui.components.RatingStars
 import dev.milinko.movielens.ui.components.RemoteAvatarImage
 import dev.milinko.movielens.ui.components.SectionHeader
 import dev.milinko.movielens.ui.components.YouTubeTrailerPlayer
+import dev.milinko.movielens.util.cinemaToday
+import dev.milinko.movielens.util.isHallNumber
+import dev.milinko.movielens.util.nextDay
+import dev.milinko.movielens.util.safeWebLink
+import dev.milinko.movielens.util.shortDayLabel
+import dev.milinko.movielens.util.time
+import dev.milinko.movielens.util.timesOnDay
+
+/**
+ * Day chips above the cinemas ("Today", "Tomorrow", "Mon 19.10."); scrolls sideways when the week
+ * does not fit.
+ */
+@Composable
+internal fun ShowtimeDayChips(days: List<String>, selected: String?, onSelect: (String) -> Unit) {
+    val today = remember { cinemaToday() }
+    val tomorrow = remember(today) { nextDay(today) }
+    val locale = LocalLocale.current.platformLocale
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(days, key = { it }) { day ->
+            val label = when (day) {
+                today -> stringResource(R.string.showtimes_today)
+                tomorrow -> stringResource(R.string.showtimes_tomorrow)
+                else -> shortDayLabel(day, locale)
+            }
+            FilterChip(selected = day == selected, onClick = { onSelect(day) }, label = { Text(label) })
+        }
+    }
+}
 
 /**
  * Cinema card in the cinemas section: location icon, cinema name, address/distance below, an
- * "Upcoming" badge and the booking link.
+ * "Upcoming" badge and either the screenings of [day] (each opens the ticket page of exactly that
+ * screening) or, when the cinema has no known times, the link to its page for the movie.
  */
 @Composable
-internal fun CinemaShowtimeCard(show: Showtime) {
+internal fun CinemaShowtimeCard(show: Showtime, day: String? = null) {
     val context = LocalContext.current
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -125,24 +161,79 @@ internal fun CinemaShowtimeCard(show: Showtime) {
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                TextButton(onClick = {
-                    runCatching {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, show.bookingUrl.toUri()))
+            if (show.times.isNullOrEmpty()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TextButton(onClick = { openLink(context, show.bookingUrl) }) {
+                        Text(text = stringResource(R.string.movie_detail_open_link), style = MaterialTheme.typography.labelLarge)
                     }
-                }) {
-                    Text(text = stringResource(R.string.movie_detail_open_link), style = MaterialTheme.typography.labelLarge)
+                    if (show.isUpcoming) {
+                        GenreChip(text = stringResource(R.string.movie_detail_upcoming_badge))
+                    }
                 }
-                if (show.isUpcoming) {
-                    GenreChip(text = stringResource(R.string.movie_detail_upcoming_badge))
+            } else {
+                val slots = timesOnDay(show, day)
+                if (slots.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.showtimes_none_on_day),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    ShowtimeSlots(slots = slots, cinema = show)
                 }
             }
         }
     }
+}
+
+/** The screenings of one day as tappable time boxes ("19:00", below "3D · Hall 2"). */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ShowtimeSlots(slots: List<ShowtimeSlot>, cinema: Showtime) {
+    val context = LocalContext.current
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        slots.forEach { slot ->
+            val hall = slot.hall?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                if (isHallNumber(it)) stringResource(R.string.showtimes_hall_number, it) else it
+            }
+            val details = listOfNotNull(slot.format, hall).joinToString(" · ")
+            val description = stringResource(R.string.showtimes_buy_content_description, slot.time(), cinema.cinemaLocation)
+            Surface(
+                // The screening's own ticket page, else the cinema's page for the movie.
+                onClick = { openLink(context, safeWebLink(slot.bookingUrl) ?: cinema.bookingUrl) },
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.semantics { contentDescription = description }
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(text = slot.time(), style = MaterialTheme.typography.titleSmall)
+                    if (details.isNotEmpty()) {
+                        Text(
+                            text = details,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Opens a web link in the browser; anything that is not an http(s) link is ignored. */
+private fun openLink(context: android.content.Context, url: String) {
+    val safe = safeWebLink(url) ?: return
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, safe.toUri())) }
 }
 
 /**
